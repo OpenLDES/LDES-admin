@@ -1,0 +1,30 @@
+@prefix ldes:    <https://w3id.org/ldes#> .
+@prefix tree:    <https://w3id.org/tree#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix sh:      <http://www.w3.org/ns/shacl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+
+<http://localhost:8080/parcels>
+    a                  ldes:EventStream ;
+    ldes:timestampPath dcterms:created ;
+    ldes:versionOfPath dcterms:isVersionOf ;
+    ldes:createVersions true ;
+    tree:shape         <http://localhost:8080/parcels/shape> ;
+    tree:view          <http://localhost:8080/parcels/by-time>, <http://localhost:8080/parcels/by-page> .
+
+<http://localhost:8080/parcels/shape>
+    a              sh:NodeShape ;
+    sh:targetClass <https://data.vlaanderen.be/ns/perceel#Perceel> .
+
+<http://localhost:8080/parcels/by-page>
+    a                    tree:Node ;
+    tree:viewDescription [
+        tree:fragmentationStrategy () ;
+        tree:pageSize "100"^^xsd:int
+    ] .
+
+<http://localhost:8080/addresses>
+    a                  ldes:EventStream ;
+    ldes:timestampPath dcterms:modified ;
+    ldes:versionOfPath dcterms:isVersionOf ;
+    tree:shape         [ a sh:NodeShape ] .

@@ -1,0 +1,15 @@
+# HELP ldes_server_ingested_members_count
+# TYPE ldes_server_ingested_members_count gauge
+ldes_server_ingested_members_count{application="ldes-server",collection="parcels"} 1200.0
+ldes_server_ingested_members_count{application="ldes-server",collection="addresses"} 300.0
+# HELP ldes_server_bucket_members_count
+# TYPE ldes_server_bucket_members_count gauge
+ldes_server_bucket_members_count{application="ldes-server",collection="parcels",view="by-page"} 1200.0
+ldes_server_bucket_members_count{application="ldes-server",collection="parcels",view="parcels/by-time"} 1100.0
+# HELP ldes_server_pagination_members_count
+# TYPE ldes_server_pagination_members_count gauge
+ldes_server_pagination_members_count{application="ldes-server",collection="parcels",view="by-page"} 1200.0
+ldes_server_pagination_members_count{application="ldes-server",collection="parcels",view="parcels/by-time"} 950.0
+# HELP jvm_threads_live_threads The current number of live threads
+# TYPE jvm_threads_live_threads gauge
+jvm_threads_live_threads{application="ldes-server"} 42.0

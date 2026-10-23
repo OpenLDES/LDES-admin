@@ -1,1 +1,9 @@
-services: { }
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ldes_admin
+      POSTGRES_USER: ldes_admin
+      POSTGRES_PASSWORD: ldes_admin
+    ports:
+      - "5432"

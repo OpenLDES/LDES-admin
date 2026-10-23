@@ -1,0 +1,24 @@
+@prefix ldes:    <https://w3id.org/ldes#> .
+@prefix tree:    <https://w3id.org/tree#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+
+<http://localhost:8080/parcels/by-time>
+    tree:viewDescription [
+        tree:fragmentationStrategy ([
+            a                        tree:HierarchicalTimeBasedFragmentation ;
+            tree:maxGranularity      "day" ;
+            tree:fragmentationPath   dcterms:created
+        ]) ;
+        tree:pageSize         "250"^^xsd:int ;
+        ldes:retentionPolicy  [
+            a          ldes:DurationAgoPolicy ;
+            tree:value "P30D"^^xsd:duration
+        ]
+    ] .
+
+<http://localhost:8080/parcels/by-page>
+    tree:viewDescription [
+        tree:fragmentationStrategy () ;
+        tree:pageSize "100"^^xsd:int
+    ] .

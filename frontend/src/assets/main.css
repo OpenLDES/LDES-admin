@@ -1,0 +1,313 @@
+/* LDES-admin: layout and design tokens on top of the PrimeVue Aura theme */
+
+:root {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sidebar-width: 248px;
+  --sidebar-collapsed-width: 76px;
+  --topbar-height: 60px;
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  --page-bg: #f4f6f8;
+  --card-bg: var(--p-content-background);
+  --card-border: var(--p-content-border-color);
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --hover-bg: var(--p-content-hover-background);
+  --text: var(--p-text-color);
+  --muted: var(--p-text-muted-color);
+
+  --sidebar-bg: #0e1726;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-text: #aab6c7;
+  --sidebar-text-strong: #f1f5f9;
+
+  /* Pipeline component kinds */
+  --kind-input: #0ea5e9;
+  --kind-adapter: #8b5cf6;
+  --kind-transformer: #f59e0b;
+  --kind-output: #10b981;
+
+  /* Charts: validated categorical slots 1-3 and recessive chrome */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --chart-grid: #e8ebef;
+  --chart-ink: #6b7280;
+  --spark-muted: #c3cbd6;
+
+  --code-bg: #f8fafc;
+}
+
+.app-dark {
+  --page-bg: #09090b;
+  --card-shadow: none;
+  --sidebar-bg: #0c0c0e;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --chart-grid: #27272a;
+  --chart-ink: #9ca3af;
+  --spark-muted: #3f3f46;
+  --code-bg: #111113;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--page-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--p-primary-color);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* Page building blocks -------------------------------------------------------------------- */
+
+.page {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.grid-main-side {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 20px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 1100px) {
+  .grid-2,
+  .grid-3,
+  .grid-main-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  padding: 20px;
+}
+
+.card.flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card.flush .card-header {
+  padding: 16px 20px 0;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.card-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.clickable:hover {
+  border-color: var(--p-primary-300);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.app-dark .clickable:hover {
+  border-color: var(--p-primary-800);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12.5px;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.metric {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 20px;
+  background: var(--p-content-hover-background);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+
+.chip .pi {
+  font-size: 11px;
+}
+
+.kind-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.divider {
+  height: 1px;
+  background: var(--card-border);
+  margin: 16px 0;
+}
+
+.definition-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 20px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.definition-list dt {
+  color: var(--muted);
+}
+
+.definition-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* PrimeVue refinements ------------------------------------------------------------------- */
+
+.p-datatable .p-datatable-tbody > tr.clickable-row {
+  cursor: pointer;
+}
+
+.p-tablist {
+  margin-bottom: 4px;
+}
+
+.p-tabpanels {
+  padding: 20px 0 0 !important;
+  background: transparent !important;
+}
+
+.p-toast {
+  max-width: 440px;
+}
+
+.p-dialog .p-dialog-content {
+  padding-top: 4px;
+}

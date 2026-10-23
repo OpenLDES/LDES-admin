@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+*.tsbuildinfo
+cypress/screenshots
+cypress/videos
+cypress/downloads
+.vite

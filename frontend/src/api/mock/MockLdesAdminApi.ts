@@ -1,0 +1,743 @@
+import { Parser } from 'n3'
+import type {
+  HealthStatus,
+  Instance,
+  InstanceHealth,
+  InstanceType,
+  RegisterInstanceRequest,
+  StartLocalInstanceRequest,
+} from '@/domain/instance'
+import { instanceTypeLabel } from '@/domain/instance'
+import type {
+  BackgroundProcess,
+  DcatTarget,
+  EventStream,
+  Fragment,
+  RdfFormat,
+  Relation,
+  StreamStatistics,
+  TypedConfig,
+  View,
+} from '@/domain/ldes'
+import { backlogOf } from '@/domain/ldes'
+import type {
+  ComponentCatalog,
+  DeployedPipeline,
+  LdesClientStatus,
+  Pipeline,
+  PipelineStatistics,
+  PipelineStatus,
+} from '@/domain/ldio'
+import { canBeHalted, canBeResumed } from '@/domain/ldio'
+import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
+import { componentsOfKind } from '@/pipeline/catalog'
+import { PIPELINE_NAME } from '@/pipeline/graph'
+import { expand, PREFIXES } from '@/domain/rdf'
+import { ApiError, type LdesAdminApi } from '../LdesAdminApi'
+import { createSampleState, sampleMember, type SampleState } from './sampleData'
+
+export interface MockOptions {
+  /** Average response time in ms, to make loading states visible */
+  latency?: number
+  now?: () => Date
+  /** Delay before a new pipeline starts running, and before a local instance is up */
+  startupDelay?: number
+}
+
+/**
+ * The LDES-admin API on in-memory sample data. Behaves like the backend, including its error
+ * responses, so the frontend can be developed and demonstrated without servers.
+ */
+export class MockLdesAdminApi implements LdesAdminApi {
+  private state: SampleState
+  private localPorts = 32772
+
+  constructor(private readonly options: MockOptions = {}) {
+    this.state = createSampleState(this.now())
+  }
+
+  // Dashboard ----------------------------------------------------------------------------------
+
+  getDashboard(): Promise<DashboardOverview> {
+    return this.respond(() => ({
+      ldesServers: this.instancesOf('LDES_SERVER').map((server) => {
+        const up = this.isUp(server)
+        const streams = up ? this.state.statistics[server.id] ?? [] : []
+        return {
+          server,
+          health: this.health(server),
+          ingestedMembers: streams.reduce((sum, stream) => sum + stream.ingestedMembers, 0),
+          streams,
+          problems: up ? this.state.problems[server.id] ?? [] : [],
+        }
+      }),
+      ldios: this.instancesOf('LDIO').map((ldio) => {
+        const up = this.isUp(ldio)
+        const pipelines = up ? this.state.pipelines[ldio.id] ?? [] : []
+        const statistics = up ? this.state.pipelineStatistics[ldio.id] ?? [] : []
+        const pipelinesByStatus: Partial<Record<PipelineStatus, number>> = {}
+        pipelines.forEach(({ status }) => {
+          pipelinesByStatus[status] = (pipelinesByStatus[status] ?? 0) + 1
+        })
+        return {
+          ldio,
+          health: this.health(ldio),
+          pipelinesByStatus,
+          processedMembers: statistics.reduce((sum, stats) => sum + stats.membersOut, 0),
+          pipelines: pipelines.map(({ pipeline, status }) => {
+            const stats = statistics.find((s) => s.pipeline === pipeline.name)
+            return {
+              name: pipeline.name,
+              status,
+              membersIn: stats?.membersIn ?? 0,
+              membersOut: stats?.membersOut ?? 0,
+            }
+          }),
+          problems: up ? this.state.problems[ldio.id] ?? [] : [],
+        }
+      }),
+    }))
+  }
+
+  getThroughput(): Promise<ThroughputSeries[]> {
+    return this.respond(() => this.state.throughput.filter((series) =>
+      this.state.instances.some((instance) => instance.id === series.instanceId)))
+  }
+
+  getActivity(): Promise<ActivityEvent[]> {
+    return this.respond(() => this.state.activity)
+  }
+
+  // Instances ----------------------------------------------------------------------------------
+
+  listInstances(type: InstanceType): Promise<Instance[]> {
+    return this.respond(() => this.instancesOf(type))
+  }
+
+  getInstance(type: InstanceType, id: string): Promise<Instance> {
+    return this.respond(() => this.instance(type, id))
+  }
+
+  registerInstance(type: InstanceType, request: RegisterInstanceRequest): Promise<Instance> {
+    return this.respond(() => {
+      if (!request.name?.trim()) throw new ApiError(400, "'name' must not be blank")
+      const url = normalizeUrl(request.url)
+      if (this.state.instances.some((i) => i.type === type && i.url === url)) {
+        throw new ApiError(409, `A ${type} with URL ${url} is already registered`)
+      }
+      const instance: Instance = {
+        id: crypto.randomUUID(),
+        type,
+        name: request.name.trim(),
+        url,
+        origin: 'REGISTERED',
+        sandbox: request.sandbox ?? false,
+        registeredAt: this.now().toISOString(),
+      }
+      this.add(instance, /down|unreachable/.test(url) ? 'DOWN' : 'UP')
+      return instance
+    })
+  }
+
+  startLocalInstance(type: InstanceType, request: StartLocalInstanceRequest): Promise<Instance> {
+    return this.respond(() => {
+      if (!request.name?.trim()) throw new ApiError(400, "'name' must not be blank")
+      const instance: Instance = {
+        id: crypto.randomUUID(),
+        type,
+        name: request.name.trim(),
+        url: `http://localhost:${this.localPorts++}`,
+        origin: 'LOCAL',
+        sandbox: request.sandbox ?? false,
+        registeredAt: this.now().toISOString(),
+      }
+      this.add(instance, 'UP')
+      this.log('info', instance, `Local ${instanceTypeLabel[type]} started`,
+        `${type === 'LDIO' ? 'openldes/ldi-orchestrator:3.1.1' : 'openldes/ldes-server:4.2.1'} on ${instance.url}`)
+      return instance
+    }, this.options.startupDelay ?? 2200)
+  }
+
+  unregisterInstance(type: InstanceType, id: string): Promise<void> {
+    return this.respond(() => {
+      this.instance(type, id)
+      this.state.instances = this.state.instances.filter((instance) => instance.id !== id)
+    })
+  }
+
+  checkHealth(type: InstanceType, id: string): Promise<InstanceHealth> {
+    return this.respond(() => this.health(this.instance(type, id)))
+  }
+
+  // LDES servers -------------------------------------------------------------------------------
+
+  listEventStreams(serverId: string): Promise<EventStream[]> {
+    return this.respond(() => {
+      this.reachable('LDES_SERVER', serverId, 'list event streams')
+      return this.state.eventStreams[serverId] ?? []
+    })
+  }
+
+  getEventStream(serverId: string, collection: string): Promise<EventStream> {
+    return this.respond(() => this.stream(serverId, collection, 'get event stream ' + collection))
+  }
+
+  createEventStream(serverId: string, definition: string): Promise<EventStream> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, 'create event stream')
+      const reject = (reason: string) =>
+        new ApiError(400, `LDES server '${server.name}' could not create event stream: 400 BAD_REQUEST - ${reason}`)
+      validateRdf(definition, 'text/turtle', reject)
+      const subject = definition.match(/(<[^>]*>|[\w-]*:[\w-]+)\s+a\s+ldes:EventStream/)
+      if (!subject) throw reject('No ldes:EventStream found in the definition')
+      const collection = lastSegment(subject[1])
+      const streams = this.state.eventStreams[serverId] ?? []
+      if (streams.some((stream) => stream.collection === collection)) {
+        throw reject(`Collection ${collection} already exists`)
+      }
+      const path = (property: string) => {
+        const value = definition.match(new RegExp(`ldes:${property}\\s+(\\S+?)\\s*[;.]`))?.[1]
+        return value ? expandTerm(value) : undefined
+      }
+      const stream: EventStream = {
+        collection,
+        timestampPath: path('timestampPath'),
+        versionOfPath: path('versionOfPath'),
+        createVersions: /ldes:createVersions\s+true/.test(definition),
+        views: [],
+        definition,
+      }
+      this.state.eventStreams[serverId] = [...streams, stream]
+        .sort((a, b) => a.collection.localeCompare(b.collection))
+      this.state.statistics[serverId] = [...(this.state.statistics[serverId] ?? []),
+        { collection, ingestedMembers: 0, backlog: 0, views: [] }]
+      this.state.views[`${serverId}/${collection}`] = []
+      this.state.shapes[`${serverId}/${collection}`] = definition
+      this.log('success', server, `Event stream ${collection} created`)
+      return stream
+    })
+  }
+
+  deleteEventStream(serverId: string, collection: string): Promise<void> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, 'delete event stream ' + collection)
+      this.stream(serverId, collection, 'delete event stream ' + collection)
+      this.state.eventStreams[serverId] = this.state.eventStreams[serverId]
+        .filter((stream) => stream.collection !== collection)
+      this.state.statistics[serverId] = (this.state.statistics[serverId] ?? [])
+        .filter((stream) => stream.collection !== collection)
+      this.log('warn', server, `Event stream ${collection} deleted`)
+    })
+  }
+
+  listViews(serverId: string, collection: string): Promise<View[]> {
+    return this.respond(() => {
+      this.stream(serverId, collection, `list views of ${collection}`)
+      return this.state.views[`${serverId}/${collection}`] ?? []
+    })
+  }
+
+  createView(serverId: string, collection: string, definition: string): Promise<View> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, `create view on ${collection}`)
+      const stream = this.stream(serverId, collection, `create view on ${collection}`)
+      const reject = (reason: string) =>
+        new ApiError(400, `LDES server '${server.name}' could not create view on ${collection}: 400 BAD_REQUEST - ${reason}`)
+      validateRdf(definition, 'text/turtle', reject)
+      const subject = definition.match(/(<[^>]*>|[\w-]*:[\w-]+)\s+(?:a\s+tree:Node\s*;\s*)?tree:viewDescription/)
+      if (!subject) throw reject('No tree:viewDescription found in the definition')
+      const name = lastSegment(subject[1])
+      const key = `${serverId}/${collection}`
+      if ((this.state.views[key] ?? []).some((view) => view.name === name)) {
+        throw reject(`View ${name} already exists`)
+      }
+      const view: View = {
+        collection,
+        name,
+        pageSize: Number(definition.match(/tree:pageSize\s+"?(\d+)/)?.[1] ?? 100),
+        fragmentations: [...definition.matchAll(/a\s+tree:(\w+Fragmentation)/g)]
+          .map((match) => ({ type: match[1], properties: propertiesNear(definition, match.index!) })),
+        retentionPolicies: [...definition.matchAll(/a\s+ldes:(\w+(?:Policy|Subset))/g)]
+          .map((match) => ({ type: match[1], properties: propertiesNear(definition, match.index!) })),
+        definition,
+      }
+      this.state.views[key] = [...(this.state.views[key] ?? []), view]
+        .sort((a, b) => a.name.localeCompare(b.name))
+      stream.views = [...stream.views, name].sort()
+      const statistics = this.statisticsOf(serverId, collection)
+      if (statistics) {
+        statistics.views.push({ view: name, bucketisedMembers: 0, paginatedMembers: 0 })
+        statistics.backlog = backlogOf(statistics.views)
+      }
+      this.log('success', server, `View ${collection}/${name} created`)
+      return view
+    })
+  }
+
+  deleteView(serverId: string, collection: string, view: string): Promise<void> {
+    return this.respond(() => {
+      const stream = this.stream(serverId, collection, `delete view ${view}`)
+      const key = `${serverId}/${collection}`
+      this.state.views[key] = (this.state.views[key] ?? []).filter((v) => v.name !== view)
+      stream.views = stream.views.filter((name) => name !== view)
+      const statistics = this.statisticsOf(serverId, collection)
+      if (statistics) {
+        statistics.views = statistics.views.filter((v) => v.view !== view)
+        statistics.backlog = backlogOf(statistics.views)
+      }
+    })
+  }
+
+  getShape(serverId: string, collection: string): Promise<string> {
+    return this.respond(() => {
+      this.stream(serverId, collection, `get shape of ${collection}`)
+      return this.state.shapes[`${serverId}/${collection}`] ?? ''
+    })
+  }
+
+  updateShape(serverId: string, collection: string, shape: string): Promise<string> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, `update shape of ${collection}`)
+      this.stream(serverId, collection, `update shape of ${collection}`)
+      validateRdf(shape, 'text/turtle', (reason) => new ApiError(400,
+        `LDES server '${server.name}' could not update shape of ${collection}: 400 BAD_REQUEST - ${reason}`))
+      this.state.shapes[`${serverId}/${collection}`] = shape
+      return shape
+    })
+  }
+
+  getCatalog(serverId: string): Promise<string> {
+    return this.respond(() => {
+      this.reachable('LDES_SERVER', serverId, 'get DCAT catalog')
+      return this.state.catalogs[serverId] ?? ''
+    })
+  }
+
+  updateDcat(serverId: string, target: DcatTarget, dcat: string): Promise<void> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, 'update DCAT')
+      validateRdf(dcat, 'text/turtle', (reason) =>
+        new ApiError(400, `LDES server '${server.name}' could not update DCAT: 400 BAD_REQUEST - ${reason}`))
+      if (target.kind === 'server') this.state.catalogs[serverId] = dcat
+    })
+  }
+
+  ingestMember(serverId: string, collection: string, member: string, format: RdfFormat):
+    Promise<void> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, `ingest member in ${collection}`)
+      this.stream(serverId, collection, `ingest member in ${collection}`)
+      validateRdf(member, format, (reason) => new ApiError(400,
+        `LDES server '${server.name}' could not ingest member in ${collection}: 400 BAD_REQUEST - ${reason}`))
+      const statistics = this.statisticsOf(serverId, collection)
+      if (statistics) {
+        statistics.ingestedMembers += 1
+        statistics.views.forEach((view) => {
+          view.bucketisedMembers += 1
+          view.paginatedMembers += 1
+        })
+      }
+      this.log('info', server, `Member ingested in ${collection}`)
+    })
+  }
+
+  getStreamStatistics(serverId: string): Promise<StreamStatistics[]> {
+    return this.respond(() => {
+      this.reachable('LDES_SERVER', serverId, 'get metrics')
+      return this.state.statistics[serverId] ?? []
+    })
+  }
+
+  getBackgroundProcesses(serverId: string): Promise<BackgroundProcess[]> {
+    return this.respond(() => {
+      this.reachable('LDES_SERVER', serverId, 'get background processes')
+      return this.state.processes[serverId] ?? []
+    })
+  }
+
+  getFragment(serverId: string, collection: string, view: string, url?: string):
+    Promise<Fragment> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, `fetch ${collection}/${view}`)
+      const definition = (this.state.views[`${serverId}/${collection}`] ?? [])
+        .find((v) => v.name === view)
+      if (!definition) {
+        throw new ApiError(404, `LDES server '${server.name}' could not fetch ${collection}/${view}: 404 NOT_FOUND`)
+      }
+      return buildFragment(`${server.url}/${collection}/${view}`, url, collection, definition,
+        this.now())
+    })
+  }
+
+  // LDIOs --------------------------------------------------------------------------------------
+
+  listPipelines(ldioId: string): Promise<DeployedPipeline[]> {
+    return this.respond(() => {
+      this.reachable('LDIO', ldioId, 'list pipelines')
+      return this.state.pipelines[ldioId] ?? []
+    })
+  }
+
+  createPipeline(ldioId: string, pipeline: Pipeline): Promise<DeployedPipeline> {
+    return this.respond(() => {
+      const ldio = this.reachable('LDIO', ldioId, `create pipeline ${pipeline.name}`)
+      if (!PIPELINE_NAME.test(pipeline.name)) {
+        throw new ApiError(400, `'name' must consist of letters, digits, '-' and '_', but was ${pipeline.name}`)
+      }
+      const pipelines = this.state.pipelines[ldioId] ?? []
+      if (pipelines.some((deployed) => deployed.pipeline.name === pipeline.name)) {
+        throw new ApiError(400, `LDIO '${ldio.name}' could not create pipeline ${pipeline.name}: 400 BAD_REQUEST - Pipeline ${pipeline.name} already exists`)
+      }
+      const deployed: DeployedPipeline = { pipeline, status: 'INIT', updateSource: 'AUTO' }
+      this.state.pipelines[ldioId] = [...pipelines, deployed]
+      this.state.pipelineStatistics[ldioId] = [...(this.state.pipelineStatistics[ldioId] ?? []),
+        { pipeline: pipeline.name, membersIn: 0, membersOut: 0, inFlight: 0 }]
+      this.startSoon(ldioId, pipeline.name)
+      this.log('success', ldio, `Pipeline ${pipeline.name} created`)
+      return deployed
+    })
+  }
+
+  updatePipeline(ldioId: string, pipeline: Pipeline): Promise<DeployedPipeline> {
+    return this.respond(() => {
+      const ldio = this.reachable('LDIO', ldioId, `update pipeline ${pipeline.name}`)
+      const deployed = this.pipeline(ldioId, pipeline.name)
+      deployed.pipeline = pipeline
+      deployed.status = 'INIT'
+      deployed.updateSource = 'AUTO'
+      this.startSoon(ldioId, pipeline.name)
+      this.log('info', ldio, `Pipeline ${pipeline.name} updated`)
+      return deployed
+    })
+  }
+
+  deletePipeline(ldioId: string, name: string): Promise<void> {
+    return this.respond(() => {
+      const ldio = this.reachable('LDIO', ldioId, `delete pipeline ${name}`)
+      this.pipeline(ldioId, name)
+      this.state.pipelines[ldioId] = this.state.pipelines[ldioId]
+        .filter((deployed) => deployed.pipeline.name !== name)
+      this.log('warn', ldio, `Pipeline ${name} deleted`)
+    })
+  }
+
+  haltPipeline(ldioId: string, name: string): Promise<PipelineStatus> {
+    return this.respond(() => {
+      const ldio = this.reachable('LDIO', ldioId, `halt pipeline ${name}`)
+      const deployed = this.pipeline(ldioId, name)
+      if (!canBeHalted(deployed.status)) {
+        throw new ApiError(409, `Cannot halt pipeline ${name}, because it is ${deployed.status}`)
+      }
+      deployed.status = 'HALTED'
+      deployed.updateSource = 'MANUAL'
+      this.log('warn', ldio, `Pipeline ${name} halted`)
+      return deployed.status
+    })
+  }
+
+  resumePipeline(ldioId: string, name: string): Promise<PipelineStatus> {
+    return this.respond(() => {
+      const ldio = this.reachable('LDIO', ldioId, `resume pipeline ${name}`)
+      const deployed = this.pipeline(ldioId, name)
+      if (!canBeResumed(deployed.status)) {
+        throw new ApiError(409, `Cannot resume pipeline ${name}, because it is ${deployed.status}`)
+      }
+      deployed.status = 'RUNNING'
+      deployed.updateSource = 'MANUAL'
+      this.log('success', ldio, `Pipeline ${name} resumed`)
+      return deployed.status
+    })
+  }
+
+  getComponentCatalog(ldioId: string): Promise<ComponentCatalog> {
+    return this.respond(() => {
+      this.reachable('LDIO', ldioId, 'get component catalog')
+      const ids = (kind: Parameters<typeof componentsOfKind>[0]) =>
+        componentsOfKind(kind).map((component) => component.id).sort()
+      return {
+        inputs: ids('input'),
+        adapters: ids('adapter'),
+        transformers: ids('transformer'),
+        outputs: ids('output'),
+      }
+    })
+  }
+
+  getPipelineStatistics(ldioId: string): Promise<PipelineStatistics[]> {
+    return this.respond(() => {
+      this.reachable('LDIO', ldioId, 'get metrics')
+      return this.state.pipelineStatistics[ldioId] ?? []
+    })
+  }
+
+  getLdesClientStatuses(ldioId: string): Promise<Record<string, LdesClientStatus>> {
+    return this.respond(() => {
+      this.reachable('LDIO', ldioId, 'get LDES client statuses')
+      return this.state.clientStatuses[ldioId] ?? {}
+    })
+  }
+
+  // Helpers ------------------------------------------------------------------------------------
+
+  private now(): Date {
+    return this.options.now?.() ?? new Date()
+  }
+
+  /**
+   * Answers after a realistic delay, with a copy of the data, like an HTTP response would.
+   */
+  private async respond<T>(answer: () => T, latency = this.options.latency ?? 280): Promise<T> {
+    if (latency > 0) {
+      await new Promise((resolve) => setTimeout(resolve, latency * (0.6 + Math.random() * 0.8)))
+    }
+    const result = answer()
+    return result === undefined ? result : JSON.parse(JSON.stringify(result))
+  }
+
+  private instancesOf(type: InstanceType): Instance[] {
+    return this.state.instances.filter((instance) => instance.type === type)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  private instance(type: InstanceType, id: string): Instance {
+    const instance = this.state.instances.find((i) => i.id === id && i.type === type)
+    if (!instance) throw new ApiError(404, `No ${type} found with id ${id}`)
+    return instance
+  }
+
+  private health(instance: Instance): InstanceHealth {
+    return { status: this.state.health[instance.id] ?? 'UNKNOWN', checkedAt: this.now().toISOString() }
+  }
+
+  private isUp(instance: Instance): boolean {
+    return this.state.health[instance.id] === 'UP'
+  }
+
+  /** An instance that is up; an unreachable one fails like the backend does (502) */
+  private reachable(type: InstanceType, id: string, action: string): Instance {
+    const instance = this.instance(type, id)
+    if (!this.isUp(instance)) {
+      throw new ApiError(502, `${instanceTypeLabel[type]} '${instance.name}' could not ${action}: ${instance.url} is unreachable`)
+    }
+    return instance
+  }
+
+  private stream(serverId: string, collection: string, action: string): EventStream {
+    const server = this.reachable('LDES_SERVER', serverId, action)
+    const stream = (this.state.eventStreams[serverId] ?? [])
+      .find((s) => s.collection === collection)
+    if (!stream) {
+      throw new ApiError(404, `LDES server '${server.name}' could not ${action}: 404 NOT_FOUND`)
+    }
+    return stream
+  }
+
+  private statisticsOf(serverId: string, collection: string): StreamStatistics | undefined {
+    return (this.state.statistics[serverId] ?? []).find((s) => s.collection === collection)
+  }
+
+  private pipeline(ldioId: string, name: string): DeployedPipeline {
+    const deployed = (this.state.pipelines[ldioId] ?? []).find((p) => p.pipeline.name === name)
+    if (!deployed) throw new ApiError(404, `No pipeline found with name ${name}`)
+    return deployed
+  }
+
+  private add(instance: Instance, health: HealthStatus): void {
+    this.state.instances.push(instance)
+    this.state.health[instance.id] = health
+    if (instance.type === 'LDES_SERVER') {
+      this.state.eventStreams[instance.id] = []
+      this.state.statistics[instance.id] = []
+      this.state.catalogs[instance.id] = ''
+      this.state.processes[instance.id] = []
+    } else {
+      this.state.pipelines[instance.id] = []
+      this.state.pipelineStatistics[instance.id] = []
+    }
+  }
+
+  private startSoon(ldioId: string, name: string): void {
+    setTimeout(() => {
+      const deployed = this.state.pipelines[ldioId]?.find((p) => p.pipeline.name === name)
+      if (deployed?.status === 'INIT') deployed.status = 'RUNNING'
+    }, this.options.startupDelay ?? 2200)
+  }
+
+  private log(severity: ActivityEvent['severity'], instance: Instance, title: string,
+    detail?: string): void {
+    this.state.activity = [{
+      id: crypto.randomUUID(),
+      time: this.now().toISOString(),
+      severity,
+      source: { type: instance.type, id: instance.id, name: instance.name },
+      title,
+      detail,
+    }, ...this.state.activity].slice(0, 50)
+  }
+}
+
+// Fragments ----------------------------------------------------------------------------------
+
+const MEMBERS_PER_PAGE = 5
+
+/**
+ * Builds a page of a view the way the LDES server fetch API serves it: the view root links to
+ * buckets (per fragmentation) or straight to the first page; pages link to the next page.
+ */
+function buildFragment(root: string, url: string | undefined, collection: string, view: View,
+  now: Date): Fragment {
+  const target = new URL(url ?? root)
+  const params = target.searchParams
+  const page = Number(params.get('pageNumber') ?? 0)
+  const fragmentation: TypedConfig | undefined = view.fragmentations[0]
+  const isRoot = !url || url === root
+  const fragment: Fragment = {
+    url: target.toString(),
+    collection,
+    view: view.name,
+    root: isRoot,
+    immutable: false,
+    relations: [],
+    members: [],
+  }
+  const path = fragmentation?.properties.fragmentationPath
+
+  if (isRoot) {
+    fragment.relations = rootRelations(root, fragmentation, view, now, path)
+    return fragment
+  }
+
+  const pages = fragmentation ? 3 : 6
+  const bucket = [...params.entries()].filter(([key]) => key !== 'pageNumber')
+    .map(([, value]) => value).join('/')
+  const seed = [...bucket].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const day = params.get('day')
+    ? new Date(Date.UTC(Number(params.get('year')), Number(params.get('month')) - 1,
+      Number(params.get('day')), 6))
+    : new Date(now.getTime() - 86_400_000)
+  fragment.members = Array.from({ length: MEMBERS_PER_PAGE }, (_, i) => {
+    const index = seed + (page - 1) * MEMBERS_PER_PAGE + i
+    const timestamp = new Date(day.getTime() + ((page - 1) * MEMBERS_PER_PAGE + i) * 1_740_000)
+    const member = sampleMember(collection, index, timestamp)
+    return { ...member, timestamp: timestamp.toISOString() }
+  })
+  fragment.immutable = page < pages
+  if (page < pages) {
+    const next = new URL(target)
+    next.searchParams.set('pageNumber', String(page + 1))
+    fragment.relations = [{
+      type: 'Relation',
+      node: next.toString(),
+      label: `Page ${page + 1}`,
+      remainingItems: (pages - page) * view.pageSize,
+    }]
+  }
+  return fragment
+}
+
+function rootRelations(root: string, fragmentation: TypedConfig | undefined, view: View,
+  now: Date, path: string | undefined): Relation[] {
+  const firstPage = (params: Record<string, string>) => {
+    const url = new URL(root)
+    Object.entries({ ...params, pageNumber: '1' }).forEach(([k, v]) => url.searchParams.set(k, v))
+    return url.toString()
+  }
+  switch (fragmentation?.type) {
+    case 'HierarchicalTimeBasedFragmentation':
+      return [2, 1, 0].map((daysAgo) => {
+        const day = new Date(now.getTime() - daysAgo * 86_400_000)
+        day.setUTCHours(0, 0, 0, 0)
+        return {
+          type: 'GreaterThanOrEqualToRelation',
+          path,
+          value: day.toISOString(),
+          node: firstPage({
+            year: String(day.getUTCFullYear()),
+            month: String(day.getUTCMonth() + 1),
+            day: String(day.getUTCDate()),
+          }),
+          label: day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }),
+          remainingItems: 3 * view.pageSize,
+        }
+      })
+    case 'GeospatialFragmentation':
+      return [[16812, 10970], [16813, 10970], [16812, 10971], [16814, 10972]].map(([x, y]) => ({
+        type: 'GeospatiallyContainsRelation',
+        path,
+        value: `POLYGON ((${tileLon(x)} ${tileLat(y)}, ${tileLon(x + 1)} ${tileLat(y)}, ${tileLon(x + 1)} ${tileLat(y + 1)}, ${tileLon(x)} ${tileLat(y + 1)}, ${tileLon(x)} ${tileLat(y)}))`,
+        node: firstPage({ tile: `15/${x}/${y}` }),
+        label: `Tile 15/${x}/${y}`,
+      }))
+    case 'ReferenceFragmentation': {
+      const key = fragmentation.properties.fragmentationKey ?? 'reference'
+      return ['Antwerpen', 'Brugge', 'Gent', 'Hasselt', 'Leuven', 'Mechelen'].map((value) => ({
+        type: 'EqualToRelation',
+        path,
+        value,
+        node: firstPage({ [key]: value }),
+        label: value,
+      }))
+    }
+    default:
+      return [{
+        type: 'Relation',
+        node: firstPage({}),
+        label: 'Page 1',
+        remainingItems: 6 * view.pageSize,
+      }]
+  }
+}
+
+const tileLon = (x: number) => ((x / 2 ** 15) * 360 - 180).toFixed(4)
+const tileLat = (y: number) => {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** 15
+  return ((180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))).toFixed(4)
+}
+
+// RDF helpers --------------------------------------------------------------------------------
+
+function validateRdf(content: string, format: RdfFormat, reject: (reason: string) => Error): void {
+  if (!content.trim()) throw reject('The body is empty')
+  try {
+    if (format === 'application/ld+json') {
+      JSON.parse(content)
+    } else {
+      const n3Format = format === 'application/n-quads' ? 'N-Quads'
+        : format === 'application/n-triples' ? 'N-Triples' : 'Turtle'
+      new Parser({ format: n3Format, baseIRI: 'http://localhost/' }).parse(content)
+    }
+  } catch (e) {
+    throw reject(`Invalid RDF: ${(e instanceof Error ? e.message : String(e)).split('\n')[0]}`)
+  }
+}
+
+/** The quoted values of the properties right after a type statement, e.g. maxZoom "15" */
+function propertiesNear(definition: string, index: number): Record<string, string> {
+  const block = definition.slice(index, definition.indexOf(']', index))
+  return Object.fromEntries([...block.matchAll(/(?:tree|ldes):(\w+)\s+"?([^";\s\]]+)"?/g)]
+    .map((match) => [match[1], expandTerm(match[2])]))
+}
+
+function expandTerm(term: string): string {
+  if (term.startsWith('<') && term.endsWith('>')) return term.slice(1, -1)
+  const [prefix] = term.split(':')
+  return PREFIXES[prefix] ? expand(term) : term
+}
+
+function lastSegment(term: string): string {
+  const value = term.replace(/^<|>$/g, '').replace(/[#/]+$/, '')
+  return value.split(/[#/:]/).pop() || value
+}
+
+function normalizeUrl(value: string): string {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new ApiError(400, `'url' must be an absolute http(s) URL, but was ${value}`)
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new ApiError(400, `'url' must be an absolute http(s) URL, but was ${value}`)
+  }
+  return url.toString().replace(/\/+$/, '')
+}

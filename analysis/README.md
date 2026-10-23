@@ -2,6 +2,14 @@
 
 This application is an administration, monitoring, and sandboxing tool for OpenLDES server and
 Linked Data pipelines (LDIO).
+More information about the OpenLDES server and LDIO can be found here:
+* https://openldes.org/
+* https://openldes.github.io/LDESServer/4.2.1/
+* https://openldes.github.io/Linked-Data-Interactions/3.2.0-SNAPSHOT/
+
+You can find the API specifications here:
+* https://openldes.github.io/LDESServer/4.2.1/configuration/admin-api
+* https://openldes.github.io/Linked-Data-Interactions/3.2.0-SNAPSHOT/ldio/pipeline-management/pipeline-api
 
 First, there's a dashboard that allows you to monitor the status of your OpenLDES server (s)
 and pipelines that are running. You can see the status of each pipeline, the number of events

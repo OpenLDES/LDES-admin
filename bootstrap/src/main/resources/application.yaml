@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: LDES-admin
+  jpa:
+    open-in-view: false
+    hibernate:
+      # The schema is owned by Flyway (adapter/src/main/resources/db/migration)
+      ddl-auto: validate
+  http:
+    clients:
+      connect-timeout: 5s
+      read-timeout: 30s
+  docker:
+    compose:
+      # compose.yaml in the project root provides Postgres during development
+      lifecycle-management: start-only
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+ldes-admin:
+  security:
+    # Set to true to require a JWT (OAuth2 resource server), and configure
+    # spring.security.oauth2.resourceserver.jwt.issuer-uri
+    enabled: false
+  ldio:
+    # How long to wait for an LDIO to stop a pipeline when deleting or updating it
+    delete-timeout: 30s
+  local-runtime:
+    ldes-server-image: openldes/ldes-server:4.2.1
+    ldio-image: openldes/ldi-orchestrator:3.1.1
+    postgres-image: postgres:16-alpine
+    startup-timeout: 5m
