@@ -94,7 +94,8 @@ jobs:
             fi
           else
             echo "IMAGE_TAG=${{ needs.build.outputs.version }}-$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
-            echo "IMAGES=${{ env.GHCR_REGISTRY }}/${{ github.repository }}" >> $GITHUB_ENV
+            # Docker only accepts lowercase repository names; the owner is OpenLDES
+            echo "IMAGES=${GHCR_REGISTRY}/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
             echo "LATEST=latest" >> $GITHUB_ENV
           fi
       - name: Log in to the DockerHub Container registry
