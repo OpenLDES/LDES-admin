@@ -11,8 +11,16 @@
 * [x] Bugfix: you cannot have multiple fragmentations per view. So, when you don't have "+ Add
   time-based", "+ Add geospatial" and "+ Add reference" under "fragmentation" in the "create new
   view" popup.
-* [] Bugfix: when you create a new "Pagination" or "Recent" view, you can now add a "Fragmentation".
+* [x] Bugfix: when you create a new "Pagination" or "Recent" view, you can now add a
+  "Fragmentation".
   However, it should be impossible to add fragmentations when creating those kind of views.
+* [x] In a first section of the README page, document all features that are packed in this LDES-admin
+  application. Add screenshots to this README file, and make it appealing to read. Don't make
+  it too verbose. This needs to show all features of this application in a concise way, so that a
+  user can quickly understand what this application can do for them.
+  There's already an LDES-admin server running (http://localhost:8080/) that you can use to create
+  the screenshots. Use the "demo" mode to create those screenshots. Create all screenshots in
+  "black" mode.
 * [] Create full example of sensor data that is modeled in ssn-sosa ontology. Also, create a full
   example for parking data, based on the onboarding example
   (https://github.com/OpenLDES/Onboarding-Example/blob/main/advanced-conversion/README.md). When you
@@ -35,7 +43,9 @@
     * When you click on "LDIOs up", go to the list of LDIOs
     * When you click on "Pipelines running", go to the list of LDIOs
     * When you click on "Members ingested", go to the list of LDES servers
-    *
 * [] When you are on the "background processes" tab of a stream, then refresh the number of
   completed, failed, average and longest recent run every 2 seconds. Make this "2 seconds"
   configurable.
+* [] Create github actions. Support the same release flow as the one for the OpenLDES server
+  (See https://github.com/OpenLDES/LDESServer/tree/main/.github). Document in the README on how to
+  use this flow, and which variables and passwords that you need to set in Github.

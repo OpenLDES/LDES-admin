@@ -3,6 +3,71 @@
 Administration, monitoring and sandboxing for [OpenLDES](https://openldes.org/) servers and Linked
 Data Interaction Orchestrator (LDIO) pipelines.
 
+![The dashboard: health, throughput and recent activity of all LDES servers and LDIOs](docs/screenshots/dashboard.png)
+
+## Features
+
+### Monitor
+
+* **Dashboard**: which LDES servers and LDIOs are up, how many pipelines run, the members ingested
+  per hour over the last 24 hours, what needs attention, and a feed of recent activity.
+* **Health checks**: every instance is checked every minute; LDES-admin records when one goes down
+  and when it comes back.
+* **Event stream statistics**: members ingested, bucketised and paginated per view, and the backlog
+  still waiting to be paginated.
+* **Background processes**: the fragmentation and maintenance jobs of a server (bucketisation,
+  pagination, retention, compaction, deletion) with their runs, failures and durations.
+
+| ![Views of an event stream and how far they are paginated](docs/screenshots/event-stream.png) | ![The background processes of an LDES server](docs/screenshots/background-processes.png) |
+|:---:|:---:|
+| Views of an event stream, and how far they are paginated | Background processes, with a failed retention run |
+
+### Manage LDES servers
+
+* **Add** a server that runs elsewhere by its URL, or **start a local one** in Docker with one click.
+* **Event streams and views**: create them in a form and as Turtle side by side, validated the way
+  the server validates them. Templates for pagination, time-based, geospatial and reference
+  fragmentation, and retention policies.
+* **Shapes and DCAT**: edit the SHACL shape of an event stream and the DCAT catalog of the server,
+  and see the catalog it publishes.
+* **Browse** a view page by page: follow its relations and read its members.
+* **Ingest** members directly on an event stream, in Turtle, JSON-LD, N-Quads or N-Triples.
+
+| ![LDES servers, registered and local](docs/screenshots/ldes-servers.png) | ![The event streams of an LDES server](docs/screenshots/ldes-server.png) |
+|:---:|:---:|
+| LDES servers, registered and local | Event streams with their statistics |
+| ![Creating a view: a form and Turtle that stay in step](docs/screenshots/create-view.png) | ![Browsing the pages and members of a view](docs/screenshots/fragment-browser.png) |
+| Creating a view: form and Turtle stay in step | Browsing the pages and members of a view |
+
+### Manage LDIOs
+
+* **Add** an LDIO that runs elsewhere, or **start a local one** in Docker.
+* **Pipelines**: their status, members in and out and the progress of LDES clients. Halt, resume,
+  edit and delete them.
+* **Component catalog**: the inputs, adapters, transformers and outputs an LDIO has installed.
+
+![The pipelines of an LDIO](docs/screenshots/ldio.png)
+
+### Experiment in the sandbox
+
+* **Design** a pipeline by dragging components onto a canvas, or start from a template. Configure
+  every LDIO component in a form or as YAML, validated as you type.
+* **Simulate**: run a member through the pipeline in the browser and see what each step makes of
+  it.
+* **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
+  LDIO in Docker that work together out of the box.
+
+| ![Designing a pipeline in the sandbox](docs/screenshots/sandbox.png) | ![Simulating a pipeline step by step](docs/screenshots/simulation.png) |
+|:---:|:---:|
+| Designing a pipeline, with a form for every component | Running a member through the pipeline |
+
+### Try it without servers
+
+**Demo mode** runs on sample data in the browser, to explore LDES-admin without any server;
+**production mode** manages real LDES servers and LDIOs. Light and dark themes included.
+
+## Documentation
+
 * [analysis/README.md](analysis/README.md) – what LDES-admin does
 * [analysis/architecture.md](analysis/architecture.md) – how it is built
 
