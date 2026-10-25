@@ -41,4 +41,17 @@ class SecuredApiIT {
   void keepsHealthPublic() {
     assertThat(mvc.get().uri("/actuator/health")).hasStatusOk();
   }
+
+  @Test
+  void keepsTheRestOfTheActuatorPrivate() {
+    assertThat(mvc.get().uri("/actuator/metrics")).hasStatus(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void keepsTheFrontendPublic() {
+    // It holds no data; the API it calls is what needs the token. Without a built frontend the
+    // page is missing, but it is not refused.
+    assertThat(mvc.get().uri("/sandbox").exchange().getResponse().getStatus())
+        .isNotEqualTo(HttpStatus.UNAUTHORIZED.value());
+  }
 }

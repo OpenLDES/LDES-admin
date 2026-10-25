@@ -7,6 +7,7 @@ document describes how it is built.
 ```mermaid
 flowchart LR
   browser["Vue frontend<br/>(frontend/)"] -- REST /api/v1 --> rest
+  bootstrap_static["static resources<br/>(built frontend)"] -. served on / .-> browser
 
   subgraph backend["Spring Boot backend"]
     direction LR
@@ -50,7 +51,7 @@ every ring is a Maven module, so the compiler enforces that dependencies only po
 | `model`       | Domain model: records with their invariants and behaviour        | –             | none                        |
 | `application` | Use cases (ports in), ports out, and the services implementing them | `model`     | none                        |
 | `adapter`     | REST API, scheduler, JPA persistence, LDES server/LDIO clients, local runtime | `application` | Spring, Jena, Testcontainers |
-| `bootstrap`   | Spring Boot application, wiring, security, scheduling, configuration | `adapter`  | Spring Boot                 |
+| `bootstrap`   | Spring Boot application, wiring, security, scheduling, configuration, serving the frontend | `adapter`, `frontend` | Spring Boot |
 
 `DependencyRuleTest` (ArchUnit, in `bootstrap`) additionally checks what the modules cannot:
 adapters don't depend on each other, inbound adapters only use use cases (never services),
@@ -82,7 +83,7 @@ org.openldes.ldesadmin
 │   ├── in.rest      instance | ldes | ldio | sandbox | monitoring | dashboard, RestExceptionHandler (RFC 9457)
 │   ├── in.scheduling InstanceMonitorScheduler
 │   └── out          persistence.jpa | ldes | ldio | health | runtime | http (shared HTTP helpers)
-└── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SchedulingConfig, SecurityConfig
+└── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SchedulingConfig, SecurityConfig, FrontendConfig
 ```
 
 ## Domain model
@@ -213,13 +214,14 @@ Assumptions worth knowing:
 | Unit                     | `model`, `application`         | Domain invariants; services against mocked ports (JUnit 6, AssertJ, Mockito) |
 | Slice                    | `adapter`                      | Controllers with `@WebMvcTest` and `MockMvcTester`; HTTP clients against `MockRestServiceServer`, with responses recorded from real servers |
 | Integration (`*IT`)      | `adapter`                      | JPA + Flyway against Postgres; the LDES server and LDIO clients against real `openldes/ldes-server` and `openldes/ldi-orchestrator` containers, started by the local runtime adapter |
-| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API; `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client |
+| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client |
 | Architecture             | `bootstrap`                    | `DependencyRuleTest` (ArchUnit)                                       |
 | Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, stores, mock and HTTP API, domain helpers, components (Jest) |
 | Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, sandbox, demo and production mode with a stubbed backend (Cypress) |
 
-`./mvnw test` runs the unit, slice and architecture tests; `./mvnw verify` also runs the
-integration tests, which need Docker.
+`./mvnw test` runs the unit, slice and architecture tests, and the frontend unit tests;
+`./mvnw verify` also runs the integration tests, which need Docker. The Cypress tests run with
+`pnpm test:e2e`.
 
 ## Frontend
 
@@ -235,6 +237,23 @@ frontend/src
 ├── components   layout, common, dashboard, instances, ldes, ldio, sandbox
 └── views        one per route
 ```
+
+### Build and serving
+
+The `frontend` directory is also a Maven module: `frontend-maven-plugin` downloads Node.js into
+`frontend/node/` and pnpm through corepack, installs the dependencies, type-checks and builds, runs
+the Jest tests in the `test` phase, and packages `dist/` as `static/` in a jar. The bootstrap
+module depends on that jar, and `FrontendConfig` serves it on `/`:
+
+* every path that is not a file, `/api/**` or `/actuator/**` gets `index.html`, as the frontend
+  routes in the browser (`/ldes-servers/{id}` has no file);
+* the assets carry a content hash in their name, so they may be cached for a year; `index.html` is
+  revalidated on every visit, so a new version shows right away;
+* responses are compressed (the JavaScript shrinks to about a quarter).
+
+The frontend is public even when the API requires a token: it holds no data. As it calls the API
+on the same origin, it needs no CORS. `-Dfrontend.skip` leaves the frontend out of a Maven build;
+while working on the frontend, `pnpm dev` serves it with hot reloading and proxies the API.
 
 ### Demo and production mode
 
@@ -292,4 +311,3 @@ member can be sent to a deployed pipeline with an HTTP input, which really proce
   its outputs replaced by an `Ldio:HttpOut` to a capture endpoint of LDES-admin, post the member to
   the `Ldio:HttpIn` input, and return what arrives. Intermediate steps would need one deployment
   per prefix of the pipeline.
-* Serving the built frontend from the Spring Boot application.

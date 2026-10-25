@@ -1,5 +1,8 @@
 node_modules
 dist
+# Node.js and corepack, downloaded by the Maven build
+node
+target
 coverage
 *.tsbuildinfo
 cypress/screenshots

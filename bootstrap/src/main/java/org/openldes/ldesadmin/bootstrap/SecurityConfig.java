@@ -12,7 +12,8 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Secures the API as an OAuth2 resource server when {@code ldes-admin.security.enabled} is set;
  * configure the issuer with {@code spring.security.oauth2.resourceserver.jwt.issuer-uri}.
- * Without it (the default, for local use) the API is open.
+ * Without it (the default, for local use) the API is open. The frontend itself, its files and
+ * routes, is always public: it holds no data.
  */
 @Configuration(proxyBeanMethods = false)
 class SecurityConfig {
@@ -25,7 +26,8 @@ class SecurityConfig {
     return http
         .authorizeHttpRequests(requests -> requests
             .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
-            .anyRequest().authenticated())
+            .requestMatchers("/api/**", "/actuator/**").authenticated()
+            .anyRequest().permitAll())
         .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
         .sessionManagement(session -> session
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS))

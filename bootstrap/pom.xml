@@ -21,6 +21,12 @@
       <groupId>org.openldes</groupId>
       <artifactId>ldes-admin-adapter</artifactId>
     </dependency>
+    <!-- The built frontend, served on / -->
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-frontend</artifactId>
+      <scope>runtime</scope>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>

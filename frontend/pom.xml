@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.openldes</groupId>
+    <artifactId>ldes-admin</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+  <artifactId>ldes-admin-frontend</artifactId>
+  <name>LDES-admin :: Frontend</name>
+  <description>
+    The Vue frontend, built with pnpm and packaged as static resources for the Spring Boot
+    application
+  </description>
+
+  <!--
+    Maven downloads Node.js into node/ and pnpm through corepack (the version in the
+    packageManager field of package.json), so the build needs neither on the machine. Skip the
+    frontend with -Dfrontend.skip, e.g. for a quick backend build; the jar then holds whatever
+    dist/ holds.
+  -->
+  <properties>
+    <node.version>v24.21.0</node.version>
+    <!-- Overridden by -DskipTests -->
+    <skipTests>false</skipTests>
+  </properties>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>dist</directory>
+        <!-- Where Spring Boot serves static resources from -->
+        <targetPath>static</targetPath>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>com.github.eirslett</groupId>
+        <artifactId>frontend-maven-plugin</artifactId>
+        <version>2.0.2</version>
+        <configuration>
+          <nodeVersion>${node.version}</nodeVersion>
+          <environmentVariables>
+            <COREPACK_ENABLE_DOWNLOAD_PROMPT>0</COREPACK_ENABLE_DOWNLOAD_PROMPT>
+            <!-- Cypress is only needed to run the end-to-end tests, not to build -->
+            <CYPRESS_INSTALL_BINARY>0</CYPRESS_INSTALL_BINARY>
+            <CI>true</CI>
+            <!-- pnpm 9 on Node.js 24 warns about url.parse(), which Maven logs as an error -->
+            <NODE_OPTIONS>--no-deprecation</NODE_OPTIONS>
+          </environmentVariables>
+        </configuration>
+        <executions>
+          <execution>
+            <id>install-node-and-corepack</id>
+            <goals>
+              <goal>install-node-and-corepack</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>pnpm-install</id>
+            <goals>
+              <goal>corepack</goal>
+            </goals>
+            <configuration>
+              <arguments>pnpm install --frozen-lockfile</arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>pnpm-build</id>
+            <goals>
+              <goal>corepack</goal>
+            </goals>
+            <configuration>
+              <!-- Type-checks, then builds to dist/ -->
+              <arguments>pnpm run build</arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>pnpm-test</id>
+            <phase>test</phase>
+            <goals>
+              <goal>corepack</goal>
+            </goals>
+            <configuration>
+              <arguments>pnpm test</arguments>
+              <skip>${skipTests}</skip>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>skip-frontend</id>
+      <activation>
+        <property>
+          <name>frontend.skip</name>
+        </property>
+      </activation>
+      <properties>
+        <skip.installnodecorepack>true</skip.installnodecorepack>
+        <skip.corepack>true</skip.corepack>
+        <skipTests>true</skipTests>
+      </properties>
+    </profile>
+  </profiles>
+</project>

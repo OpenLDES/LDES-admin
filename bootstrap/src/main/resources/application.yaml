@@ -14,6 +14,15 @@ spring:
     compose:
       # compose.yaml in the project root provides Postgres during development
       lifecycle-management: start-only
+  web:
+    resources:
+      # The frontend is served by FrontendConfig, which also routes the paths of the frontend
+      add-mappings: false
+
+server:
+  compression:
+    # The JavaScript of the frontend shrinks to a quarter
+    enabled: true
 
 management:
   endpoints:

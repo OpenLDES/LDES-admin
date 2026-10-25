@@ -33,13 +33,15 @@
 
   <!--
     Hexagonal architecture: every ring is a separate Maven module, so the dependency rule
-    (adapter -> application -> model) is enforced by the compiler.
+    (adapter -> application -> model) is enforced by the compiler. The frontend is built into a
+    jar of static resources that the bootstrap module serves.
     See analysis/architecture.md.
   -->
   <modules>
     <module>model</module>
     <module>application</module>
     <module>adapter</module>
+    <module>frontend</module>
     <module>bootstrap</module>
   </modules>
 
@@ -68,6 +70,11 @@
       <dependency>
         <groupId>org.openldes</groupId>
         <artifactId>ldes-admin-adapter</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-frontend</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
