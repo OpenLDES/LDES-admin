@@ -273,6 +273,13 @@ The choice is remembered in the browser. Without one, the frontend starts in pro
 `/actuator/health` of the backend answers, and in demo mode otherwise. Switching rebuilds the views
 and reloads the shared stores, so nothing of the other mode lingers.
 
+### Refreshing
+
+The dashboard refreshes every 30 seconds. The background processes of an LDES server refresh
+every 2 seconds while their tab shows (`usePolling`, which waits for an answer before asking
+again); the tab offers other intervals, or none, and the browser remembers the choice
+(`stores/ui.ts`).
+
 ### Event streams and views
 
 Creating an event stream or a view shows its definition as a form and as Turtle, next to each

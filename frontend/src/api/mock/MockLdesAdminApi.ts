@@ -73,9 +73,11 @@ export interface MockOptions {
 export class MockLdesAdminApi implements LdesAdminApi {
   private state: SampleState
   private localPorts = 32772
+  private readonly startedAt: number
 
   constructor(private readonly options: MockOptions = {}) {
     this.state = createSampleState(this.now())
+    this.startedAt = this.now().getTime()
   }
 
   // Dashboard ----------------------------------------------------------------------------------
@@ -417,7 +419,7 @@ export class MockLdesAdminApi implements LdesAdminApi {
   getBackgroundProcesses(serverId: string): Promise<BackgroundProcess[]> {
     return this.respond(() => {
       this.reachable('LDES_SERVER', serverId, 'get background processes')
-      return this.state.processes[serverId] ?? []
+      return (this.state.processes[serverId] ?? []).map((process) => this.sinceStart(process))
     })
   }
 
@@ -661,6 +663,21 @@ export class MockLdesAdminApi implements LdesAdminApi {
     this.log('info', instance, instance.origin === 'LOCAL'
       ? `Local ${instanceTypeLabel[instance.type]} stopped`
       : `${instanceTypeLabel[instance.type]} removed`)
+  }
+
+  /**
+   * The fragmentation job runs every few seconds, like on a local server, so its runs go up while
+   * you watch; the maintenance job runs at night.
+   */
+  private sinceStart(process: BackgroundProcess): BackgroundProcess {
+    if (process.job !== 'fragmentation') return process
+    const elapsed = this.now().getTime() - this.startedAt
+    const phase = elapsed % FRAGMENTATION_INTERVAL
+    return {
+      ...process,
+      completedRuns: process.completedRuns + Math.floor(elapsed / FRAGMENTATION_INTERVAL),
+      running: process.step === 'bucketisation' ? phase < 1500 : phase >= 1500 && phase < 2500,
+    }
   }
 
   private countIngested(serverId: string, collection: string, members = 1): void {
@@ -940,6 +957,9 @@ function typedConfig(graph: RdfGraph, node: Resource): TypedConfig {
 
 const RDF_FORMATS: RdfFormat[] = ['text/turtle', 'application/ld+json', 'application/n-quads',
   'application/n-triples']
+
+/** How often the fragmentation job of a sample server runs, in ms */
+const FRAGMENTATION_INTERVAL = 5000
 
 /** What the first poll of a pipeline with an HTTP poller fetches */
 const POLLED_MEMBERS = 14

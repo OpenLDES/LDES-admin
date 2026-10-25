@@ -43,7 +43,7 @@
     * When you click on "LDIOs up", go to the list of LDIOs
     * When you click on "Pipelines running", go to the list of LDIOs
     * When you click on "Members ingested", go to the list of LDES servers
-* [] When you are on the "background processes" tab of a stream, then refresh the number of
+* [x] When you are on the "background processes" tab of a stream, then refresh the number of
   completed, failed, average and longest recent run every 2 seconds. Make this "2 seconds"
   configurable.
 * [] Create github actions. Support the same release flow as the one for the OpenLDES server

@@ -105,6 +105,19 @@ describe('an LDES server', () => {
     cy.contains('[data-cy=process]', 'View retention')
   })
 
+  it('refreshes the background processes every 2 seconds, or as often as chosen', () => {
+    cy.get('[data-cy=tab-processes]').click()
+    cy.get('[data-cy=process-refresh]').should('contain', 'Every 2 seconds')
+    cy.contains('[data-cy=process]', 'Pagination').invoke('text').then((before) => {
+      cy.contains('[data-cy=process]', 'Pagination', { timeout: 8000 }).should('not.have.text', before)
+    })
+
+    cy.get('[data-cy=process-refresh]').click()
+    cy.contains('.p-select-option', 'Never').click()
+    cy.reload()
+    cy.get('[data-cy=process-refresh]').should('contain', 'Never')
+  })
+
   it('publishes a catalog of the server', () => {
     cy.get('[data-cy=internal-url]').should('contain', 'http://sandbox-ldes-server:8080')
     cy.get('[data-cy=tab-dcat]').click()

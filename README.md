@@ -16,7 +16,8 @@ Data Interaction Orchestrator (LDIO) pipelines.
 * **Event stream statistics**: members ingested, bucketised and paginated per view, and the backlog
   still waiting to be paginated.
 * **Background processes**: the fragmentation and maintenance jobs of a server (bucketisation,
-  pagination, retention, compaction, deletion) with their runs, failures and durations.
+  pagination, retention, compaction, deletion) with their runs, failures and durations, refreshed
+  every 2 seconds (or as often as you choose).
 
 | ![Views of an event stream and how far they are paginated](docs/screenshots/event-stream.png) | ![The background processes of an LDES server](docs/screenshots/background-processes.png) |
 |:---:|:---:|
