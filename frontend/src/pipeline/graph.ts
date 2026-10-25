@@ -1,5 +1,6 @@
 import type { ComponentConfig, ComponentDefinition, Pipeline } from '@/domain/ldio'
-import { componentInfo, type ComponentKind, kinds, missingRequiredProperties } from './catalog'
+import { componentInfo, type ComponentKind, kinds } from './catalog'
+import { configProblems } from './config'
 
 /**
  * A pipeline drawn as a graph: one node per component, edges in the direction the data flows.
@@ -40,13 +41,18 @@ export interface GraphIssue {
   severity: 'error' | 'warning'
   message: string
   nodeId?: string
+  /** For a problem with the configuration of a component: the property it is about */
+  property?: string
 }
 
 export interface GraphConversion {
   /** As much of the pipeline as could be derived; complete when there are no errors */
   pipeline?: Pipeline
   issues: GraphIssue[]
+  /** No errors at all: the pipeline can be deployed */
   valid: boolean
+  /** No errors in the structure of the pipeline: it can be simulated, whatever its configuration */
+  runnable: boolean
   /** Node ids in pipeline order: input, adapter, transformers, outputs */
   order: string[]
 }
@@ -166,15 +172,19 @@ export function graphToPipeline(
     error("The pipeline name may only contain letters, digits, '-' and '_'")
   }
   nodes.forEach((node) =>
-    missingRequiredProperties(node.data.component, node.data.config).forEach((key) =>
-      warning(`${label(node)} needs '${key}'`, node.id),
-    ),
+    configProblems(node.data.component, node.data.config).forEach((problem) => {
+      const where = problem.index === undefined ? problem.key : `${problem.key} (line ${problem.index + 1})`
+      const message = problem.message === 'Required'
+        ? `${label(node)} needs '${problem.key}'`
+        : `${label(node)}${where ? ` – ${where}` : ''}: ${problem.message}`
+      issues.push({ severity: problem.severity, message, nodeId: node.id, property: problem.key ?? '' })
+    }),
   )
 
   const inputs = nodes.filter((node) => node.data.kind === 'input')
   if (inputs.length === 0) {
     error('Add an input: every pipeline starts with one')
-    return { issues, valid: false, order: [] }
+    return { issues, valid: false, runnable: false, order: [] }
   }
   inputs.slice(1).forEach((extra) => error('A pipeline has exactly one input', extra.id))
 
@@ -246,6 +256,7 @@ export function graphToPipeline(
     pipeline,
     issues,
     valid: issues.every((issue) => issue.severity !== 'error'),
+    runnable: issues.every((issue) => issue.severity !== 'error' || issue.property !== undefined),
     order,
   }
 }

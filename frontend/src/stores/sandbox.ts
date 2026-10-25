@@ -148,7 +148,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
 
   async function run() {
     const pipeline = conversion.value.pipeline
-    if (!pipeline || !conversion.value.valid || running.value) return
+    if (!pipeline || !conversion.value.runnable || running.value) return
     resetSimulation()
     running.value = true
     const outcome = simulator.run(pipeline, sample.value)

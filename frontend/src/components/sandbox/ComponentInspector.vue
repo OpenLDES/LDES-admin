@@ -8,20 +8,15 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import type { ComponentConfig } from '@/domain/ldio'
-import {
-  componentInfo,
-  componentsOfKind,
-  type ConfigProperty,
-  configValue,
-  kinds,
-} from '@/pipeline/catalog'
+import { componentInfo, componentsOfKind, kinds } from '@/pipeline/catalog'
 import { cloneConfig, label } from '@/pipeline/graph'
 import { componentToYaml, parseComponentYaml } from '@/pipeline/yaml'
 import { useSandboxStore } from '@/stores/sandbox'
+import ComponentConfigForm from './ComponentConfigForm.vue'
 
 /**
- * Right-hand panel of the sandbox: the YAML of the selected component (editable, applied while
- * typing), or the whole pipeline when nothing is selected.
+ * Right-hand panel of the sandbox: the configuration of the selected component, as a form and as
+ * YAML (both editable, and kept in step), or the whole pipeline when nothing is selected.
  */
 const emit = defineEmits<{ editYaml: [] }>()
 
@@ -30,7 +25,10 @@ const toast = useToast()
 const node = computed(() => sandbox.selected)
 const info = computed(() => node.value ? componentInfo(node.value.data.component) : undefined)
 const kind = computed(() => node.value ? kinds[node.value.data.kind] : undefined)
-const issues = computed(() => node.value ? sandbox.issuesOf(node.value.id) : [])
+// Problems with the configuration show at their fields; these are about the place in the pipeline
+const issues = computed(() => node.value
+  ? sandbox.issuesOf(node.value.id).filter((issue) => issue.property === undefined)
+  : [])
 const alternatives = computed(() => node.value
   ? componentsOfKind(node.value.data.kind).map((c) => ({ label: c.label, value: c.id }))
   : [])
@@ -70,22 +68,10 @@ function swap(component: string) {
   resetDraft()
 }
 
-function isSet(property: ConfigProperty) {
-  const value = configValue(node.value?.data.config, property.key)
-  return value !== undefined && value !== null && value !== ''
-}
-
-/** Adds a property to the config, nested along its dots, with its default value */
-function addProperty(property: ConfigProperty) {
-  if (!node.value || isSet(property)) return
-  const config: ComponentConfig = cloneConfig(node.value.data.config)
-  const path = property.key.split('.')
-  let target = config
-  path.slice(0, -1).forEach((segment) => {
-    if (typeof target[segment] !== 'object' || target[segment] === null) target[segment] = {}
-    target = target[segment] as ComponentConfig
-  })
-  target[path[path.length - 1]] = property.default ?? ''
+/** A change in the form, which the YAML reflects right away */
+function onConfig(config: ComponentConfig) {
+  if (!node.value) return
+  clearTimeout(timer)
   sandbox.updateComponent(node.value.id, node.value.data.component, config)
   resetDraft()
 }
@@ -122,42 +108,27 @@ onBeforeUnmount(() => clearTimeout(timer))
             option-label="label" option-value="value" fluid size="small" @update:model-value="swap" />
         </div>
 
+        <Message v-for="issue in issues" :key="issue.message" :severity="issue.severity === 'error' ? 'error' : 'warn'"
+          size="small" :closable="false">{{ issue.message }}</Message>
+
+        <div class="field">
+          <span class="label">Configuration</span>
+          <ComponentConfigForm :component="node.data.component" :config="node.data.config"
+            @change="onConfig" />
+        </div>
+
         <div class="field">
           <div class="row">
-            <span class="label">Configuration (YAML)</span>
+            <span class="label">YAML</span>
             <span class="spacer" />
-            <span v-if="!parseError" class="applied small"><i class="pi pi-check" /> Applied</span>
+            <span v-if="!parseError" class="applied small"><i class="pi pi-check" /> In step with the form</span>
           </div>
-          <CodeEditor :model-value="draft" language="yaml" min-height="150px" max-height="340px"
+          <CodeEditor :model-value="draft" language="yaml" min-height="120px" max-height="340px"
             data-cy="component-yaml" @update:model-value="onDraft" />
           <Message v-if="parseError" severity="error" size="small" :closable="false" data-cy="yaml-error">
             {{ parseError }}
           </Message>
         </div>
-
-        <Message v-for="issue in issues" :key="issue.message" :severity="issue.severity === 'error' ? 'error' : 'warn'"
-          size="small" :closable="false">{{ issue.message }}</Message>
-
-        <div v-if="info.properties.length" class="field">
-          <span class="label">Properties</span>
-          <ul class="properties">
-            <li v-for="property in info.properties" :key="property.key" class="property"
-              :class="{ set: isSet(property) }">
-              <div class="property-head">
-                <code>{{ property.key }}</code>
-                <span v-if="property.required" class="required">required</span>
-                <span class="spacer" />
-                <Button v-if="!isSet(property)" icon="pi pi-plus" text rounded size="small"
-                  :aria-label="`Add ${property.key}`" v-tooltip.left="'Add to the configuration'"
-                  @click="addProperty(property)" />
-                <i v-else class="pi pi-check set-icon" />
-              </div>
-              <div class="muted small">{{ property.description }}</div>
-              <div v-if="property.default" class="muted small">Default: <code>{{ property.default }}</code></div>
-            </li>
-          </ul>
-        </div>
-        <p v-else class="muted small">This component has no configuration.</p>
 
         <div class="node-actions">
           <Button label="Duplicate" icon="pi pi-copy" severity="secondary" text size="small"
@@ -307,58 +278,13 @@ onBeforeUnmount(() => clearTimeout(timer))
   font-size: 10px;
 }
 
-.properties {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-}
 
-.property {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 
-.property + .property {
-  border-top: 1px solid var(--card-border);
-}
 
-.property-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-}
 
-.property-head code {
-  font-size: 12px;
-  font-weight: 600;
-}
 
-.required {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 0 6px;
-  border-radius: 4px;
-  color: var(--p-red-700);
-  background: var(--p-red-50);
-}
 
-.app-dark .required {
-  color: var(--p-red-300);
-  background: color-mix(in srgb, var(--p-red-500) 14%, transparent);
-}
 
-.set-icon {
-  font-size: 11px;
-  color: var(--p-green-600);
-  margin-right: 8px;
-}
 
 .node-actions {
   display: flex;

@@ -24,7 +24,46 @@ describe('the sandbox', () => {
     cy.get('[data-cy=component-yaml] .cm-content').type('{selectall}{backspace}name: Ldio:KafkaOut', { delay: 0 })
     cy.get('[data-cy=yaml-error]').should('not.exist')
     cy.get('[data-cy="node-Ldio:KafkaOut"]').should('exist')
-    cy.get('[data-cy=inspector]').should('contain', "Kafka Out needs 'bootstrap-servers'")
+    cy.get('[data-cy="config-bootstrap-servers"]').should('contain', 'Required')
+  })
+
+  it('configures a component in a form that stays in step with its YAML', () => {
+    cy.get('[data-cy=templates]').click()
+    cy.contains('.p-menu-item', 'Replicate an LDES into a triple store').click()
+    cy.contains('.p-confirmdialog button', 'Replace').click()
+    cy.get('[data-cy="node-Ldio:LdesClient"]').click()
+    const urls = () => cy.get('[data-cy="config-urls"]')
+    const yaml = () => cy.get('[data-cy=component-yaml] .cm-content')
+    urls().find('[data-cy=list-item]').should('have.length', 1)
+
+    // A URL that is not one: the field says so, the YAML shows it, and it cannot be deployed
+    urls().find('[data-cy=add-item]').click()
+    urls().find('[data-cy=list-item]').eq(1).type('not a url')
+    urls().should('contain', 'Not an http(s) URL')
+    yaml().should('contain', '- not a url')
+    cy.get('[data-cy=pipeline-validity]').should('contain', '1 problem')
+    cy.get('[data-cy=deploy]').should('be.disabled')
+
+    urls().find('[data-cy=list-item]').eq(1).clear().type('http://sandbox-ldes-server:8080/sandbox-parcels/by-time')
+    urls().should('not.contain', 'Not an http(s) URL')
+    yaml().should('contain', '- http://sandbox-ldes-server:8080/sandbox-parcels/by-time')
+    cy.get('[data-cy=pipeline-validity]').should('contain', 'Valid')
+
+    // A dropdown with the content types Jena reads
+    cy.get('[data-cy="config-source-format"] .p-select').click()
+    cy.contains('.p-select-option', 'N-Quads').click()
+    yaml().should('contain', 'source-format: application/n-quads')
+
+    // The state group is open, as the template keeps the state in SQLite
+    cy.get('[data-cy="config-sqlite.directory"]').should('exist')
+
+    // ... and the YAML drives the form
+    const typed = '{name: Ldio:LdesClient, config: {urls: [http://ldes.example.org/a], sourceFormat: text/n3}}'
+    yaml().type(`{selectall}{backspace}${typed.replaceAll('{', '{{}')}`, { delay: 0 })
+    urls().find('[data-cy=list-item]').should('have.length', 1).first()
+      .should('have.value', 'http://ldes.example.org/a')
+    cy.get('[data-cy="config-source-format"]').should('contain', 'text/n3')
+    cy.get('[data-cy="config-sqlite.directory"]').should('not.exist')
   })
 
   it('refuses a component of another kind', () => {

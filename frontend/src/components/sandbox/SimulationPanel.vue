@@ -38,7 +38,8 @@ const selectedStep = ref(0)
 const steps = computed(() => sandbox.result?.steps ?? [])
 const shown = computed<SimulationStep | undefined>(() => steps.value[selectedStep.value])
 const pending = computed(() => sandbox.conversion.order.length - steps.value.length)
-const blocked = computed(() => sandbox.errors[0]?.message)
+// A configuration that LDIO would refuse can still be simulated
+const blocked = computed(() => sandbox.errors.find((issue) => issue.property === undefined)?.message)
 
 const status = computed(() => {
   if (sandbox.running) return { icon: 'pi pi-spin pi-spinner', text: 'Running…', tone: 'busy' }

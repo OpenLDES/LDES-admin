@@ -112,7 +112,7 @@ describe('pipeline graph', () => {
     })
   })
 
-  it('reports missing required configuration as warnings', () => {
+  it('reports missing required configuration', () => {
     const nodes = [
       createNode('Ldio:LdesClient', { x: 0, y: 0 }, {}, 'in'),
       createNode('Ldio:NoopOut', { x: 300, y: 0 }, undefined, 'out'),
@@ -121,8 +121,27 @@ describe('pipeline graph', () => {
     const conversion = graphToPipeline({ name: 'p' }, nodes, [connect('in', 'out')])
 
     expect(conversion.issues).toEqual([
-      { severity: 'warning', message: "LDES Client needs 'urls'", nodeId: 'in' },
+      { severity: 'error', message: "LDES Client needs 'urls'", nodeId: 'in', property: 'urls' },
     ])
+    expect(conversion.valid).toBe(false)
+    // The simulation does not need it
+    expect(conversion.runnable).toBe(true)
+  })
+
+  it('reports invalid configuration values with the property they are about', () => {
+    const nodes = [
+      createNode('Ldio:LdesClient', { x: 0, y: 0 }, { urls: ['http://ldes.example.org/parcels', 'nope'] }, 'in'),
+      createNode('Ldio:NoopOut', { x: 300, y: 0 }, undefined, 'out'),
+    ]
+
+    const conversion = graphToPipeline({ name: 'p' }, nodes, [connect('in', 'out')])
+
+    expect(conversion.issues).toEqual([{
+      severity: 'error',
+      message: 'LDES Client – urls (line 2): Not an http(s) URL',
+      nodeId: 'in',
+      property: 'urls',
+    }])
   })
 
   it('rejects pipeline names that cannot be used in URLs', () => {

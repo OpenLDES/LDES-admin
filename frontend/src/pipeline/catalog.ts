@@ -12,12 +12,82 @@ import { SANDBOX_EVENT_STREAM_URL } from '@/domain/sandbox'
  */
 export type ComponentKind = 'input' | 'adapter' | 'transformer' | 'output'
 
+/**
+ * What a property holds, which decides how it is edited and validated:
+ *
+ * * `string`, `secret`, `text` – free text: one line, hidden, or several lines (queries, mappings)
+ * * `url`, `urls` – an http(s) URL, or a list of them
+ * * `iri`, `propertyPath` – an absolute IRI, or a property path of IRIs in angle brackets
+ * * `integer`, `boolean`, `duration` (ISO 8601), `cron` (Spring, 6 fields)
+ * * `select` – one of a list of options
+ * * `context` – a JSON-LD context: its URL, or the context document itself
+ * * `json` – a JSON document, as a string
+ * * `headers` – a list of HTTP headers, each a key and a value
+ * * `map` – a nested configuration, only edited in YAML
+ */
+export type PropertyType =
+  | 'string'
+  | 'secret'
+  | 'text'
+  | 'url'
+  | 'urls'
+  | 'iri'
+  | 'propertyPath'
+  | 'integer'
+  | 'boolean'
+  | 'duration'
+  | 'cron'
+  | 'select'
+  | 'context'
+  | 'json'
+  | 'headers'
+  | 'map'
+
+export interface SelectOption {
+  value: string
+  label?: string
+}
+
 export interface ConfigProperty {
   /** Dotted keys are nested in YAML, e.g. rdf-writer.content-type */
   key: string
+  type: PropertyType
   required?: boolean
   default?: string
   description: string
+  /** Shown as placeholder when there is no default */
+  example?: string
+  /** For `select`: the values to choose from */
+  options?: SelectOption[]
+  /** For `select`: the options are suggestions; other values are allowed too */
+  custom?: boolean
+  /** For `string`: the format the value has to follow */
+  pattern?: { regex: RegExp; message: string }
+  /** For `integer`: the lowest value */
+  min?: number
+  /** For `urls`: a single URL is written as a value rather than a list */
+  single?: boolean
+  /** Groups related properties in the editor, e.g. Authentication; ungrouped ones come first */
+  group?: string
+  /** Only applies when another property has one of these values (or its default is one) */
+  when?: { key: string; values: string[] }
+}
+
+export interface ConfigProblem {
+  /** The property it is about; none for problems of the configuration as a whole */
+  key?: string
+  /** For list properties: the item it is about */
+  index?: number
+  severity: 'error' | 'warning'
+  message: string
+}
+
+/** Reads the configuration of a component in the checks of the component */
+export interface ConfigReader {
+  /** The value as configured, undefined when it is not */
+  value(key: string): unknown
+  /** The value as configured, or else the default, as text */
+  effective(key: string): string | undefined
 }
 
 export interface ComponentInfo {
@@ -32,6 +102,8 @@ export interface ComponentInfo {
   properties: ConfigProperty[]
   /** Config of a freshly dropped component: required properties with example values */
   defaultConfig: ComponentConfig
+  /** Rules that involve several properties */
+  check?: (config: ConfigReader) => ConfigProblem[]
 }
 
 export interface KindInfo {
@@ -77,42 +149,293 @@ export const kindOrder: ComponentKind[] = ['input', 'adapter', 'transformer', 'o
 
 const DOCS = 'https://openldes.github.io/Linked-Data-Interactions/3.2.0-SNAPSHOT/ldio'
 
+/** The RDF serialisations Apache Jena reads and writes */
+export const RDF_CONTENT_TYPES: SelectOption[] = [
+  { value: 'text/turtle', label: 'Turtle' },
+  { value: 'application/n-quads', label: 'N-Quads' },
+  { value: 'application/n-triples', label: 'N-Triples' },
+  { value: 'application/trig', label: 'TriG' },
+  { value: 'application/ld+json', label: 'JSON-LD' },
+  { value: 'application/rdf+xml', label: 'RDF/XML' },
+  { value: 'application/rdf+json', label: 'RDF/JSON' },
+  { value: 'application/trix+xml', label: 'TriX' },
+  { value: 'text/n3', label: 'N3' },
+  { value: 'application/rdf+protobuf', label: 'RDF Protobuf' },
+  { value: 'application/rdf+thrift', label: 'RDF Thrift' },
+]
+
+/** What messages of an input with an adapter can hold: RDF, or raw data for the adapter */
+const MESSAGE_CONTENT_TYPES: SelectOption[] = [
+  ...RDF_CONTENT_TYPES,
+  { value: 'application/json', label: 'JSON' },
+  { value: 'text/csv', label: 'CSV' },
+  { value: 'application/xml', label: 'XML' },
+]
+
+const BROKERS = {
+  regex: /^\s*[^\s,:]+:\d+(\s*,\s*[^\s,:]+:\d+)*\s*$/,
+  message: 'Enter host:port pairs separated by commas, e.g. localhost:9092',
+}
+
+const AMQP_URL = {
+  regex: /^amqp(s|ws|wss)?:\/\/[^\s/:]+:\d+/,
+  message: 'Enter an AMQP URI, e.g. amqp://localhost:61616',
+}
+
 const rdfWriter: ConfigProperty[] = [
   {
     key: 'rdf-writer.content-type',
+    type: 'select',
+    options: RDF_CONTENT_TYPES,
     default: 'text/turtle',
-    description: 'Serialisation of the output, any content type supported by Apache Jena',
+    description: 'Serialisation of the output',
+    group: 'Output format',
   },
   {
     key: 'rdf-writer.frame',
-    description: 'JSON-LD frame to shape the output when writing application/ld+json',
+    type: 'json',
+    example: '{"@context": {...}, "@type": "..."}',
+    description: 'JSON-LD frame to shape the JSON-LD output',
+    group: 'Output format',
+    when: { key: 'rdf-writer.content-type', values: ['application/ld+json'] },
   },
 ]
+
+const API_KEY = 'API_KEY'
+const OAUTH2 = 'OAUTH2_CLIENT_CREDENTIALS'
 
 const auth: ConfigProperty[] = [
   {
     key: 'auth.type',
+    type: 'select',
+    options: [
+      { value: 'NO_AUTH', label: 'No authentication' },
+      { value: API_KEY, label: 'API key' },
+      { value: OAUTH2, label: 'OAuth2 client credentials' },
+    ],
     default: 'NO_AUTH',
-    description: 'NO_AUTH, API_KEY or OAUTH2_CLIENT_CREDENTIALS',
+    description: 'How to authenticate with the server',
+    group: 'Authentication',
   },
-  { key: 'auth.api-key', description: 'The API key, for auth.type API_KEY' },
-  { key: 'auth.client-id', description: 'Client id, for OAUTH2_CLIENT_CREDENTIALS' },
-  { key: 'auth.client-secret', description: 'Client secret, for OAUTH2_CLIENT_CREDENTIALS' },
-  { key: 'auth.token-endpoint', description: 'Token endpoint, for OAUTH2_CLIENT_CREDENTIALS' },
+  {
+    key: 'auth.api-key',
+    type: 'secret',
+    description: 'The API key',
+    group: 'Authentication',
+    when: { key: 'auth.type', values: [API_KEY] },
+  },
+  {
+    key: 'auth.api-key-header',
+    type: 'string',
+    default: 'X-API-KEY',
+    description: 'The header that carries the API key',
+    group: 'Authentication',
+    when: { key: 'auth.type', values: [API_KEY] },
+  },
+  {
+    key: 'auth.client-id',
+    type: 'string',
+    description: 'The client identifier',
+    group: 'Authentication',
+    when: { key: 'auth.type', values: [OAUTH2] },
+  },
+  {
+    key: 'auth.client-secret',
+    type: 'secret',
+    description: 'The client secret',
+    group: 'Authentication',
+    when: { key: 'auth.type', values: [OAUTH2] },
+  },
+  {
+    key: 'auth.token-endpoint',
+    type: 'url',
+    example: 'https://login.example.org/token',
+    description: 'Where to request a token',
+    group: 'Authentication',
+    when: { key: 'auth.type', values: [OAUTH2] },
+  },
+  {
+    key: 'auth.scope',
+    type: 'string',
+    description: 'The OAuth2 scope to request',
+    group: 'Authentication',
+    when: { key: 'auth.type', values: [OAUTH2] },
+  },
+]
+
+const httpRequester: ConfigProperty[] = [
+  ...auth,
+  {
+    key: 'retries.enabled',
+    type: 'boolean',
+    default: 'true',
+    description: 'Retry requests when the server cannot be reached',
+    group: 'Retries',
+  },
+  {
+    key: 'retries.max',
+    type: 'integer',
+    min: 0,
+    default: '5',
+    description: 'How many times to retry',
+    group: 'Retries',
+    when: { key: 'retries.enabled', values: ['true'] },
+  },
+  {
+    key: 'retries.statuses-to-retry',
+    type: 'string',
+    example: '410,451',
+    pattern: {
+      regex: /^\s*\d{3}(\s*,\s*\d{3})*\s*$/,
+      message: 'Enter HTTP status codes separated by commas, e.g. 410,451',
+    },
+    description: 'Other HTTP status codes that trigger a retry',
+    group: 'Retries',
+    when: { key: 'retries.enabled', values: ['true'] },
+  },
+  {
+    key: 'rate-limit.enabled',
+    type: 'boolean',
+    default: 'false',
+    description: 'Limit the number of requests to the server',
+    group: 'Rate limit',
+  },
+  {
+    key: 'rate-limit.limit',
+    type: 'integer',
+    min: 1,
+    default: '500',
+    description: 'Requests allowed per period',
+    group: 'Rate limit',
+    when: { key: 'rate-limit.enabled', values: ['true'] },
+  },
+  {
+    key: 'rate-limit.period',
+    type: 'duration',
+    default: 'PT1M',
+    description: 'The period of the limit',
+    group: 'Rate limit',
+    when: { key: 'rate-limit.enabled', values: ['true'] },
+  },
+  {
+    key: 'http.headers',
+    type: 'headers',
+    description: 'Headers to add to every request',
+    group: 'HTTP headers',
+  },
 ]
 
 const state: ConfigProperty[] = [
   {
     key: 'state',
+    type: 'select',
+    options: [
+      { value: 'memory', label: 'Memory' },
+      { value: 'sqlite', label: 'SQLite' },
+      { value: 'postgres', label: 'PostgreSQL' },
+    ],
     default: 'memory',
-    description: "Where the state is kept: 'memory', 'sqlite' or 'postgres'",
+    description: 'Where to keep the state; it survives restarts in SQLite and PostgreSQL',
+    group: 'State',
   },
   {
     key: 'keep-state',
+    type: 'boolean',
     default: 'false',
-    description: 'Keep the state when the pipeline stops (not for memory)',
+    description: 'Keep the state when the pipeline stops',
+    group: 'State',
+    when: { key: 'state', values: ['sqlite', 'postgres'] },
+  },
+  {
+    key: 'sqlite.directory',
+    type: 'string',
+    example: '/ldio/sqlite',
+    description: 'Directory for the .db file',
+    group: 'State',
+    when: { key: 'state', values: ['sqlite'] },
+  },
+  {
+    key: 'postgres.url',
+    type: 'string',
+    example: 'jdbc:postgresql://localhost:5432/ldio',
+    pattern: {
+      regex: /^jdbc:postgresql:\/\/\S+$/,
+      message: 'Enter a JDBC URL, e.g. jdbc:postgresql://localhost:5432/ldio',
+    },
+    description: 'JDBC URL of the database',
+    group: 'State',
+    when: { key: 'state', values: ['postgres'] },
+  },
+  {
+    key: 'postgres.username',
+    type: 'string',
+    description: 'User name for the database',
+    group: 'State',
+    when: { key: 'state', values: ['postgres'] },
+  },
+  {
+    key: 'postgres.password',
+    type: 'secret',
+    description: 'Password for the database',
+    group: 'State',
+    when: { key: 'state', values: ['postgres'] },
   },
 ]
+
+const kafkaSecurity: ConfigProperty[] = [
+  {
+    key: 'security-protocol',
+    type: 'select',
+    options: [
+      { value: 'NO_AUTH', label: 'No authentication' },
+      { value: 'SASL_SSL_PLAIN', label: 'SASL over SSL, plain' },
+    ],
+    default: 'NO_AUTH',
+    description: 'How to connect to the brokers',
+    group: 'Security',
+  },
+  {
+    key: 'sasl-jaas-user',
+    type: 'string',
+    description: 'User name',
+    group: 'Security',
+    when: { key: 'security-protocol', values: ['SASL_SSL_PLAIN'] },
+  },
+  {
+    key: 'sasl-jaas-password',
+    type: 'secret',
+    description: 'Password',
+    group: 'Security',
+    when: { key: 'security-protocol', values: ['SASL_SSL_PLAIN'] },
+  },
+]
+
+function isBlank(value: unknown): boolean {
+  return value === undefined || value === null || (typeof value === 'string' && value.trim() === '')
+}
+
+/** Credentials that the chosen authentication or state needs */
+function checkCredentials(config: ConfigReader): ConfigProblem[] {
+  const problems: ConfigProblem[] = []
+  const need = (key: string, because: string, severity: ConfigProblem['severity'] = 'error') => {
+    if (isBlank(config.value(key))) {
+      problems.push({ key, severity, message: `Needed for ${because}` })
+    }
+  }
+  if (config.effective('auth.type') === API_KEY) need('auth.api-key', 'API key authentication')
+  if (config.effective('auth.type') === OAUTH2) {
+    ['auth.client-id', 'auth.client-secret', 'auth.token-endpoint']
+      .forEach((key) => need(key, 'OAuth2 client credentials'))
+  }
+  if (config.effective('state') === 'postgres') {
+    ['postgres.url', 'postgres.username', 'postgres.password']
+      .forEach((key) => need(key, 'state in PostgreSQL', 'warning'))
+  }
+  if (config.effective('security-protocol') === 'SASL_SSL_PLAIN') {
+    ['sasl-jaas-user', 'sasl-jaas-password'].forEach((key) => need(key, 'SASL'))
+  }
+  return problems
+}
 
 export const components: ComponentInfo[] = [
   // Inputs ------------------------------------------------------------------------------------
@@ -136,17 +459,38 @@ export const components: ComponentInfo[] = [
     docs: `${DOCS}/ldio-inputs/ldio-http-in-poller`,
     requiresAdapter: true,
     properties: [
-      { key: 'url', required: true, description: 'URL to poll' },
-      { key: 'interval', description: 'Polling interval in ISO 8601, e.g. PT1M (or use cron)' },
-      { key: 'cron', description: 'Spring cron expression, e.g. */10 * * * * * (or interval)' },
+      { key: 'url', type: 'urls', single: true, required: true, description: 'URLs to poll' },
+      {
+        key: 'interval',
+        type: 'duration',
+        example: 'PT1M',
+        description: 'Time between polls, in ISO 8601; or use a cron expression',
+      },
+      {
+        key: 'cron',
+        type: 'cron',
+        example: '*/10 * * * * *',
+        description: 'When to poll, as a Spring cron expression; or use an interval',
+      },
       {
         key: 'continueOnFail',
+        type: 'boolean',
         default: 'true',
         description: 'Keep polling when a poll fails',
       },
-      ...auth,
+      ...httpRequester,
     ],
     defaultConfig: { url: 'https://api.example.org/changes', interval: 'PT1M' },
+    check: (config) => {
+      const set = (key: string) => !isBlank(config.value(key))
+      const problems = checkCredentials(config)
+      if (!set('interval') && !set('cron')) {
+        problems.push({ key: 'interval', severity: 'error', message: "Set 'interval' or 'cron'" })
+      } else if (set('interval') && set('cron')) {
+        problems.push({ key: 'cron', severity: 'warning', message: "Set 'interval' or 'cron', not both" })
+      }
+      return problems
+    },
   },
   {
     id: 'Ldio:LdesClient',
@@ -156,25 +500,56 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-cloud-download',
     docs: `${DOCS}/ldio-inputs/ldio-ldes-client`,
     properties: [
-      { key: 'urls', required: true, description: 'URLs of the LDES (views) to follow' },
+      {
+        key: 'urls',
+        type: 'urls',
+        required: true,
+        description: 'URLs of the LDES to follow; several URLs must be views of the same LDES',
+      },
       {
         key: 'source-format',
+        type: 'select',
+        options: RDF_CONTENT_TYPES,
         default: 'text/turtle',
-        description: 'Content type to request from the server',
+        description: 'Content type to request from the server; N-Quads or RDF Protobuf parse faster when the server uses no relative IRIs',
       },
-      ...state,
       {
         key: 'enable-exactly-once',
+        type: 'boolean',
         default: 'true',
-        description: 'Filter out members that were already received',
+        description: 'Filter out members that were already received from another page',
       },
       {
         key: 'materialisation.enabled',
+        type: 'boolean',
         default: 'false',
         description: 'Turn version objects into state objects',
+        group: 'Version materialisation',
       },
+      {
+        key: 'materialisation.enable-latest-state',
+        type: 'boolean',
+        default: 'true',
+        description: 'Only pass on the latest state of each object',
+        group: 'Version materialisation',
+        when: { key: 'materialisation.enabled', values: ['true'] },
+      },
+      ...state,
+      ...httpRequester,
     ],
     defaultConfig: { urls: [`${SANDBOX_EVENT_STREAM_URL}/by-page`] },
+    check: (config) => {
+      const problems = checkCredentials(config)
+      if (config.effective('materialisation.enabled') === 'true'
+        && config.effective('enable-exactly-once') === 'true') {
+        problems.push({
+          key: 'enable-exactly-once',
+          severity: 'warning',
+          message: 'The exactly-once filter does not work with version materialisation: turn it off',
+        })
+      }
+      return problems
+    },
   },
   {
     id: 'Ldio:LdesClientConnector',
@@ -186,11 +561,22 @@ export const components: ComponentInfo[] = [
     properties: [
       {
         key: 'connector-transfer-url',
+        type: 'url',
         required: true,
         description: 'Transfer URL of the EDC connector that starts the transfer',
       },
-      { key: 'proxy-url-to-replace', description: 'Part of the LDES URL to proxy' },
-      { key: 'proxy-url-replacement', description: 'Replacement for the proxied URL part' },
+      {
+        key: 'proxy-url-to-replace',
+        type: 'string',
+        example: 'http://ldes-behind-connectors.dev',
+        description: 'Part of the LDES URLs to replace',
+      },
+      {
+        key: 'proxy-url-replacement',
+        type: 'string',
+        example: 'http://consumer-connector:29193',
+        description: 'What replaces that part',
+      },
     ],
     defaultConfig: {
       'connector-transfer-url': 'http://consumer-connector:29193/management/v2/transferprocesses',
@@ -205,17 +591,31 @@ export const components: ComponentInfo[] = [
     docs: `${DOCS}/ldio-inputs/ldio-kafka-in`,
     requiresAdapter: true,
     properties: [
-      { key: 'content-type', required: true, description: 'Content type of the messages' },
-      { key: 'bootstrap-servers', required: true, description: 'Comma separated broker URIs' },
-      { key: 'topics', required: true, description: 'Comma separated topic names' },
-      { key: 'group-id', description: 'Consumer group, generated by default' },
-      { key: 'security-protocol', default: 'NO_AUTH', description: 'e.g. SASL_SSL_PLAIN' },
+      {
+        key: 'content-type',
+        type: 'select',
+        options: MESSAGE_CONTENT_TYPES,
+        custom: true,
+        required: true,
+        description: 'Content type of the messages, as the adapter reads them',
+      },
+      {
+        key: 'bootstrap-servers',
+        type: 'string',
+        required: true,
+        pattern: BROKERS,
+        description: 'Brokers to connect to',
+      },
+      { key: 'topics', type: 'string', required: true, description: 'Topics, separated by commas' },
+      { key: 'group-id', type: 'string', description: 'Consumer group; generated when not set' },
+      ...kafkaSecurity,
     ],
     defaultConfig: {
       'content-type': 'application/n-quads',
       'bootstrap-servers': 'localhost:9092',
       topics: 'quickstart-events',
     },
+    check: checkCredentials,
   },
   {
     id: 'Ldio:AmqpIn',
@@ -226,11 +626,18 @@ export const components: ComponentInfo[] = [
     docs: `${DOCS}/ldio-inputs/ldio-amqp-in`,
     requiresAdapter: true,
     properties: [
-      { key: 'remote-url', required: true, description: 'URI of the AMQP broker' },
-      { key: 'queue', required: true, description: 'Name of the queue' },
-      { key: 'username', required: true, description: 'User name' },
-      { key: 'password', required: true, description: 'Password' },
-      { key: 'content-type', default: 'application/n-quads', description: 'Message content type' },
+      { key: 'remote-url', type: 'string', required: true, pattern: AMQP_URL, description: 'URI of the AMQP broker' },
+      { key: 'queue', type: 'string', required: true, description: 'Name of the queue' },
+      { key: 'username', type: 'string', required: true, description: 'User name' },
+      { key: 'password', type: 'secret', required: true, description: 'Password' },
+      {
+        key: 'content-type',
+        type: 'select',
+        options: MESSAGE_CONTENT_TYPES,
+        custom: true,
+        default: 'application/n-quads',
+        description: 'Content type of the messages, unless they tell otherwise',
+      },
     ],
     defaultConfig: {
       'remote-url': 'amqp://localhost:61616',
@@ -250,6 +657,8 @@ export const components: ComponentInfo[] = [
     properties: [
       {
         key: 'max-jsonld-cache-capacity',
+        type: 'integer',
+        min: 1,
         default: '100',
         description: 'Number of external JSON-LD contexts to cache',
       },
@@ -264,11 +673,24 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-code',
     docs: `${DOCS}/ldio-adapters/ldio-json-to-json-ld`,
     properties: [
-      { key: 'context', required: true, description: 'URI of a JSON-LD context, or the context' },
+      {
+        key: 'context',
+        type: 'context',
+        required: true,
+        description: 'URL of a JSON-LD context, or the context document: {"@context": {...}}',
+      },
       {
         key: 'force-content-type',
+        type: 'boolean',
         default: 'false',
-        description: 'Treat every message as application/json',
+        description: 'Read every message as application/json, whatever its content type',
+      },
+      {
+        key: 'max-jsonld-cache-capacity',
+        type: 'integer',
+        min: 1,
+        default: '100',
+        description: 'Number of external JSON-LD contexts to cache',
       },
     ],
     defaultConfig: { context: 'https://example.org/context.jsonld' },
@@ -281,7 +703,12 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-table',
     docs: `${DOCS}/ldio-adapters/ldio-rml-adapter`,
     properties: [
-      { key: 'mapping', required: true, description: 'Path to, or content of, the RML mapping' },
+      {
+        key: 'mapping',
+        type: 'text',
+        required: true,
+        description: 'Path to the RML mapping, or the mapping itself',
+      },
     ],
     defaultConfig: { mapping: 'mapping.ttl' },
   },
@@ -293,9 +720,14 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-sitemap',
     docs: `${DOCS}/ldio-adapters/ldio-ngsiv2-to-ld`,
     properties: [
-      { key: 'core-context', required: true, description: 'URI of the core JSON-LD context' },
-      { key: 'ld-context', description: 'URI of a custom JSON-LD context' },
-      { key: 'data-identifier', required: true, description: 'Key that holds the entities' },
+      { key: 'core-context', type: 'url', required: true, description: 'URL of the core JSON-LD context' },
+      { key: 'ld-context', type: 'url', description: 'URL of a custom JSON-LD context' },
+      {
+        key: 'data-identifier',
+        type: 'string',
+        required: true,
+        description: 'Key of the JSON that holds the entities',
+      },
     ],
     defaultConfig: {
       'core-context': 'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld',
@@ -313,21 +745,31 @@ export const components: ComponentInfo[] = [
     properties: [
       {
         key: 'member-type',
+        type: 'iri',
         required: true,
-        description: 'RDF type of the object to turn into a version object',
+        description: 'RDF type of the objects to turn into version objects',
       },
       {
         key: 'date-observed-property',
-        description: 'Property path (<iri>) of the timestamp, defaults to now',
+        type: 'propertyPath',
+        example: '<https://example.org/lastModified>',
+        description: 'Property path to an xsd:dateTime to use as timestamp; the current time when not set',
       },
-      { key: 'delimiter', default: '/', description: 'Between the state id and the timestamp' },
+      {
+        key: 'delimiter',
+        type: 'string',
+        default: '/',
+        description: 'Between the id of the state object and the timestamp, in the version id',
+      },
       {
         key: 'generatedAt-property',
+        type: 'iri',
         default: 'http://www.w3.org/ns/prov#generatedAtTime',
         description: 'Property that receives the timestamp',
       },
       {
         key: 'versionOf-property',
+        type: 'iri',
         default: 'http://purl.org/dc/terms/isVersionOf',
         description: 'Property that links the version to the state object',
       },
@@ -344,13 +786,15 @@ export const components: ComponentInfo[] = [
     properties: [
       {
         key: 'versionOf-property',
+        type: 'iri',
         required: true,
         description: 'Property that links the version to the state object',
       },
       {
         key: 'restrict-to-members',
+        type: 'boolean',
         default: 'false',
-        description: 'Only keep the statements of the member itself',
+        description: 'Only keep the statements of the member itself, with its nested blank nodes',
       },
     ],
     defaultConfig: { 'versionOf-property': 'http://purl.org/dc/terms/isVersionOf' },
@@ -363,8 +807,18 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-filter',
     docs: `${DOCS}/ldio-transformers/ldio-sparql-construct`,
     properties: [
-      { key: 'query', required: true, description: 'Path to, or content of, the query' },
-      { key: 'infer', default: 'false', description: 'Add the result to the original model' },
+      {
+        key: 'query',
+        type: 'text',
+        required: true,
+        description: 'Path to the query, or the query itself',
+      },
+      {
+        key: 'infer',
+        type: 'boolean',
+        default: 'false',
+        description: 'Add the result to the original model instead of replacing it',
+      },
     ],
     defaultConfig: { query: 'CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }' },
   },
@@ -378,6 +832,7 @@ export const components: ComponentInfo[] = [
     properties: [
       {
         key: 'transform-to-rdf+wkt-enabled',
+        type: 'boolean',
         default: 'false',
         description: 'Produce RDF+WKT instead of GeoSPARQL',
       },
@@ -391,7 +846,9 @@ export const components: ComponentInfo[] = [
     description: 'Replaces blank nodes with well-known IRIs',
     icon: 'pi pi-link',
     docs: `${DOCS}/ldio-transformers/ldio-skolemisation-transformer`,
-    properties: [{ key: 'skolemDomain', required: true, description: 'Domain of the IRIs' }],
+    properties: [
+      { key: 'skolemDomain', type: 'iri', required: true, description: 'Domain of the generated IRIs' },
+    ],
     defaultConfig: { skolemDomain: 'https://example.org' },
   },
   {
@@ -403,6 +860,7 @@ export const components: ComponentInfo[] = [
     docs: `${DOCS}/ldio-transformers/ldio-change-detection-filter`,
     properties: [...state],
     defaultConfig: {},
+    check: checkCredentials,
   },
   {
     id: 'Ldio:HttpEnricher',
@@ -412,25 +870,55 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-plus-circle',
     docs: `${DOCS}/ldio-transformers/ldio-http-enricher`,
     properties: [
-      { key: 'adapter.name', required: true, description: 'Adapter that parses the response' },
+      {
+        key: 'adapter.name',
+        type: 'select',
+        options: [
+          { value: 'Ldio:RdfAdapter', label: 'RDF Adapter' },
+          { value: 'Ldio:JsonToLdAdapter', label: 'JSON to JSON-LD' },
+          { value: 'Ldio:RmlAdapter', label: 'RML Adapter' },
+          { value: 'Ldio:NgsiV2ToLdAdapter', label: 'NGSI-v2 to LD' },
+        ],
+        required: true,
+        description: 'Adapter that turns the responses into linked data',
+      },
+      {
+        key: 'adapter.config',
+        type: 'map',
+        description: 'Configuration of that adapter',
+      },
       {
         key: 'url-property-path',
+        type: 'propertyPath',
         required: true,
-        description: 'Property path that selects the URL to call',
+        example: '<http://example.org/url>',
+        description: 'Property path to the URL to call',
       },
-      { key: 'header-property-path', description: 'Property path that selects headers' },
-      { key: 'body-property-path', description: 'Property path that selects the body' },
+      {
+        key: 'header-property-path',
+        type: 'propertyPath',
+        example: '<http://example.org/header>',
+        description: 'Property path to the headers to send',
+      },
+      {
+        key: 'body-property-path',
+        type: 'propertyPath',
+        example: '<http://example.org/meta>/<http://example.org/body>',
+        description: 'Property path to the body to post',
+      },
       {
         key: 'http-method-property-path',
+        type: 'string',
         default: 'GET',
-        description: 'Property path that selects the method',
+        description: 'Property path to the HTTP method, GET or POST',
       },
-      ...auth,
+      ...httpRequester,
     ],
     defaultConfig: {
       adapter: { name: 'Ldio:RdfAdapter' },
       'url-property-path': '<http://example.org/meta>/<http://example.org/url>',
     },
+    check: checkCredentials,
   },
   // Outputs -----------------------------------------------------------------------------------
   {
@@ -451,15 +939,12 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-send',
     docs: `${DOCS}/ldio-outputs/ldio-http-out`,
     properties: [
-      { key: 'endpoint', required: true, description: 'Target URL' },
-      {
-        key: 'continueOnFail',
-        default: 'true',
-        description: 'Drop the member instead of failing when the target keeps refusing it',
-      },
+      { key: 'endpoint', type: 'url', required: true, description: 'Where to post the model' },
       ...rdfWriter,
+      ...httpRequester,
     ],
     defaultConfig: { endpoint: SANDBOX_EVENT_STREAM_URL },
+    check: checkCredentials,
   },
   {
     id: 'Ldio:HttpSparqlOut',
@@ -469,17 +954,41 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-database',
     docs: `${DOCS}/ldio-outputs/ldio-http-sparql-out`,
     properties: [
-      { key: 'endpoint', required: true, description: 'URL of the SPARQL host' },
-      { key: 'graph', description: 'Graph to write to' },
+      { key: 'endpoint', type: 'url', required: true, description: 'URL of the SPARQL endpoint' },
+      { key: 'graph', type: 'iri', description: 'Graph to write to' },
+      {
+        key: 'skolemisation.skolemDomain',
+        type: 'iri',
+        description: 'Skolemise blank nodes with this domain before writing',
+      },
       {
         key: 'replacement.enabled',
+        type: 'boolean',
         default: 'true',
-        description: 'Replace the previous version of the resource',
+        description: 'Replace the earlier statements about the same subjects',
+        group: 'Replacement',
       },
-      { key: 'skolemisation.skolemDomain', description: 'Skolemise blank nodes first' },
-      ...auth,
+      {
+        key: 'replacement.depth',
+        type: 'integer',
+        min: 1,
+        default: '10',
+        description: 'How deep nested nodes are deleted',
+        group: 'Replacement',
+        when: { key: 'replacement.enabled', values: ['true'] },
+      },
+      {
+        key: 'replacement.deleteFunction',
+        type: 'text',
+        example: 'DELETE { ?s ?p ?o } WHERE { ?s ?p ?o }',
+        description: 'A delete query instead of the default one',
+        group: 'Replacement',
+        when: { key: 'replacement.enabled', values: ['true'] },
+      },
+      ...httpRequester,
     ],
     defaultConfig: { endpoint: 'http://localhost:8890/sparql' },
+    check: checkCredentials,
   },
   {
     id: 'Ldio:RepositorySink',
@@ -489,11 +998,17 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-server',
     docs: `${DOCS}/ldio-outputs/ldio-repository-sink`,
     properties: [
-      { key: 'sparql-host', required: true, description: 'URL of the repository server' },
-      { key: 'repository-id', required: true, description: 'RDF4J repository id' },
-      { key: 'named-graph', description: 'Named graph to write to' },
-      { key: 'batch-size', default: '500', description: 'Members committed at once' },
-      { key: 'batch-timeout', default: '120000', description: 'Commit after this many ms' },
+      { key: 'sparql-host', type: 'url', required: true, description: 'URL of the repository server' },
+      { key: 'repository-id', type: 'string', required: true, description: 'RDF4J repository id' },
+      { key: 'named-graph', type: 'iri', description: 'Named graph to write to' },
+      { key: 'batch-size', type: 'integer', min: 1, default: '500', description: 'Members committed at once' },
+      {
+        key: 'batch-timeout',
+        type: 'integer',
+        min: 1,
+        default: '120000',
+        description: 'Milliseconds after which a smaller batch is committed anyway',
+      },
     ],
     defaultConfig: { 'sparql-host': 'http://localhost:7200', 'repository-id': 'my-repository' },
   },
@@ -505,12 +1020,30 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-megaphone',
     docs: `${DOCS}/ldio-outputs/ldio-kafka-out`,
     properties: [
-      { key: 'bootstrap-servers', required: true, description: 'Comma separated broker URIs' },
-      { key: 'topic', required: true, description: 'Name of the topic' },
-      { key: 'key-property-path', description: 'Property path that selects the message key' },
+      {
+        key: 'bootstrap-servers',
+        type: 'string',
+        required: true,
+        pattern: BROKERS,
+        description: 'Brokers to connect to',
+      },
+      { key: 'topic', type: 'string', required: true, description: 'Name of the topic' },
+      {
+        key: 'key-property-path',
+        type: 'propertyPath',
+        example: '<http://purl.org/dc/terms/title>',
+        description: 'Property path to the message key',
+      },
+      {
+        key: 'frame-type',
+        type: 'iri',
+        description: 'RDF type of the objects to include when framing JSON-LD',
+      },
+      ...kafkaSecurity,
       ...rdfWriter,
     ],
     defaultConfig: { 'bootstrap-servers': 'localhost:9092', topic: 'quickstart-events' },
+    check: checkCredentials,
   },
   {
     id: 'Ldio:AmqpOut',
@@ -520,10 +1053,10 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-envelope',
     docs: `${DOCS}/ldio-outputs/ldio-amqp-out`,
     properties: [
-      { key: 'remote-url', required: true, description: 'URI of the AMQP broker' },
-      { key: 'queue', required: true, description: 'Name of the queue' },
-      { key: 'username', required: true, description: 'User name' },
-      { key: 'password', required: true, description: 'Password' },
+      { key: 'remote-url', type: 'string', required: true, pattern: AMQP_URL, description: 'URI of the AMQP broker' },
+      { key: 'queue', type: 'string', required: true, description: 'Name of the queue' },
+      { key: 'username', type: 'string', required: true, description: 'User name' },
+      { key: 'password', type: 'secret', required: true, description: 'Password' },
       ...rdfWriter,
     ],
     defaultConfig: {
@@ -541,11 +1074,18 @@ export const components: ComponentInfo[] = [
     icon: 'pi pi-th-large',
     docs: `${DOCS}/ldio-outputs/ldio-rdb-out`,
     properties: [
-      { key: 'table-name', required: true, description: 'Table that receives the rows' },
+      { key: 'table-name', type: 'string', required: true, description: 'Table that receives the rows' },
       {
         key: 'sparql-select-query',
+        type: 'text',
         required: true,
         description: 'Query that turns the model into rows',
+      },
+      {
+        key: 'ignore-duplicate-key-exception',
+        type: 'boolean',
+        default: 'false',
+        description: 'Skip rows that violate a unique key instead of failing',
       },
     ],
     defaultConfig: {
@@ -576,26 +1116,46 @@ export function componentsOfKind(kind: ComponentKind): ComponentInfo[] {
 }
 
 /**
- * Reads a dotted key from a config that may be flat (LDIO responses) or nested (YAML).
+ * LDIO matches configuration keys regardless of case, dashes and underscores: source-format,
+ * sourceFormat and sourceformat are the same property. Deployed pipelines come back with keys
+ * like membertype.
  */
-export function configValue(config: ComponentConfig | undefined, key: string): unknown {
-  if (!config) return undefined
-  if (key in config) return config[key]
-  const [head, ...rest] = key.split('.')
-  const nested = config[head]
-  return rest.length > 0 && nested && typeof nested === 'object'
-    ? configValue(nested as ComponentConfig, rest.join('.'))
-    : undefined
+export function normalizeKey(key: string): string {
+  return key.toLowerCase().replace(/[-_]/g, '')
 }
 
-export function missingRequiredProperties(id: string, config: ComponentConfig = {}): string[] {
-  return (componentInfo(id)?.properties ?? [])
-    .filter((property) => property.required)
-    .filter((property) => {
-      const value = configValue(config, property.key)
-      return value === undefined || value === null || value === ''
-    })
-    .map((property) => property.key)
+/**
+ * Where a property is in a config that may be nested (YAML), flat (LDIO responses, e.g.
+ * rdfwriter.contenttype) or a mix, with keys written in any of the ways LDIO accepts.
+ *
+ * @returns the keys leading to the value, and the value
+ */
+export function findConfigEntry(config: ComponentConfig | undefined, key: string):
+  { path: string[]; value: unknown } | undefined {
+  return config ? find(config, key.split('.').map(normalizeKey)) : undefined
+}
+
+function find(config: ComponentConfig, segments: string[]): { path: string[]; value: unknown } | undefined {
+  for (const [key, value] of Object.entries(config)) {
+    const keySegments = key.split('.').map(normalizeKey)
+    if (keySegments.length > segments.length
+      || !keySegments.every((segment, i) => segment === segments[i])) {
+      continue
+    }
+    if (keySegments.length === segments.length) return { path: [key], value }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = find(value as ComponentConfig, segments.slice(keySegments.length))
+      if (nested) return { path: [key, ...nested.path], value: nested.value }
+    }
+  }
+  return undefined
+}
+
+/**
+ * Reads a dotted key from a config, however it is written (see {@link findConfigEntry}).
+ */
+export function configValue(config: ComponentConfig | undefined, key: string): unknown {
+  return findConfigEntry(config, key)?.value
 }
 
 const summaryKeys = [

@@ -241,7 +241,7 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
           <Button icon="pi pi-code" severity="secondary" text size="small" v-tooltip.bottom="'Pipeline YAML'"
             aria-label="Pipeline YAML" data-cy="open-yaml" @click="showYaml = true" />
           <Button label="Run" icon="pi pi-play" severity="secondary" outlined size="small"
-            :disabled="!sandbox.conversion.valid" :loading="sandbox.running" @click="run" />
+            :disabled="!sandbox.conversion.runnable" :loading="sandbox.running" @click="run" />
           <Button label="Deploy" icon="pi pi-cloud-upload" size="small" :disabled="!sandbox.conversion.valid"
             data-cy="deploy" @click="showDeploy = true" />
         </div>

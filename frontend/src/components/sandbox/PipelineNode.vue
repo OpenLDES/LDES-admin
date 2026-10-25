@@ -22,6 +22,7 @@ const info = computed(() => componentInfo(props.data.component))
 const kind = computed(() => kinds[props.data.kind])
 const summary = computed(() => summarize(props.data.config))
 const issues = computed(() => issuesOf(props.id))
+const hasErrors = computed(() => issues.value.some((issue) => issue.severity === 'error'))
 
 const statusIcon = computed(() => {
   switch (props.data.runStatus) {
@@ -50,8 +51,9 @@ const statusIcon = computed(() => {
       <div v-if="summary" class="node-summary" :title="summary">{{ summary }}</div>
     </div>
     <span v-if="statusIcon" class="node-status"><i :class="statusIcon" /></span>
-    <span v-else-if="issues.length" class="node-warning" :title="issues.map((issue) => issue.message).join('\n')">
-      <i class="pi pi-exclamation-triangle" />
+    <span v-else-if="issues.length" class="node-warning" :class="{ errors: hasErrors }"
+      :title="issues.map((issue) => issue.message).join('\n')" :data-cy="hasErrors ? 'node-errors' : 'node-warnings'">
+      <i :class="hasErrors ? 'pi pi-times' : 'pi pi-exclamation-triangle'" />
     </span>
     <Handle v-if="data.kind !== 'output'" type="source" :position="outgoing" class="port" />
   </div>
@@ -176,6 +178,10 @@ const statusIcon = computed(() => {
 
 .node-warning {
   background: var(--p-amber-500);
+}
+
+.node-warning.errors {
+  background: var(--p-red-500);
 }
 
 .port {

@@ -256,9 +256,21 @@ The sandbox draws a pipeline as a graph (Vue Flow): inputs, adapters, transforme
 dragged from the palette and connected top to bottom. The connection rules follow the LDIO
 pipeline structure (an adapter only follows an input, transformers form a single chain, outputs end
 the pipeline), and `graphToPipeline` turns the graph into an LDIO pipeline definition while
-listing everything that keeps it from being valid. Selecting a component shows its part of the
-pipeline as YAML, which is applied to the graph while typing. The whole pipeline can be edited as
-YAML too, and deployed on an LDIO.
+listing everything that keeps it from being valid. The whole pipeline can be edited as YAML too,
+and deployed on an LDIO.
+
+Selecting a component shows its configuration as a form and as YAML; both edit the same
+configuration, so a change in one shows in the other right away. The catalog
+(`pipeline/catalog.ts`) describes every property after the LDIO documentation: its type (text,
+URL, list of URLs, IRI, property path, number, boolean, ISO 8601 duration, cron expression, a
+choice such as the RDF content types Jena supports, JSON-LD context, HTTP headers), whether it is
+required, its default, the group it belongs to (authentication, retries, state, …) and when it
+applies (e.g. the API key only for API key authentication). `pipeline/config.ts` reads and writes
+properties the way LDIO matches keys (`sourceFormat`, `source-format` and `sourceformat` are the
+same), and validates the configuration: missing and invalid values, rules between properties, and
+keys that are not properties of the component. The form shows problems at their fields; the
+pipeline lists them too, and a pipeline with errors cannot be deployed. It can still be simulated,
+unless its structure is wrong.
 
 The *sandbox environment* (toolbar, and a card on the dashboard) starts and stops the sandbox LDES
 server and LDIO. The templates, and the defaults of components that point to an LDES, use the

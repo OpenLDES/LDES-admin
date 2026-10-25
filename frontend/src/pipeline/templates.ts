@@ -26,7 +26,7 @@ const PARCEL_CONTEXT = JSON.stringify({
     Polygon: 'geojson:Polygon',
     coordinates: { '@id': 'geojson:coordinates', '@container': '@list' },
   },
-})
+}, null, 2)
 
 export const templates: PipelineTemplate[] = [
   {
@@ -162,7 +162,7 @@ export const templates: PipelineTemplate[] = [
         name: 'Ldio:HttpIn',
         adapter: {
           name: 'Ldio:JsonToLdAdapter',
-          config: { context: '{"@vocab": "https://data.vlaanderen.be/ns/mobiliteit#"}' },
+          config: { context: '{"@context": {"@vocab": "https://data.vlaanderen.be/ns/mobiliteit#"}}' },
         },
       },
       transformers: [
