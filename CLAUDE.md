@@ -67,6 +67,17 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   `http://sandbox-ldes-server:8080/sandbox-parcels`). Frontend templates and component defaults
   point there.
 
+### CI
+
+* `.github/workflows` mirror the OpenLDES server: 1.a (PR: `./mvnw verify`, Cypress, image + Trivy),
+  2.a (push: `develop` → GHCR `<version>-<timestamp>`, `main` → Docker Hub `<version>`), 3 (GitHub
+  release of `main` → PR promoting the snapshot version), 4 (manual: Maven release on `develop`,
+  qcastel action in an Alpine JDK 25 image, so `-Dfrontend.skip`). `.github/Dockerfile` copies
+  `ldes-admin-bootstrap-*.jar`. Variables/secrets: README. Root pom: `<scm>`, release plugin,
+  profile `coverage` (JaCoCo, for SonarCloud).
+* The image needs the Docker socket (`--group-add`) for local instances; on Docker Desktop also
+  `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` (else Testcontainers cannot reach Ryuk).
+
 ## Frontend
 
 * `src/api/LdesAdminApi.ts` is the port; `http/HttpLdesAdminApi` (backend, `/api/v1`) and

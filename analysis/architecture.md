@@ -223,6 +223,16 @@ Assumptions worth knowing:
 `./mvnw verify` also runs the integration tests, which need Docker. The Cypress tests run with
 `pnpm test:e2e`.
 
+## Continuous integration
+
+The GitHub workflows (`.github/workflows`) follow the release flow of the OpenLDES server: every
+pull request is verified (Maven, including the integration tests, and Cypress) and its Docker image
+scanned with Trivy; pushes to `develop` publish snapshot images to the GitHub Container Registry,
+pushes to `main` publish to Docker Hub; a GitHub release opens a pull request that promotes the
+snapshot version, and the Maven release plugin moves `develop` on to the next one. The image
+(`.github/Dockerfile`) runs the bootstrap jar, which holds the frontend. The README lists the
+steps of a release and the variables and secrets the workflows need.
+
 ## Frontend
 
 Vue 3 with TypeScript, PrimeVue (Aura theme), Vue Flow, CodeMirror 6 and Chart.js, built with Vite

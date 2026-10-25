@@ -1,0 +1,64 @@
+name: 3. Approve Snapshot
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+env:
+  JAVA_DISTRIBUTION: ${{ vars.JAVA_DISTRIBUTION || 'temurin' }}
+  JAVA_VERSION: ${{ vars.JAVA_VERSION || '25' }}
+  GIT_CONFIG_USERNAME: ${{ vars.GIT_CONFIG_USERNAME }}
+  GIT_CONFIG_EMAIL: ${{ vars.GIT_CONFIG_EMAIL }}
+
+jobs:
+  approve-snapshot:
+    # A release of main, or a manual run on main (a release runs on its tag, not on a branch)
+    if: ${{ (github.event_name == 'release' && github.event.release.target_commitish == 'main') || github.ref == 'refs/heads/main' }}
+    name: Approve Snapshot and Promote
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Promote the snapshot version
+        run: |
+          export VERSION=$(./mvnw help:evaluate -Dexpression="project.version" -q -DforceStdout)
+
+          echo "current version: $VERSION"
+          if [[ $VERSION == *"-SNAPSHOT" ]]; then
+            echo "Dealing with a snapshot version. Current version: $VERSION"
+            export NEWVERSION=$(echo ${VERSION/"-SNAPSHOT"/""})
+            echo "New version: ${NEWVERSION}"
+            ./mvnw -B versions:set -DnewVersion=${NEWVERSION} -DgenerateBackupPoms=false
+            git config --global user.name "${{ env.GIT_CONFIG_USERNAME }}"
+            git config --global user.email "${{ env.GIT_CONFIG_EMAIL }}"
+            git add -A
+            git commit -am "ci: Promoted version to ${NEWVERSION}"
+            echo "NEW_VERSION=${NEWVERSION}" >> $GITHUB_ENV
+          else
+            echo "Already released. Current version: $VERSION"
+          fi
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: ${{ env.NEW_VERSION != '' }}
+        with:
+          author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+          signoff: false
+          branch: ci/promote-snapshot
+          delete-branch: true
+          title: '[ci] Promote snapshot ${{ env.NEW_VERSION }}'
+          body: |
+            As part of QA process, the snapshot version is being promoted to a release version.
+          labels: |
+            promotion
+            automated pr

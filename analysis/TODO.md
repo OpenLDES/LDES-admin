@@ -46,6 +46,6 @@
 * [x] When you are on the "background processes" tab of a stream, then refresh the number of
   completed, failed, average and longest recent run every 2 seconds. Make this "2 seconds"
   configurable.
-* [] Create github actions. Support the same release flow as the one for the OpenLDES server
+* [x] Create github actions. Support the same release flow as the one for the OpenLDES server
   (See https://github.com/OpenLDES/LDESServer/tree/main/.github). Document in the README on how to
   use this flow, and which variables and passwords that you need to set in Github.

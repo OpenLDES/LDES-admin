@@ -211,6 +211,71 @@ together out of the box:
 The first start pulls the Docker images, which takes a few minutes. The sandbox stops with *Stop*,
 and with the backend.
 
+## Docker image
+
+The workflows below publish LDES-admin as a Docker image (`linux/amd64` and `linux/arm64`). It
+needs Postgres, and the Docker socket of the host to start local LDES servers and LDIOs:
+
+```shell
+docker run -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://<host>:5432/<database> \
+  -e SPRING_DATASOURCE_USERNAME=<user> -e SPRING_DATASOURCE_PASSWORD=<password> \
+  -v /var/run/docker.sock:/var/run/docker.sock --group-add <group of the socket> \
+  <namespace>/ldes-admin:<version>
+```
+
+The container runs as a user without privileges: `--group-add` gives it access to the socket (the
+group that owns `/var/run/docker.sock`; `0` on Docker Desktop). On Docker Desktop, also set
+`TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`, so LDES-admin reaches the containers it starts.
+
+## Continuous integration and releases
+
+The GitHub workflows in `.github/workflows` follow the release flow of the
+[OpenLDES server](https://github.com/OpenLDES/LDESServer/tree/main/.github): work happens on
+`develop`, releases on `main`.
+
+| Workflow                           | Runs on                                       | What it does                                                                                                                                                                                             |
+|------------------------------------|-----------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.a. Build & Test Project          | pull requests, or manually                    | `./mvnw verify` (with a SonarCloud analysis when enabled), the Cypress tests, and a Docker image that Trivy scans (results in the Security tab)                                                          |
+| 2.a. Build & Deploy Project        | pushes to `develop` and `main`, or manually   | Builds and pushes the image: from `develop` to `ghcr.io/<owner>/<repository>:<version>-<timestamp>` and `latest`; from `main` to Docker Hub, `<namespace>/ldes-admin:<version>`, and `latest` for a release |
+| 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main` | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                  |
+| 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                          |
+
+To release a version:
+
+1. Merge the pull requests of the version into `develop`. Every merge publishes a snapshot image to
+   the GitHub Container Registry.
+2. Merge `develop` into `main` (a pull request). This publishes `<version>-SNAPSHOT` to Docker Hub.
+3. Publish a GitHub release of `main`, with a tag `v<version>` (the Maven release plugin uses the
+   bare version for its own tags). Workflow 3 opens a pull request that promotes the snapshot;
+   merging it publishes `<version>` and `latest` to Docker Hub.
+4. Run workflow 4 to move `develop` on to the next snapshot version.
+
+Configure the repository under *Settings › Secrets and variables › Actions*:
+
+| Variable              | Needed for                       | Value                                                              |
+|-----------------------|----------------------------------|--------------------------------------------------------------------|
+| `DOCKER_NAMESPACE`    | 2.a on `main`                    | The Docker Hub namespace (user or organisation) of the image       |
+| `GIT_CONFIG_USERNAME` | 3                                | Author of the commit that promotes the version                     |
+| `GIT_CONFIG_EMAIL`    | 3                                | E-mail address of that author                                      |
+| `JAVA_DISTRIBUTION`   | all, optional                    | The JDK distribution for `actions/setup-java`; default `temurin`   |
+| `JAVA_VERSION`        | all, optional                    | The JDK version; default `25`                                      |
+| `ANALYSE_PACKAGE`     | 1.a, 2.a, optional               | `true` to analyse the code with SonarCloud                         |
+| `SONAR_ORGANIZATION`  | with `ANALYSE_PACKAGE`           | The SonarCloud organisation                                        |
+| `SONAR_PROJECT_KEY`   | with `ANALYSE_PACKAGE`           | The SonarCloud project key                                         |
+
+| Secret            | Needed for             | Value                                                                                                                                                                                  |
+|-------------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DOCKER_USER`     | 2.a on `main`          | A Docker Hub user that may push to the namespace                                                                                                                                       |
+| `DOCKER_PASSWORD` | 2.a on `main`          | An access token of that user                                                                                                                                                           |
+| `SSH_PRIVATE_KEY` | 4                      | The private key of a deploy key with write access, which pushes the release commits and tag (see [Setup with SSH](https://github.com/qcastel/github-actions-maven-release#setup-with-ssh)) |
+| `SONAR_TOKEN`     | with `ANALYSE_PACKAGE` | A SonarCloud token                                                                                                                                                                     |
+
+The workflows publish to the GitHub Container Registry with the token GitHub gives them. For
+workflow 3, allow *GitHub Actions to create and approve pull requests* (*Settings › Actions ›
+General › Workflow permissions*). When `develop` is protected, let the deploy key of workflow 4
+push to it.
+
 ## Usage of AI
 
 This project was developed with the help of AI tools. These tools were used to assist in code
