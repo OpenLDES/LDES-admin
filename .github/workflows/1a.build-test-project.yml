@@ -71,8 +71,17 @@ jobs:
           package_json_file: frontend/package.json
           cache: true
           cache_dependency_path: frontend/pnpm-lock.yaml
+      # With its store from the cache, pnpm skips the postinstall of Cypress that downloads the binary
+      # to ~/.cache/Cypress (outside the store), so the binary is cached and installed separately
+      - name: Cache the Cypress binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/Cypress
+          key: ${{ runner.os }}-cypress-${{ hashFiles('frontend/pnpm-lock.yaml') }}
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Install the Cypress binary
+        run: pnpm exec cypress install
       - name: Cypress, in demo mode and against a stubbed backend
         run: pnpm test:e2e
       - name: Upload screenshots of failed tests
