@@ -21,7 +21,7 @@
   There's already an LDES-admin server running (http://localhost:8080/) that you can use to create
   the screenshots. Use the "demo" mode to create those screenshots. Create all screenshots in
   "black" mode.
-* [] Create full example of sensor data that is modeled in ssn-sosa ontology. Also, create a full
+* [x] Create full example of sensor data that is modeled in ssn-sosa ontology. Also, create a full
   example for parking data, based on the onboarding example
   (https://github.com/OpenLDES/Onboarding-Example/blob/main/advanced-conversion/README.md). When you
   create a new server and/or LDIO, then the user should be able to select

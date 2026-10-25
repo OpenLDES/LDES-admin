@@ -61,6 +61,19 @@ Data Interaction Orchestrator (LDIO) pipelines.
 |:---:|:---:|
 | Designing a pipeline, with a form for every component | Running a member through the pipeline |
 
+### Start from a demo
+
+Two complete examples, each an event stream with the views `by-page` and `by-time` and the LDIO
+pipeline that feeds it:
+
+* **Sensor observations**, modelled with SOSA/SSN, with sample data sent through the pipeline;
+* **Parking occupancy** of the car parks of Ghent, polled live from the open data of the city and
+  mapped to Mobivoc, after the
+  [OpenLDES onboarding example](https://github.com/OpenLDES/Onboarding-Example/tree/main/advanced-conversion).
+
+Pick them when starting a local LDES server or LDIO, or start a new event stream from one.
+Ingesting in their event streams starts from a member that fits, in the format of your choice.
+
 ### Try it without servers
 
 **Demo mode** runs on sample data in the browser, to explore LDES-admin without any server;

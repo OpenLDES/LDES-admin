@@ -90,6 +90,13 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   `composables/useTurtleDraft.ts` keeps graph and Turtle in step; `ConfigField.vue` is shared with
   the sandbox. Errors block creating. The view template decides the fragmentation (none for
   Pagination and Recent members); the form edits its properties but cannot add, remove or swap it.
+* Examples (`src/examples/`): `sensors.ts` (SOSA/SSN observations, sample data as Turtle members
+  and as one JSON message for the pipeline) and `parking.ts` (Ghent car parks, polled, RML + SPARQL
+  → Mobivoc, after the OpenLDES onboarding example). `install.ts` creates stream, views, pipeline
+  (`<collection>-ingest`) and data through `LdesAdminApi`, skipping what exists; used by
+  `StartLocalInstanceDialog` (with a local instance of the other kind) and
+  `CreateEventStreamDialog` (templates + "Also create"). `exampleFor(stream)` picks the members
+  `IngestPanel` offers; `ldes/formats.ts` converts them to the chosen RDF format.
 * Patterns: `useAsync`/`useAction` composables; `data-cy` attributes for Cypress;
   `cy.dialogOpened(dataCy)` before typing in a PrimeVue dialog; Cypress pins demo mode in
   `cypress/support/e2e.ts`; e2e for production mode stubs the backend with `cy.intercept`.
@@ -164,6 +171,17 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
   * The time-based subject filter is read as `tree:fragmentationSubjectFilter` (docs say
     `fragmenterSubjectFilter`, the shape `fragmentSubjectFilter`); geospatial reads
     `tree:fragmenterSubjectFilter`. Reference defaults: path `rdf:type`, key `reference`.
+* Ingest: with `createVersions false` a request holds exactly one member (one named subject; other
+  resources only as objects, blank nodes scoped to it); the timestamp must be `xsd:dateTime` (or
+  string). Members are validated against the `tree:shape` only once the shape was set with
+  `PUT …/shape` (or after a restart): the shape given when creating the stream is not enforced
+  before that. SHACL sequence paths (`( sosa:hasResult qudt:numericValue )`) work.
+* LDIO: `Ldio:JsonToLdAdapter` makes a model per object of a JSON array; JSON-LD turns numbers
+  coerced to `xsd:double` into canonical lexical forms (`82` → `"8.2E1"`). `Ldio:RmlAdapter` makes
+  a model per named graph (`rr:graphMap`). `Ldio:VersionObjectCreator` versions the first subject of
+  a member type and puts the lexical form of the observed time in the version IRI (use `/` as
+  delimiter when state IRIs contain `#`). `Ldio:HttpIn` answers 202. The Ghent parking API
+  (`data.stad.gent/.../bezetting-parkeergarages-real-time/exports/json`) lists 14 car parks.
 * LDIO matches config keys ignoring case, `-` and `_` and returns them normalised
   (`membertype`, `rdfwriter.contenttype`). Deleting a pipeline returns 202 (wait until gone).
   `GET /admin/api/v1/pipeline/ldes-client` → `[{pipeline, status}]`. `POST /{pipeline}` feeds an

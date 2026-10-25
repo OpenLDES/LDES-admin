@@ -559,20 +559,10 @@ export class MockLdesAdminApi implements LdesAdminApi {
         validateRdf(content, rdf, (reason) => new ApiError(400,
           `LDIO '${ldio.name}' could not receive a message in pipeline ${pipeline}: 400 BAD_REQUEST - ${reason}`))
       }
-      const stats = this.state.pipelineStatistics[ldioId]?.find((s) => s.pipeline === pipeline)
-      if (stats) {
-        stats.membersIn += 1
-        stats.membersOut += 1
-      }
-      // An HTTP output that points to the event stream of a local LDES server ingests there
-      for (const output of deployed.pipeline.outputs ?? []) {
-        const endpoint = output.name === 'Ldio:HttpOut' ? String(output.config?.endpoint ?? '') : ''
-        const server = this.instancesOf('LDES_SERVER').find((candidate) => candidate.internalUrl
-          && endpoint.startsWith(`${candidate.internalUrl}/`))
-        if (server && this.isUp(server)) {
-          this.countIngested(server.id, endpoint.slice(server.internalUrl!.length + 1))
-        }
-      }
+      // Like LDIO, the JSON to JSON-LD adapter makes a member of every object of a JSON array
+      const adapter = deployed.pipeline.input.adapter?.name
+      const members = adapter === 'Ldio:JsonToLdAdapter' ? jsonObjectCount(content) : 1
+      this.process(ldioId, deployed.pipeline, members)
     })
   }
 
@@ -673,14 +663,31 @@ export class MockLdesAdminApi implements LdesAdminApi {
       : `${instanceTypeLabel[instance.type]} removed`)
   }
 
-  private countIngested(serverId: string, collection: string): void {
+  private countIngested(serverId: string, collection: string, members = 1): void {
     const statistics = this.statisticsOf(serverId, collection)
     if (!statistics) return
-    statistics.ingestedMembers += 1
+    statistics.ingestedMembers += members
     statistics.views.forEach((view) => {
-      view.bucketisedMembers += 1
-      view.paginatedMembers += 1
+      view.bucketisedMembers += members
+      view.paginatedMembers += members
     })
+  }
+
+  /** Members go through a pipeline: an HTTP output to the event stream of a local LDES server ingests there */
+  private process(ldioId: string, pipeline: Pipeline, members: number): void {
+    const stats = this.state.pipelineStatistics[ldioId]?.find((s) => s.pipeline === pipeline.name)
+    if (stats) {
+      stats.membersIn += members
+      stats.membersOut += members
+    }
+    for (const output of pipeline.outputs ?? []) {
+      const endpoint = output.name === 'Ldio:HttpOut' ? String(output.config?.endpoint ?? '') : ''
+      const server = this.instancesOf('LDES_SERVER').find((candidate) => candidate.internalUrl
+        && endpoint.startsWith(`${candidate.internalUrl}/`))
+      if (server && this.isUp(server)) {
+        this.countIngested(server.id, endpoint.slice(server.internalUrl!.length + 1), members)
+      }
+    }
   }
 
   private now(): Date {
@@ -764,7 +771,10 @@ export class MockLdesAdminApi implements LdesAdminApi {
   private startSoon(ldioId: string, name: string): void {
     setTimeout(() => {
       const deployed = this.state.pipelines[ldioId]?.find((p) => p.pipeline.name === name)
-      if (deployed?.status === 'INIT') deployed.status = 'RUNNING'
+      if (deployed?.status !== 'INIT') return
+      deployed.status = 'RUNNING'
+      // A poller fetches right away; the parking data of Ghent lists 14 car parks
+      if (deployed.pipeline.input.name === 'Ldio:HttpInPoller') this.process(ldioId, deployed.pipeline, POLLED_MEMBERS)
     }, this.options.startupDelay ?? 2200)
   }
 
@@ -930,6 +940,18 @@ function typedConfig(graph: RdfGraph, node: Resource): TypedConfig {
 
 const RDF_FORMATS: RdfFormat[] = ['text/turtle', 'application/ld+json', 'application/n-quads',
   'application/n-triples']
+
+/** What the first poll of a pipeline with an HTTP poller fetches */
+const POLLED_MEMBERS = 14
+
+function jsonObjectCount(content: string): number {
+  try {
+    const json: unknown = JSON.parse(content)
+    return Array.isArray(json) ? json.length : 1
+  } catch {
+    return 1
+  }
+}
 
 /** A host name derived from a name, like the backend does: "Sandbox LDIO" becomes sandbox-ldio */
 function slug(name: string): string {
