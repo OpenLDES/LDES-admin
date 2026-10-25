@@ -38,7 +38,7 @@
   the sensor example stream).
   When the user wants to ingest a member on one of the example streams, then example data should be
   available directly in the editor in the right format.
-* [] On the dashboard:
+* [x] On the dashboard:
     * When you click on "LDES servers up", go to the list of LDES servers
     * When you click on "LDIOs up", go to the list of LDIOs
     * When you click on "Pipelines running", go to the list of LDIOs
