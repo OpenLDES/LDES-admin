@@ -1,4 +1,4 @@
-import { onMounted, ref, shallowRef, watch, type Ref, type WatchSource } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref, type WatchSource } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { ApiError } from '@/api'
 
@@ -27,6 +27,30 @@ export function useAsync<T>(loader: () => Promise<T>, options: { watch?: WatchSo
   if (options.watch) watch(options.watch, reload)
 
   return { data: data as Ref<T | undefined>, loading, error, reload }
+}
+
+/**
+ * Loads again and again while active, every given number of seconds (0: not at all). The next
+ * load waits until the previous one answered, so slow responses never pile up.
+ */
+export function usePolling(load: () => Promise<unknown>, seconds: () => number, active: () => boolean) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let stopped = false
+
+  function schedule() {
+    clearTimeout(timer)
+    if (stopped || !active() || seconds() <= 0) return
+    timer = setTimeout(async () => {
+      await load()
+      schedule()
+    }, seconds() * 1000)
+  }
+
+  watch([seconds, active], schedule, { immediate: true })
+  onBeforeUnmount(() => {
+    stopped = true
+    clearTimeout(timer)
+  })
 }
 
 /**

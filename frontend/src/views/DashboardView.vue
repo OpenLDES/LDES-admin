@@ -100,12 +100,13 @@ const kpis = computed(() => {
     <section class="kpis">
       <template v-if="kpis">
         <StatTile label="LDES servers up" :value="kpis.servers.value" :caption="kpis.servers.caption"
-          icon="pi pi-server" :tone="kpis.servers.caption === 'All healthy' ? 'good' : 'warning'" />
-        <StatTile label="LDIOs up" :value="kpis.ldios.value" :caption="kpis.ldios.caption" icon="pi pi-share-alt" />
+          icon="pi pi-server" :tone="kpis.servers.caption === 'All healthy' ? 'good' : 'warning'" to="/ldes-servers" />
+        <StatTile label="LDIOs up" :value="kpis.ldios.value" :caption="kpis.ldios.caption" icon="pi pi-share-alt"
+          to="/ldios" />
         <StatTile label="Pipelines running" :value="kpis.pipelines.value" :caption="kpis.pipelines.caption"
-          icon="pi pi-play-circle" />
+          icon="pi pi-play-circle" to="/ldios" />
         <StatTile label="Members ingested, 24 h" :value="kpis.ingested.value" caption="All LDES servers"
-          icon="pi pi-download" :trend="kpis.ingested.trend" />
+          icon="pi pi-download" :trend="kpis.ingested.trend" to="/ldes-servers" />
         <StatTile label="Needs attention" :value="kpis.problems.value" icon="pi pi-exclamation-triangle"
           :tone="Number(kpis.problems.value) > 0 ? 'critical' : 'good'"
           :caption="`${formatCompact(kpis.problems.backlog)} members waiting to be paginated`" />

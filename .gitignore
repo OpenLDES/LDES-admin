@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Documentation site (Jekyll) ###
+docs/vendor
+docs/_site
+docs/.bundle
+docs/.jekyll-cache

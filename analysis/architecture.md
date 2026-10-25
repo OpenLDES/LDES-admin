@@ -216,12 +216,28 @@ Assumptions worth knowing:
 | Integration (`*IT`)      | `adapter`                      | JPA + Flyway against Postgres; the LDES server and LDIO clients against real `openldes/ldes-server` and `openldes/ldi-orchestrator` containers, started by the local runtime adapter |
 | Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client |
 | Architecture             | `bootstrap`                    | `DependencyRuleTest` (ArchUnit)                                       |
-| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, event stream and view definitions, stores, mock and HTTP API, domain helpers, components (Jest) |
-| Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, sandbox, demo and production mode with a stubbed backend (Cypress) |
+| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, event stream and view definitions, examples and creating them, RDF formats, stores, mock and HTTP API, domain helpers, components (Jest) |
+| Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, examples, sandbox, demo and production mode with a stubbed backend (Cypress) |
 
 `./mvnw test` runs the unit, slice and architecture tests, and the frontend unit tests;
 `./mvnw verify` also runs the integration tests, which need Docker. The Cypress tests run with
 `pnpm test:e2e`.
+
+## Continuous integration
+
+The GitHub workflows (`.github/workflows`) follow the release flow of the OpenLDES server: every
+pull request is verified (Maven, including the integration tests, and Cypress) and its Docker image
+scanned with Trivy; pushes to `develop` publish snapshot images to the GitHub Container Registry,
+pushes to `main` publish to Docker Hub; a GitHub release opens a pull request that promotes the
+snapshot version, and the Maven release plugin moves `develop` on to the next one. The image
+(`.github/Dockerfile`) runs the bootstrap jar, which holds the frontend. The README lists the
+steps of a release and the variables and secrets the workflows need.
+
+The documentation site (`docs/`) is a Jekyll 4 site with a theme of its own (black, or white with
+the switch in its header; `assets/css/style.css`, `assets/js/site.js`) and no plugins. GitHub Pages
+only builds Jekyll 3 itself, so workflow 5 builds it with Jekyll 4 and publishes it to GitHub Pages
+on pushes to `main`. Its pages reuse the screenshots in `docs/screenshots/`; the features on its
+home page are in `_data/features.yml`, the pages in its header in `_data/navigation.yml`.
 
 ## Frontend
 
@@ -233,9 +249,10 @@ frontend/src
 ├── domain       TypeScript types mirroring the web models of the REST API, and helpers to present them
 ├── api          LdesAdminApi (the port: one method per endpoint), http/ (the backend) and mock/ (sample data)
 ├── pipeline     catalog of LDIO components, graph ⇄ pipeline conversion and validation, YAML, simulator, templates
-├── ldes         event stream and view definitions (catalog, Turtle ⇄ form, validation), member templates
+├── ldes         event stream and view definitions (catalog, Turtle ⇄ form, validation), member templates, formats
+├── examples     the sensor and parking demos (event stream, views, pipeline, members) and creating them
 ├── stores       Pinia: mode, instances, sandbox (the pipeline being designed), sandboxEnvironment, ui
-├── components   layout, common, dashboard, instances, ldes, ldio, sandbox
+├── components   layout, common, dashboard, examples, instances, ldes, ldio, sandbox
 └── views        one per route
 ```
 
@@ -261,7 +278,9 @@ while working on the frontend, `pnpm dev` serves it with hot reloading and proxi
 The switch in the top bar picks the implementation of `LdesAdminApi` behind `api` (`api/index.ts`):
 
 * **Demo** – `MockLdesAdminApi` keeps sample data in memory and behaves like the backend, including
-  its error responses and the sandbox (its LDIO pipeline feeds its LDES server here too).
+  its error responses and the sandbox (its LDIO pipeline feeds its LDES server here too). Its
+  pipelines pass members on to the event streams of local servers: a JSON array becomes a member
+  per object, as with LDIO, and a new pipeline with an HTTP poller fetches a batch when it starts.
 * **Production** – `HttpLdesAdminApi` calls the backend on `/api/v1` and turns problem details into
   `ApiError`s. The Vite dev and preview servers proxy `/api` and `/actuator` to the backend
   (`LDES_ADMIN_BACKEND`, default `http://localhost:8080`).
@@ -269,6 +288,13 @@ The switch in the top bar picks the implementation of `LdesAdminApi` behind `api
 The choice is remembered in the browser. Without one, the frontend starts in production mode when
 `/actuator/health` of the backend answers, and in demo mode otherwise. Switching rebuilds the views
 and reloads the shared stores, so nothing of the other mode lingers.
+
+### Refreshing
+
+The dashboard refreshes every 30 seconds. The background processes of an LDES server refresh
+every 2 seconds while their tab shows (`usePolling`, which waits for an answer before asking
+again); the tab offers other intervals, or none, and the browser remembers the choice
+(`stores/ui.ts`).
 
 ### Event streams and views
 
@@ -297,6 +323,36 @@ A view starts from a template (pagination, time-based, geospatial, reference, re
 which decides its fragmentation: none for pagination and recent members, else one of its kind.
 The form edits the properties of that fragmentation, but does not add, remove or swap it; another
 fragmentation means another template.
+
+### Examples
+
+`examples/` holds two complete demos, each an event stream with a shape, the views `by-page` and
+`by-time`, the LDIO pipeline that feeds it, and members as that pipeline ingests them:
+
+* **Sensor observations** (`sensors.ts`): observations of three stations, modelled with SOSA/SSN
+  (`sosa:Observation` with a QUDT quantity value); each is a version of "the latest observation of
+  this property at this station". The pipeline (`Ldio:HttpIn` + `Ldio:JsonToLdAdapter` →
+  `Ldio:VersionObjectCreator` → `Ldio:HttpOut`) receives readings as plain JSON, which an inline
+  JSON-LD context maps onto SOSA. The example comes with sample data: 36 observations of the last
+  four hours, as Turtle members and as one JSON message for the pipeline.
+* **Parking occupancy** (`parking.ts`), after the "advanced conversion" onboarding example of
+  OpenLDES: the pipeline polls the open data of Ghent every minute (`Ldio:HttpInPoller` +
+  `Ldio:RmlAdapter` → `Ldio:SparqlConstructTransformer` → `Ldio:VersionObjectCreator` →
+  `Ldio:HttpOut`) and publishes the car parks in Mobivoc. It brings its own data.
+
+`examples/install.ts` creates an example step by step through `LdesAdminApi`, so it works the same
+in demo and production mode: the event stream, the views, the pipeline (on an LDIO that reaches
+the server: its internal URL for a local server) and the sample data, sent through the pipeline
+once it runs, or else ingested directly. What exists already is skipped; a pipeline of the same
+name that feeds another server makes it pick another name. The first step that fails stops it.
+Starting a local LDES server or LDIO offers the examples (none chosen unless the user picks them),
+with a local instance of the other kind to complete them; a new event stream can start from an
+example, and then optionally create its views, pipeline and data.
+
+Ingesting on an event stream starts from a member that fits it: one of the example whose name it
+has or whose members its shape targets (`exampleFor`), else one after its name.
+`ldes/formats.ts` offers that member in the chosen format: N3.js writes N-Triples and N-Quads,
+and JSON-LD is written compacted with the prefixes of the Turtle.
 
 ### Sandbox
 
@@ -328,7 +384,7 @@ works out of the box.
 
 The simulator runs a member through the pipeline in the browser. RDF is parsed and serialised
 for real (N3.js); each component approximates what LDIO does (adapters map JSON with a JSON-LD
-context, the Version Object Creator and Materialiser rewrite subjects, GeoJSON becomes WKT, blank
+context: its vocabulary, prefixes and terms, with IRIs and datatypes for their values; the Version Object Creator and Materialiser rewrite subjects, GeoJSON becomes WKT, blank
 nodes are skolemised, the change detection filter remembers members). SPARQL queries and RML
 mappings are not evaluated. The result can be ingested in a sandbox LDES server, and the input
 member can be sent to a deployed pipeline with an HTTP input, which really processes it.

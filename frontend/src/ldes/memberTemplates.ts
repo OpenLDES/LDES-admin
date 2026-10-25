@@ -1,8 +1,11 @@
+import type { EventStream } from '@/domain/ldes'
 import { prefixLines } from '@/domain/rdf'
+import { exampleFor, examples } from '@/examples'
 
 /**
  * Realistic members for each kind of sample collection: parcels, addresses, mobility hindrances
- * and water quality observations, as version objects in Turtle.
+ * and water quality observations, and those of the examples (sensor observations, parking
+ * occupancy), as version objects in Turtle.
  */
 const municipalities = ['Leuven', 'Gent', 'Antwerpen', 'Brugge', 'Hasselt', 'Mechelen']
 const streets = ['Bondgenotenlaan', 'Veldstraat', 'Meir', 'Steenstraat', 'Demerstraat', 'Bruul']
@@ -12,6 +15,8 @@ const streets = ['Bondgenotenlaan', 'Veldstraat', 'Meir', 'Steenstraat', 'Demers
  */
 export function sampleMember(collection: string, index: number, timestamp: Date):
   { id: string; isVersionOf: string; content: string } {
+  const example = examples.find((candidate) => candidate.collection === collection)
+  if (example) return example.member(index, timestamp)
   const time = timestamp.toISOString().replace('.000', '')
   const n = 1000 + index * 37
   const municipality = municipalities[index % municipalities.length]
@@ -63,7 +68,13 @@ ${body}
   }
 }
 
-/** A member to start from when ingesting directly on a collection */
-export function memberTemplate(collection: string, now = new Date()): string {
-  return sampleMember(collection, Math.floor(now.getTime() / 60_000) % 997, now).content
+/**
+ * A member to start from when ingesting directly on an event stream: one of the example it fits,
+ * else one after the name of its collection
+ */
+export function memberTemplate(stream: EventStream | string, now = new Date()): string {
+  const index = Math.floor(now.getTime() / 60_000) % 997
+  const example = typeof stream === 'string' ? undefined : exampleFor(stream)
+  if (example) return example.member(index, now).content
+  return sampleMember(typeof stream === 'string' ? stream : stream.collection, index, now).content
 }

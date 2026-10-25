@@ -1,0 +1,26 @@
+{%- comment -%} Links to the pages before and after this one in the navigation {%- endcomment -%}
+{%- assign pages = site.data.navigation -%}
+{%- assign index = nil -%}
+{%- for item in pages -%}
+  {%- if item.url == page.url -%}{%- assign index = forloop.index0 -%}{%- endif -%}
+{%- endfor -%}
+{%- if index -%}
+{%- assign previous_index = index | minus: 1 -%}
+{%- assign next_index = index | plus: 1 -%}
+<nav class="pager" aria-label="Previous and next page">
+  {%- if index > 0 %}
+  {%- assign previous = pages[previous_index] %}
+  <a class="pager-link previous" href="{{ previous.url | relative_url }}">
+    <span class="pager-label">{% include icon.html name="arrow-left" %} Previous</span>
+    <span class="pager-title">{{ previous.title }}</span>
+  </a>
+  {%- endif %}
+  {%- if next_index < pages.size %}
+  {%- assign next = pages[next_index] %}
+  <a class="pager-link next" href="{{ next.url | relative_url }}">
+    <span class="pager-label">Next {% include icon.html name="arrow-right" %}</span>
+    <span class="pager-title">{{ next.title }}</span>
+  </a>
+  {%- endif %}
+</nav>
+{%- endif -%}

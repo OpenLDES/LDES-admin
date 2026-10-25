@@ -5,12 +5,15 @@ import Select from 'primevue/select'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction } from '@/composables/useAsync'
+import { exampleFor } from '@/examples'
+import { convertTurtle } from '@/ldes/formats'
 import { memberTemplate } from '@/ldes/memberTemplates'
 import { type EventStream, type RdfFormat, rdfFormats } from '@/domain/ldes'
 import { formatTime } from '@/utils/format'
 
 /**
- * Ingests a member directly on an event stream of an LDES server.
+ * Ingests a member directly on an event stream of an LDES server. The editor starts with a member
+ * that fits the event stream (one of its example, if it has one), in the chosen format.
  */
 const props = defineProps<{
   serverId: string
@@ -21,7 +24,9 @@ const emit = defineEmits<{ ingested: [collection: string] }>()
 
 const selected = ref(props.collection ?? props.streams[0]?.collection)
 const format = ref<RdfFormat>('text/turtle')
-const member = ref(selected.value ? memberTemplate(selected.value) : '')
+/** The member offered last, in Turtle; while the editor holds it unchanged, another format rewrites it */
+const offered = ref({ turtle: '', text: '' })
+const member = ref('')
 const history = ref<{ collection: string; time: string }[]>([])
 const { run, busy } = useAction()
 
@@ -29,9 +34,22 @@ const options = computed(() => props.streams.map((stream) => ({
   label: stream.collection,
   value: stream.collection,
 })))
+const stream = computed(() => props.streams.find((candidate) => candidate.collection === selected.value))
+const example = computed(() => stream.value && exampleFor(stream.value))
 
-watch(selected, (collection) => {
-  if (collection && format.value === 'text/turtle') member.value = memberTemplate(collection)
+function offer(time = new Date()) {
+  show(stream.value ? memberTemplate(stream.value, time) : '')
+}
+
+function show(turtle: string) {
+  offered.value = { turtle, text: turtle && convertTurtle(turtle, format.value) }
+  member.value = offered.value.text
+}
+
+offer()
+watch(selected, () => offer())
+watch(format, () => {
+  if (member.value === offered.value.text) show(offered.value.turtle)
 })
 
 async function ingest() {
@@ -43,7 +61,7 @@ async function ingest() {
   }, `Member ingested in ${collection}`)
   if (done) {
     history.value = [{ collection, time: new Date().toISOString() }, ...history.value].slice(0, 6)
-    member.value = memberTemplate(collection, new Date(Date.now() + history.value.length * 61_000))
+    offer(new Date(Date.now() + history.value.length * 61_000))
     emit('ingested', collection)
   }
 }
@@ -55,7 +73,10 @@ async function ingest() {
       <div class="card-header">
         <div>
           <div class="card-title">Ingest a member</div>
-          <div class="card-subtitle">Posted to the ingest endpoint of the event stream, as is</div>
+          <div class="card-subtitle">
+            Posted to the ingest endpoint of the event stream, as is<template v-if="example">.
+              Starts from a member of the {{ example.title.toLowerCase() }} example.</template>
+          </div>
         </div>
       </div>
       <div class="controls">
@@ -67,11 +88,11 @@ async function ingest() {
         <div class="field">
           <label class="label" for="ingest-format">Format</label>
           <Select v-model="format" input-id="ingest-format" :options="rdfFormats" option-label="label"
-            option-value="value" class="select" />
+            option-value="value" class="select" data-cy="ingest-format" />
         </div>
         <span class="spacer" />
         <Button label="New sample" icon="pi pi-refresh" severity="secondary" text
-          :disabled="!selected" @click="member = memberTemplate(selected!, new Date())" />
+          :disabled="!selected" data-cy="new-sample" @click="offer()" />
         <Button label="Ingest" icon="pi pi-upload" :loading="busy" :disabled="!selected || !member.trim()"
           data-cy="ingest-submit" @click="ingest" />
       </div>

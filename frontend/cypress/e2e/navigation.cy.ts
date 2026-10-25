@@ -10,6 +10,20 @@ describe('navigation', () => {
     cy.contains('[data-cy=dashboard-server]', 'Legacy 3.x').should('contain', 'Down')
   })
 
+  it('opens the LDES servers or LDIOs behind a headline number', () => {
+    const opens = (tile: string, path: string) => {
+      cy.contains('[data-cy=stat-tile]', tile).click()
+      cy.location('pathname').should('eq', path)
+      cy.go('back')
+      cy.location('pathname').should('eq', '/')
+    }
+    opens('LDES servers up', '/ldes-servers')
+    opens('LDIOs up', '/ldios')
+    opens('Pipelines running', '/ldios')
+    opens('Members ingested', '/ldes-servers')
+    cy.contains('[data-cy=stat-tile]', 'Needs attention').should('match', 'div')
+  })
+
   it('shows the throughput chart also as a table', () => {
     cy.get('[data-cy=throughput-mode] .pi-table').click()
     cy.get('.throughput table').should('contain', 'Production').and('contain', 'Staging')

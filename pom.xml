@@ -25,10 +25,10 @@
     <developer/>
   </developers>
   <scm>
-    <connection/>
-    <developerConnection/>
-    <tag/>
-    <url/>
+    <connection>scm:git:git://github.com/OpenLDES/LDES-admin.git</connection>
+    <developerConnection>scm:git:git@github.com:OpenLDES/LDES-admin.git</developerConnection>
+    <tag>HEAD</tag>
+    <url>https://github.com/OpenLDES/LDES-admin/tree/main</url>
   </scm>
 
   <!--
@@ -51,8 +51,13 @@
     <archunit.version>1.5.1</archunit.version>
     <!-- Only the bootstrap module contains a runnable application -->
     <spring-boot.run.skip>true</spring-boot.run.skip>
-    <!-- Extended by modules that load Mockito as a Java agent -->
+    <!-- Extended by modules that load Mockito as a Java agent, and by JaCoCo (profile coverage) -->
     <argLine/>
+    <maven-release-plugin.version>3.3.1</maven-release-plugin.version>
+    <jacoco.version>0.8.15</jacoco.version>
+    <!-- SonarCloud analysis in the GitHub workflows, with the coverage of the coverage profile -->
+    <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+    <sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
   </properties>
 
   <dependencyManagement>
@@ -122,8 +127,57 @@
             </execution>
           </executions>
         </plugin>
+        <!-- Workflow 4 (Prepare New Version) tags the release and moves on to the next snapshot -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-release-plugin</artifactId>
+          <version>${maven-release-plugin.version}</version>
+          <configuration>
+            <scmCommentPrefix>[ci skip]</scmCommentPrefix>
+            <tagNameFormat>@{project.version}</tagNameFormat>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.version}</version>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
+
+  <profiles>
+    <!-- Test coverage for SonarCloud: ./mvnw verify -Pcoverage -->
+    <profile>
+      <id>coverage</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>prepare-agent</id>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>report</id>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <formats>
+                    <format>XML</format>
+                  </formats>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
 </project>

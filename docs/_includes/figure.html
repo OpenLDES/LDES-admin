@@ -1,0 +1,7 @@
+{%- comment -%} A screenshot that opens in full size: src (in the site), alt, caption (optional) {%- endcomment -%}
+<figure class="screenshot">
+  <a href="{{ include.src | relative_url }}"><img src="{{ include.src | relative_url }}" alt="{{ include.alt }}" width="1440" height="900" loading="lazy"></a>
+  {%- if include.caption %}
+  <figcaption>{{ include.caption }}</figcaption>
+  {%- endif %}
+</figure>

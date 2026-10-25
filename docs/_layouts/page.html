@@ -1,0 +1,22 @@
+---
+layout: default
+---
+<div class="doc">
+  <article class="doc-content">
+    <header class="doc-header">
+      <p class="eyebrow">Documentation</p>
+      <h1>{{ page.title }}</h1>
+      {%- if page.description %}
+      <p class="lead">{{ page.description }}</p>
+      {%- endif %}
+    </header>
+    <div class="prose">
+      {{ content }}
+    </div>
+    {% include pager.html %}
+  </article>
+  <aside class="doc-toc" data-toc hidden>
+    <p class="toc-title" id="toc-title">On this page</p>
+    <nav aria-labelledby="toc-title"></nav>
+  </aside>
+</div>
