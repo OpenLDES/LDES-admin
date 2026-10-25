@@ -27,9 +27,9 @@ changes). How to build and run: `README.md`.
   `org.springframework.boot.persistence.autoconfigure.EntityScan`,
   `org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient`,
   `org.springframework.boot.test.web.server.LocalServerPort`.
-* Frontend: Vue 3.5, TypeScript 5.9, Vite 7, PrimeVue 4.5 (Aura, teal primary, dark mode class
-  `.app-dark`), Vue Flow 1.48, CodeMirror 6, N3.js, `yaml`, Chart.js, Pinia 3, vue-router 4 (HTML5
-  history), Jest 29 (+ `@vue/vue3-jest`, ts-jest), Cypress 13.17, pnpm 9.15.3.
+* Frontend: Vue 3.5, TypeScript 5.9, Vite 8, PrimeVue 4.5 (Aura, teal primary, dark mode class
+  `.app-dark`), Vue Flow 1.48, CodeMirror 6, N3.js, `yaml`, Chart.js, Pinia 3, vue-router 5 (HTML5
+  history), Jest 29 (+ `@vue/vue3-jest`, ts-jest), Cypress 16.2, pnpm 9.15.3.
 * Local instances: `openldes/ldes-server:4.2.1` (+ `postgres:16-alpine`),
   `openldes/ldi-orchestrator:3.1.1`, started through the Testcontainers API.
 
