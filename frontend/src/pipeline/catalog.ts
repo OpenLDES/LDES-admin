@@ -1,10 +1,14 @@
 import type { ComponentConfig } from '@/domain/ldio'
+import { SANDBOX_EVENT_STREAM_URL } from '@/domain/sandbox'
 
 /**
  * The LDIO components that can be used in the sandbox, with the metadata the editor needs: what
  * they do, how they are configured and how they are drawn.
  *
  * Source: https://openldes.github.io/Linked-Data-Interactions/3.2.0-SNAPSHOT/ldio/
+ *
+ * Defaults that point to an LDES point to the event stream of the sandbox, so a pipeline deployed
+ * on the sandbox LDIO works out of the box.
  */
 export type ComponentKind = 'input' | 'adapter' | 'transformer' | 'output'
 
@@ -170,7 +174,7 @@ export const components: ComponentInfo[] = [
         description: 'Turn version objects into state objects',
       },
     ],
-    defaultConfig: { urls: ['http://localhost:8080/parcels/by-page'] },
+    defaultConfig: { urls: [`${SANDBOX_EVENT_STREAM_URL}/by-page`] },
   },
   {
     id: 'Ldio:LdesClientConnector',
@@ -455,7 +459,7 @@ export const components: ComponentInfo[] = [
       },
       ...rdfWriter,
     ],
-    defaultConfig: { endpoint: 'http://localhost:8080/my-collection' },
+    defaultConfig: { endpoint: SANDBOX_EVENT_STREAM_URL },
   },
   {
     id: 'Ldio:HttpSparqlOut',

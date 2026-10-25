@@ -57,5 +57,5 @@ export interface ComponentCatalog {
 export const canBeHalted = (status: PipelineStatus) => status === 'RUNNING'
 export const canBeResumed = (status: PipelineStatus) => status === 'HALTED'
 
-// Not served by the backend yet (LDIO exposes it on /admin/api/v1/pipeline/ldes-client)
+/** Progress of a pipeline with an LDES client input */
 export type LdesClientStatus = 'REPLICATING' | 'SYNCHRONISING' | 'COMPLETED' | 'ERROR'

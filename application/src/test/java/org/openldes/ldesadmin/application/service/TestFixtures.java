@@ -34,7 +34,13 @@ public final class TestFixtures {
 
   public static Instance localLdio() {
     return Instance.local(InstanceType.LDIO, "Sandbox LDIO", URI.create("http://localhost:32768"),
-        "container-42", true, NOW);
+        URI.create("http://sandbox-ldio:8080"), "container-42", true, NOW);
+  }
+
+  public static Instance localLdesServer() {
+    return Instance.local(InstanceType.LDES_SERVER, "Sandbox LDES server",
+        URI.create("http://localhost:32769"), URI.create("http://sandbox-ldes-server:8080"),
+        "container-43", true, NOW);
   }
 
   public static Pipeline pipeline(String name) {

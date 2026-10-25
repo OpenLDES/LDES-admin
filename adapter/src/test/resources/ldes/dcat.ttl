@@ -1,0 +1,14 @@
+PREFIX dcat: <http://www.w3.org/ns/dcat#>
+PREFIX dct:  <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+<../../../..>  a  dcat:Catalog;
+        dct:description  "Catalog of the production server"@en;
+        dct:identifier   "1d911b66-e610-41a5-88a5-65823acbb9cd"^^rdfs:Literal;
+        dct:title        "Production catalog"@en;
+        dct:publisher    [ a foaf:Agent ; foaf:name "Digitaal Vlaanderen" ];
+        dcat:dataset     <../../../../parcels> .
+
+<../../../../parcels>  a  dcat:Dataset;
+        dct:title  "Parcels"@en .

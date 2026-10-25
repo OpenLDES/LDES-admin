@@ -16,6 +16,7 @@ import org.openldes.ldesadmin.application.port.in.instance.InstanceAlreadyRegist
 import org.openldes.ldesadmin.application.port.in.instance.RegisterInstanceUseCase.RegisterInstanceCommand;
 import org.openldes.ldesadmin.application.port.out.persistence.InstanceRepository;
 import org.openldes.ldesadmin.application.service.TestFixtures;
+import org.openldes.ldesadmin.application.service.monitoring.ActivityRecorder;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceOrigin;
 import org.openldes.ldesadmin.model.instance.InstanceType;
@@ -25,10 +26,12 @@ class RegisterInstanceServiceTest {
 
   @Mock
   private InstanceRepository instanceRepository;
+  @Mock
+  private ActivityRecorder activity;
 
   @Test
   void registersAndStoresTheInstance() {
-    RegisterInstanceService service = new RegisterInstanceService(instanceRepository,
+    RegisterInstanceService service = new RegisterInstanceService(instanceRepository, activity,
         TestFixtures.CLOCK);
 
     Instance instance = service.register(new RegisterInstanceCommand(InstanceType.LDES_SERVER,
@@ -38,11 +41,12 @@ class RegisterInstanceServiceTest {
     assertThat(instance.url()).hasToString("https://ldes.example.org");
     assertThat(instance.registeredAt()).isEqualTo(TestFixtures.NOW);
     verify(instanceRepository).save(instance);
+    verify(activity).success(instance, "LDES server added");
   }
 
   @Test
   void refusesToRegisterTheSameUrlTwice() {
-    RegisterInstanceService service = new RegisterInstanceService(instanceRepository,
+    RegisterInstanceService service = new RegisterInstanceService(instanceRepository, activity,
         TestFixtures.CLOCK);
     URI url = URI.create("https://ldes.example.org");
     when(instanceRepository.existsByTypeAndUrl(InstanceType.LDES_SERVER, url)).thenReturn(true);

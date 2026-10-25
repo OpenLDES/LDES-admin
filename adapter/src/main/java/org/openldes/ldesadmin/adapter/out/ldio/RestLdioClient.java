@@ -5,13 +5,17 @@ import static org.openldes.ldesadmin.adapter.out.http.RemoteCalls.call;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.openldes.ldesadmin.adapter.out.http.InstanceRestClients;
 import org.openldes.ldesadmin.adapter.out.http.PrometheusMetrics;
 import org.openldes.ldesadmin.adapter.out.ldio.LdioApi.CatalogTO;
+import org.openldes.ldesadmin.adapter.out.ldio.LdioApi.LdesClientStatusTO;
 import org.openldes.ldesadmin.adapter.out.ldio.LdioApi.PipelineTO;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException.Reason;
@@ -19,6 +23,7 @@ import org.openldes.ldesadmin.application.port.out.ldio.LdioClient;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.ldio.ComponentCatalog;
 import org.openldes.ldesadmin.model.ldio.DeployedPipeline;
+import org.openldes.ldesadmin.model.ldio.LdesClientStatus;
 import org.openldes.ldesadmin.model.ldio.Pipeline;
 import org.openldes.ldesadmin.model.ldio.PipelineStatistics;
 import org.openldes.ldesadmin.model.ldio.PipelineStatus;
@@ -31,8 +36,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Talks to the pipeline management API ({@code /admin/api/v1}) and the Prometheus metrics of an
- * LDIO.
+ * Talks to the pipeline management API ({@code /admin/api/v1}), the HTTP inputs of the pipelines
+ * and the Prometheus metrics of an LDIO.
  */
 @Component
 public class RestLdioClient implements LdioClient {
@@ -130,6 +135,44 @@ public class RestLdioClient implements LdioClient {
         .map(pipeline -> new PipelineStatistics(pipeline, in.getOrDefault(pipeline, 0L),
             out.getOrDefault(pipeline, 0L)))
         .toList();
+  }
+
+  @Override
+  public Map<String, LdesClientStatus> getLdesClientStatuses(Instance ldio) {
+    List<LdesClientStatusTO> statuses;
+    try {
+      statuses = call(ldio, "get LDES client statuses", () -> rest(ldio).get()
+          .uri(PIPELINES + "/ldes-client").accept(MediaType.APPLICATION_JSON)
+          .retrieve().body(new ParameterizedTypeReference<List<LdesClientStatusTO>>() {
+          }));
+    } catch (RemoteInstanceException e) {
+      if (e.reason() == Reason.NOT_FOUND) {
+        // LDIOs before 2.x don't report the progress of their LDES clients
+        return Map.of();
+      }
+      throw e;
+    }
+    Map<String, LdesClientStatus> result = new TreeMap<>();
+    if (statuses != null) {
+      statuses.forEach(status -> parseClientStatus(status.status())
+          .ifPresent(parsed -> result.put(status.pipeline(), parsed)));
+    }
+    return Collections.unmodifiableMap(result);
+  }
+
+  @Override
+  public void send(Instance ldio, String pipeline, String content, String contentType) {
+    call(ldio, "receive a message in pipeline " + pipeline, () -> rest(ldio).post()
+        .uri("/{pipeline}", pipeline)
+        .contentType(MediaType.parseMediaType(contentType))
+        .body(content)
+        .retrieve().toBodilessEntity());
+  }
+
+  private static Optional<LdesClientStatus> parseClientStatus(String status) {
+    return Arrays.stream(LdesClientStatus.values())
+        .filter(candidate -> candidate.name().equalsIgnoreCase(status))
+        .findFirst();
   }
 
   private RestClient rest(Instance ldio) {

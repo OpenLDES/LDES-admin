@@ -12,12 +12,13 @@ flowchart LR
     direction LR
     subgraph adapter_in["adapter (in)"]
       rest["REST controllers"]
+      scheduler["instance monitor<br/>(scheduled)"]
     end
     subgraph application["application"]
       in(["use cases<br/>(ports in)"]) --> services["services"] --> out(["ports out"])
     end
     subgraph model["model"]
-      domain["Instance, EventStream, View,<br/>Pipeline, PipelineStatus, …"]
+      domain["Instance, EventStream, View, Fragment,<br/>Pipeline, Sandbox, ActivityEvent, …"]
     end
     subgraph adapter_out["adapter (out)"]
       jpa["JPA + Flyway"]
@@ -26,16 +27,16 @@ flowchart LR
       health["actuator health probe"]
       runtime["local runtime<br/>(Testcontainers)"]
     end
-    rest --> in
+    rest & scheduler --> in
     out --> jpa & ldes & ldio & health & runtime
     services -. uses .-> domain
   end
 
   jpa --> postgres[("Postgres")]
   ldes --> server["OpenLDES servers<br/>/admin/api/v1, /{collection}, /actuator"]
-  ldio --> orchestrator["LDIOs<br/>/admin/api/v1, /actuator"]
+  ldio --> orchestrator["LDIOs<br/>/admin/api/v1, /{pipeline}, /actuator"]
   health --> server & orchestrator
-  runtime --> docker["Docker"]
+  runtime --> docker["Docker network<br/>local LDES servers and LDIOs"]
 ```
 
 ## Hexagonal architecture
@@ -48,8 +49,8 @@ every ring is a Maven module, so the compiler enforces that dependencies only po
 |---------------|------------------------------------------------------------------|---------------|-----------------------------|
 | `model`       | Domain model: records with their invariants and behaviour        | –             | none                        |
 | `application` | Use cases (ports in), ports out, and the services implementing them | `model`     | none                        |
-| `adapter`     | REST API, JPA persistence, LDES server/LDIO clients, local runtime | `application` | Spring, Jena, Testcontainers |
-| `bootstrap`   | Spring Boot application, wiring, security, configuration         | `adapter`     | Spring Boot                 |
+| `adapter`     | REST API, scheduler, JPA persistence, LDES server/LDIO clients, local runtime | `application` | Spring, Jena, Testcontainers |
+| `bootstrap`   | Spring Boot application, wiring, security, scheduling, configuration | `adapter`  | Spring Boot                 |
 
 `DependencyRuleTest` (ArchUnit, in `bootstrap`) additionally checks what the modules cannot:
 adapters don't depend on each other, inbound adapters only use use cases (never services),
@@ -67,35 +68,55 @@ org.openldes.ldesadmin
 ├── model
 │   ├── instance     Instance (aggregate root), InstanceId, InstanceType, InstanceOrigin, InstanceHealth
 │   ├── rdf          RdfDocument, RdfFormat
-│   ├── ldes         EventStream, View, Fragmentation, RetentionPolicy, DcatTarget, StreamStatistics
-│   ├── ldio         Pipeline, InputDefinition, ComponentDefinition, DeployedPipeline, PipelineStatus, …
+│   ├── ldes         EventStream, View, Fragment, Fragmentation, RetentionPolicy, DcatTarget, CatalogDescription,
+│   │                StreamStatistics, BackgroundProcess
+│   ├── ldio         Pipeline, InputDefinition, ComponentDefinition, DeployedPipeline, PipelineStatus, LdesClientStatus, …
+│   ├── sandbox      Sandbox
+│   ├── monitoring   ActivityEvent, IngestSample, ThroughputSeries
 │   └── dashboard    DashboardOverview, LdesServerSummary, LdioSummary
 ├── application
-│   ├── port.in      instance | ldes | ldio | dashboard     use case interfaces and their exceptions
-│   ├── port.out     persistence | ldes | ldio | health | runtime, RemoteInstanceException
-│   └── service      instance | ldes | ldio | dashboard     one service per use case
+│   ├── port.in      instance | ldes | ldio | sandbox | monitoring | dashboard   use case interfaces and their exceptions
+│   ├── port.out     persistence | ldes | ldio | health | runtime | monitoring, RemoteInstanceException
+│   └── service      instance | ldes | ldio | sandbox | monitoring | dashboard   one service per use case
 ├── adapter
-│   ├── in.rest      instance | ldes | ldio | dashboard, RestExceptionHandler (RFC 9457 problem details)
+│   ├── in.rest      instance | ldes | ldio | sandbox | monitoring | dashboard, RestExceptionHandler (RFC 9457)
+│   ├── in.scheduling InstanceMonitorScheduler
 │   └── out          persistence.jpa | ldes | ldio | health | runtime | http (shared HTTP helpers)
-└── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SecurityConfig
+└── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SchedulingConfig, SecurityConfig
 ```
 
 ## Domain model
 
 * **Instance** – an LDES server or LDIO managed by LDES-admin. It is either *registered* (it runs
   somewhere; LDES-admin only knows its URL) or *local* (LDES-admin started it as a Docker container
-  and stops it again). Any instance can be flagged as a *sandbox*. Instances are the only state
-  LDES-admin stores itself.
+  and stops it again). A local instance also has an *internal URL*, on which other local instances
+  reach it (`http://sandbox-ldes-server:8080`); a local LDES server publishes its IRIs on it.
+  `Instance.reachable` translates such an IRI to the URL LDES-admin can fetch, and
+  `Instance.serves` tells whether a URL belongs to the instance at all. Any instance can be flagged
+  as a *sandbox*.
 * **EventStream / View / shape / DCAT** – the configuration of an LDES server. The admin API speaks
   RDF, so the definitions travel as `RdfDocument`s; the outbound adapter extracts the fields LDES-admin
-  shows (collection, timestamp path, views, fragmentations, retention policies, page size).
+  shows (collection, timestamp path, views, fragmentations, retention policies, page size). The
+  `CatalogDescription` is the catalog of the server itself, as a blank node the server accepts back.
+* **Fragment** – a page of a view as an LDES client sees it: its relations to other pages and its
+  members.
 * **Pipeline** – an LDIO pipeline: one input (with an optional adapter), a chain of transformers and
   one or more outputs, each a component name with its configuration. `DeployedPipeline` adds the
   status (`INIT`, `RUNNING`, `HALTED`, …); only running pipelines can be halted and only halted ones
   resumed.
 * **Statistics** – members ingested, bucketised and paginated per stream and view (LDES server
   gauges), members in and out per pipeline (LDIO counters). The *backlog* of a stream is the number
-  of members bucketised but not yet paginated in its slowest view.
+  of members bucketised but not yet paginated in its slowest view. A **BackgroundProcess** is a step
+  of the fragmentation or maintenance job of a server, from its Spring Batch metrics.
+* **Sandbox** – the local LDES server *Sandbox LDES server* and LDIO *Sandbox LDIO*. Out of the box,
+  the LDIO pipeline `sandbox-ingest` (`Ldio:HttpIn` + `Ldio:RdfAdapter` → `Ldio:HttpOut`) feeds the
+  event stream `sandbox-parcels`, which has a paginated view (`by-page`) and a time-based one
+  (`by-time`).
+* **Monitoring** – an **ActivityEvent** records what happened to an instance: actions taken through
+  LDES-admin and changes it noticed (down, up again). **IngestSample**s of the members every LDES
+  server ingested so far give its **ThroughputSeries**, the members ingested per hour.
+
+Instances, activity and ingest samples are the only state LDES-admin stores itself.
 
 ## Use cases and REST API
 
@@ -109,41 +130,75 @@ reached, `503` when a local instance cannot be started).
 | Register / find / unregister instances | `GET, POST /ldes-servers`, `GET, DELETE /ldes-servers/{id}` (same for `/ldios`) |
 | Start a local instance            | `POST /ldes-servers/local`, `POST /ldios/local`                                  |
 | Check health                      | `GET /{ldes-servers,ldios}/{id}/health`                                          |
+| Sandbox                           | `GET, POST, DELETE /sandbox` (state, start and prepare, stop)                    |
 | Event streams                     | `GET, POST /ldes-servers/{id}/eventstreams`, `GET, DELETE …/eventstreams/{collection}` |
 | Views                             | `GET, POST …/eventstreams/{collection}/views`, `GET, DELETE …/views/{view}`      |
+| Fragments                         | `GET …/views/{view}/fragment?url=` (the root of the view without `url`)          |
 | Shapes                            | `GET, PUT …/eventstreams/{collection}/shape`                                    |
-| DCAT                              | `GET, POST /ldes-servers/{id}/dcat`, `PUT, DELETE …/dcat/{catalogId}`, `POST, PUT, DELETE` on `…/eventstreams/{collection}/dcat` and `…/views/{view}/dcat` |
+| DCAT                              | `GET /ldes-servers/{id}/dcat` (as published), `GET, PUT /ldes-servers/{id}/server-catalog`, `POST /dcat`, `PUT, DELETE …/dcat/{catalogId}`, `POST, PUT, DELETE` on `…/eventstreams/{collection}/dcat` and `…/views/{view}/dcat` |
 | Ingest a member                   | `POST …/eventstreams/{collection}/members` (Turtle, JSON-LD, N-Quads, N-Triples) |
-| Stream statistics                 | `GET /ldes-servers/{id}/statistics`                                              |
+| Stream statistics, processes      | `GET /ldes-servers/{id}/statistics`, `GET /ldes-servers/{id}/processes`          |
 | Pipelines                         | `GET, POST /ldios/{id}/pipelines`, `GET, PUT, DELETE …/pipelines/{name}`         |
 | Halt / resume                     | `GET …/pipelines/{name}/status`, `POST …/{name}/halt`, `POST …/{name}/resume`    |
-| Component catalog, statistics     | `GET /ldios/{id}/catalog`, `GET /ldios/{id}/statistics`                          |
-| Dashboard                         | `GET /dashboard`                                                                 |
+| Send to a pipeline                | `POST /ldios/{id}/pipelines/{name}/members` (any content type the adapter of the pipeline reads) |
+| Component catalog, statistics     | `GET /ldios/{id}/catalog`, `GET /ldios/{id}/statistics`, `GET /ldios/{id}/ldes-clients` |
+| Dashboard, activity               | `GET /dashboard`, `GET /dashboard/throughput`, `GET /activity?limit=`            |
 
 LDIO has no update operation: updating a pipeline deletes it (waiting until LDIO has stopped it)
 and creates it again.
 
+Fetching a fragment goes through LDES-admin, so it only fetches URLs of the server itself
+(`Instance.serves`): it does not become a proxy to anywhere else.
+
+### Monitoring
+
+`InstanceMonitorScheduler` (an inbound adapter) calls `MonitorInstancesUseCase` every
+`ldes-admin.monitor.interval` (1 minute): it checks the health of every instance, records when one
+goes down or comes back, and samples the members every healthy LDES server ingested. Samples are
+kept 48 hours. On startup it removes the local instances whose container stopped with a previous
+run of LDES-admin.
+
+### Sandbox
+
+`SandboxService` starts the missing sandbox instances side by side (virtual threads), through the
+same use case as any local instance, and then prepares them, unless that was done before: the
+`sandbox-parcels` event stream with its views, and the `sandbox-ingest` pipeline sending to the
+event stream on the internal URL of the server. Starting again is harmless; it also redeploys the
+pipeline when it points to another server than the current one. Stopping unregisters both, which
+stops their containers.
+
 ## Outbound adapters
 
-| Port                   | Adapter                       | Talks to                                                         |
-|------------------------|-------------------------------|------------------------------------------------------------------|
-| `InstanceRepository`   | `JpaInstanceRepository`       | Postgres; the schema is owned by Flyway (`adapter/src/main/resources/db/migration`), Hibernate only validates it |
-| `LdesServerClient`     | `RestLdesServerClient`        | `/admin/api/v1/…` (Turtle, parsed with Apache Jena), `POST /{collection}`, `/actuator/prometheus` (`ldes_server_ingested_members_count`, `ldes_server_bucket_members_count`, `ldes_server_pagination_members_count`) |
-| `LdioClient`           | `RestLdioClient`              | `/admin/api/v1/pipeline…`, `/admin/api/v1/catalog`, `/actuator/prometheus` (`ldio_data_in_total`, `ldio_data_out_total`) |
-| `InstanceHealthProbe`  | `ActuatorHealthProbe`         | `/actuator/health`, falling back to the admin API                 |
-| `LocalInstanceRuntime` | `DockerLocalInstanceRuntime`  | Docker, through the Testcontainers API: `openldes/ldes-server` with its own Postgres, or `openldes/ldi-orchestrator` |
+| Port                     | Adapter                       | Talks to                                                         |
+|--------------------------|-------------------------------|------------------------------------------------------------------|
+| `InstanceRepository`, `ActivityLog`, `IngestSampleRepository` | `JpaInstanceRepository`, `JpaActivityLog`, `JpaIngestSampleRepository` | Postgres; the schema is owned by Flyway (`adapter/src/main/resources/db/migration`), Hibernate only validates it |
+| `LdesServerClient`       | `RestLdesServerClient`        | `/admin/api/v1/…` (Turtle, parsed with Apache Jena), `POST /{collection}`, the fetch API (pages, with `Cache-Control: immutable`), `/actuator/prometheus` (`ldes_server_*_members_count`, `spring_batch_step_*`) |
+| `LdioClient`             | `RestLdioClient`              | `/admin/api/v1/pipeline…`, `/admin/api/v1/pipeline/ldes-client`, `/admin/api/v1/catalog`, `POST /{pipeline}`, `/actuator/prometheus` (`ldio_data_in_total`, `ldio_data_out_total`) |
+| `InstanceHealthProbe`    | `ActuatorHealthProbe`         | `/actuator/health`, falling back to the admin API                 |
+| `LocalInstanceRuntime`   | `DockerLocalInstanceRuntime`  | Docker, through the Testcontainers API: `openldes/ldes-server` with its own Postgres, or `openldes/ldi-orchestrator` |
 
 HTTP errors are translated into a `RemoteInstanceException` with a reason (`NOT_FOUND`, `REJECTED`,
 `UNAVAILABLE`), so no Spring type leaks into the application ring.
 
+### Local instances
+
+All local instances join one Docker network, under a host name derived from their name
+("Sandbox LDES server" becomes `sandbox-ldes-server`, with a suffix when it is taken). A local LDES
+server gets `LDESSERVER_HOSTNAME=http://<host name>:8080`, so it publishes absolute IRIs that other
+local instances can follow: an LDIO `Ldio:LdesClient` cannot follow relative ones. It fragments new
+members every 5 seconds (`ldes-admin.local-runtime.fragmentation-cron`) instead of every 30, so
+experiments show results quickly. LDES-admin reaches the containers on their mapped ports and
+translates the internal IRIs (`Instance.reachable`).
+
 Assumptions worth knowing:
 
 * An LDES server is reached on one base URL for its admin, ingest and fetch endpoints and its
-  actuator (the default single-port setup). Statistics need `/actuator/prometheus` to be exposed.
-* Local instances are for experimenting: Testcontainers removes them when LDES-admin stops. Their
-  registrations remain and show up as down until they are removed.
-* Starting a local instance blocks the request until the container is healthy (the first time
-  includes pulling the image).
+  actuator (the default single-port setup). Statistics and background processes need
+  `/actuator/prometheus` to be exposed.
+* Local instances are for experimenting: Testcontainers removes them when LDES-admin stops, and
+  LDES-admin removes their registrations on the next start.
+* Starting a local instance, or the sandbox, blocks the request until the containers are healthy
+  (the first time includes pulling the images).
 
 ## Security
 
@@ -156,12 +211,12 @@ Assumptions worth knowing:
 | Level                    | Where                          | What                                                                  |
 |--------------------------|--------------------------------|-----------------------------------------------------------------------|
 | Unit                     | `model`, `application`         | Domain invariants; services against mocked ports (JUnit 6, AssertJ, Mockito) |
-| Slice                    | `adapter`                      | Controllers with `@WebMvcTest` and `MockMvcTester`; HTTP clients against `MockRestServiceServer` |
+| Slice                    | `adapter`                      | Controllers with `@WebMvcTest` and `MockMvcTester`; HTTP clients against `MockRestServiceServer`, with responses recorded from real servers |
 | Integration (`*IT`)      | `adapter`                      | JPA + Flyway against Postgres; the LDES server and LDIO clients against real `openldes/ldes-server` and `openldes/ldi-orchestrator` containers, started by the local runtime adapter |
-| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API     |
+| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API; `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client |
 | Architecture             | `bootstrap`                    | `DependencyRuleTest` (ArchUnit)                                       |
-| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, sandbox store, mock API, components (Jest) |
-| Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, sandbox (Cypress)       |
+| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, stores, mock and HTTP API, domain helpers, components (Jest) |
+| Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, sandbox, demo and production mode with a stubbed backend (Cypress) |
 
 `./mvnw test` runs the unit, slice and architecture tests; `./mvnw verify` also runs the
 integration tests, which need Docker.
@@ -173,21 +228,27 @@ and pnpm.
 
 ```
 frontend/src
-├── domain       TypeScript types mirroring the web models of the REST API
-├── api          LdesAdminApi (the port: one method per endpoint) and mock/ (in-memory adapter with sample data)
+├── domain       TypeScript types mirroring the web models of the REST API, and helpers to present them
+├── api          LdesAdminApi (the port: one method per endpoint), http/ (the backend) and mock/ (sample data)
 ├── pipeline     catalog of LDIO components, graph ⇄ pipeline conversion and validation, YAML, simulator, templates
-├── stores       Pinia: instances, sandbox, ui (dark mode)
+├── stores       Pinia: mode, instances, sandbox (the pipeline being designed), sandboxEnvironment, ui
 ├── components   layout, common, dashboard, instances, ldes, ldio, sandbox
 └── views        one per route
 ```
 
-The frontend does not call the backend yet: `api/index.ts` provides `MockLdesAdminApi`, which keeps
-the sample data in memory and behaves like the backend, including its error responses. Connecting
-the backend means writing an HTTP implementation of `LdesAdminApi`; the Vite dev server already
-proxies `/api` to `localhost:8080`. Some screens show data the backend does not serve yet; those
-methods are marked *planned* in `LdesAdminApi`: throughput history, an activity feed, the
-background processes of a server, browsing the pages of a view, and the status of LDES client
-pipelines.
+### Demo and production mode
+
+The switch in the top bar picks the implementation of `LdesAdminApi` behind `api` (`api/index.ts`):
+
+* **Demo** – `MockLdesAdminApi` keeps sample data in memory and behaves like the backend, including
+  its error responses and the sandbox (its LDIO pipeline feeds its LDES server here too).
+* **Production** – `HttpLdesAdminApi` calls the backend on `/api/v1` and turns problem details into
+  `ApiError`s. The Vite dev and preview servers proxy `/api` and `/actuator` to the backend
+  (`LDES_ADMIN_BACKEND`, default `http://localhost:8080`).
+
+The choice is remembered in the browser. Without one, the frontend starts in production mode when
+`/actuator/health` of the backend answers, and in demo mode otherwise. Switching rebuilds the views
+and reloads the shared stores, so nothing of the other mode lingers.
 
 ### Sandbox
 
@@ -199,21 +260,24 @@ listing everything that keeps it from being valid. Selecting a component shows i
 pipeline as YAML, which is applied to the graph while typing. The whole pipeline can be edited as
 YAML too, and deployed on an LDIO.
 
+The *sandbox environment* (toolbar, and a card on the dashboard) starts and stops the sandbox LDES
+server and LDIO. The templates, and the defaults of components that point to an LDES, use the
+event stream of the sandbox on its host name in the Docker network
+(`http://sandbox-ldes-server:8080/sandbox-parcels`), so a pipeline deployed on the sandbox LDIO
+works out of the box.
+
 The simulator runs a member through the pipeline in the browser. RDF is parsed and serialised
 for real (N3.js); each component approximates what LDIO does (adapters map JSON with a JSON-LD
 context, the Version Object Creator and Materialiser rewrite subjects, GeoJSON becomes WKT, blank
 nodes are skolemised, the change detection filter remembers members). SPARQL queries and RML
-mappings are not evaluated. The result can be ingested in a sandbox LDES server.
+mappings are not evaluated. The result can be ingested in a sandbox LDES server, and the input
+member can be sent to a deployed pipeline with an HTTP input, which really processes it.
 
 ## Next steps
 
-* An HTTP implementation of `LdesAdminApi`, and authentication in the frontend (OIDC) for when the
-  API is secured.
-* Backend endpoints for the *planned* data above. Background processes and LDES client status are
-  available from the servers (Spring Batch metadata, `GET /admin/api/v1/pipeline/ldes-client`);
-  throughput and activity need LDES-admin to sample and keep history.
-* Running sandbox pipelines on a real LDIO: deploy the pipeline on a sandbox LDIO with its outputs
-  replaced by an `Ldio:HttpOut` to a capture endpoint of LDES-admin, post the member to the
-  `Ldio:HttpIn` input, and return what arrives. Intermediate steps would need one deployment per
-  prefix of the pipeline.
+* Authentication in the frontend (OIDC) for when the API is secured.
+* Showing what a deployed sandbox pipeline did to a member step by step: deploy the pipeline with
+  its outputs replaced by an `Ldio:HttpOut` to a capture endpoint of LDES-admin, post the member to
+  the `Ldio:HttpIn` input, and return what arrives. Intermediate steps would need one deployment
+  per prefix of the pipeline.
 * Serving the built frontend from the Spring Boot application.

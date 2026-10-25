@@ -4,10 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceType;
+import org.openldes.ldesadmin.model.monitoring.ActivityEvent;
+import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
+import org.openldes.ldesadmin.model.monitoring.IngestSample;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -25,7 +30,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@Import(JpaInstanceRepository.class)
+@Import({JpaInstanceRepository.class, JpaActivityLog.class, JpaIngestSampleRepository.class})
 class JpaInstanceRepositoryIT {
 
   private static final Instant NOW = Instant.parse("2026-10-23T10:15:30Z");
@@ -38,11 +43,16 @@ class JpaInstanceRepositoryIT {
   private JpaInstanceRepository repository;
   @Autowired
   private InstanceJpaRepository jpaRepository;
+  @Autowired
+  private JpaActivityLog activityLog;
+  @Autowired
+  private JpaIngestSampleRepository ingestSamples;
 
   @Test
   void storesAndRestoresInstances() {
     Instance local = Instance.local(InstanceType.LDIO, "Sandbox LDIO",
-        URI.create("http://localhost:32768"), "container-42", true, NOW);
+        URI.create("http://localhost:32768"), URI.create("http://sandbox-ldio:8080"),
+        "container-42", true, NOW);
 
     repository.save(local);
 
@@ -87,6 +97,53 @@ class JpaInstanceRepositoryIT {
     repository.deleteById(instance.id());
 
     assertThat(repository.findById(instance.id())).isEmpty();
+  }
+
+  @Test
+  void keepsTheActivityNewestFirst() {
+    Instance ldio = register(InstanceType.LDIO, "LDIO", "http://ldio.example.org");
+    ActivityEvent added = ActivityEvent.of(ldio, Severity.INFO, "LDIO added", null, NOW);
+    ActivityEvent deployed = ActivityEvent.of(ldio, Severity.SUCCESS, "Pipeline parcels deployed",
+        "x".repeat(3_000), NOW.plusSeconds(60));
+    ActivityEvent halted = ActivityEvent.of(ldio, Severity.WARN, "Pipeline parcels halted", null,
+        NOW.plusSeconds(120));
+    activityLog.record(added);
+    activityLog.record(halted);
+    activityLog.record(deployed);
+
+    List<ActivityEvent> recent = activityLog.findRecent(2);
+
+    assertThat(recent).extracting(ActivityEvent::title)
+        .containsExactly("Pipeline parcels halted", "Pipeline parcels deployed");
+    assertThat(recent.getLast().detail()).hasSize(2_048);
+  }
+
+  @Test
+  void keepsIngestSamplesUntilTheyArePruned() {
+    Instance server = register(InstanceType.LDES_SERVER, "Production", "http://ldes.example.org");
+    IngestSample old = new IngestSample(server.id(), NOW.minus(Duration.ofHours(50)), 10);
+    IngestSample recent = new IngestSample(server.id(), NOW.minus(Duration.ofMinutes(5)), 20);
+    ingestSamples.save(recent);
+    ingestSamples.save(old);
+
+    assertThat(ingestSamples.findSince(NOW.minus(Duration.ofDays(3))))
+        .containsExactly(old, recent);
+
+    ingestSamples.deleteBefore(NOW.minus(Duration.ofHours(48)));
+
+    assertThat(ingestSamples.findSince(NOW.minus(Duration.ofDays(3)))).containsExactly(recent);
+  }
+
+  @Test
+  void removesTheIngestSamplesOfARemovedServer() {
+    Instance server = register(InstanceType.LDES_SERVER, "Production", "http://ldes.example.org");
+    ingestSamples.save(new IngestSample(server.id(), NOW, 20));
+    jpaRepository.flush();
+
+    repository.deleteById(server.id());
+    jpaRepository.flush();
+
+    assertThat(ingestSamples.findSince(NOW.minus(Duration.ofDays(1)))).isEmpty();
   }
 
   private Instance register(InstanceType type, String name, String url) {

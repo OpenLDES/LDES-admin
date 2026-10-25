@@ -13,7 +13,13 @@ export interface Instance {
   id: string
   type: InstanceType
   name: string
+  /** Where LDES-admin reaches the instance */
   url: string
+  /**
+   * Where other local instances reach a local instance, e.g. http://sandbox-ldes-server:8080.
+   * A local LDES server publishes its IRIs on this URL.
+   */
+  internalUrl?: string | null
   origin: InstanceOrigin
   sandbox: boolean
   registeredAt: string

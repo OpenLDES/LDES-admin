@@ -2,6 +2,7 @@ import type { HealthStatus, Instance } from '@/domain/instance'
 import type {
   BackgroundProcess,
   EventStream,
+  ServerCatalog,
   StreamStatistics,
   TypedConfig,
   View,
@@ -14,6 +15,7 @@ import type {
 } from '@/domain/ldio'
 import type { ActivityEvent, ThroughputSeries } from '@/domain/dashboard'
 import { compact, expand, PREFIXES, prefixLines } from '@/domain/rdf'
+import { SANDBOX_EVENT_STREAM, SANDBOX_EVENT_STREAM_URL, SANDBOX_INGEST_PIPELINE } from '@/domain/sandbox'
 
 export { sampleMember } from '@/ldes/memberTemplates'
 
@@ -41,8 +43,10 @@ export interface SampleState {
   /** Per server and collection: `${serverId}/${collection}` */
   views: Record<string, View[]>
   shapes: Record<string, string>
-  /** Per server */
-  catalogs: Record<string, string>
+  /** The catalog of the server itself, per server */
+  serverCatalogs: Record<string, ServerCatalog>
+  /** The event streams with DCAT dataset metadata, per server */
+  datasets: Record<string, string[]>
   statistics: Record<string, StreamStatistics[]>
   processes: Record<string, BackgroundProcess[]>
   /** Per LDIO */
@@ -242,14 +246,17 @@ export const streamSpecs: Record<string, StreamSpec[]> = {
   ],
   [IDS.sandboxServer]: [
     {
-      collection: 'sandbox-parcels',
+      collection: SANDBOX_EVENT_STREAM,
       title: 'Sandbox parcels',
       description: 'Try out ingesting and fragmenting parcels',
       targetClass: 'perceel:Perceel',
       timestampPath: 'prov:generatedAtTime',
-      properties: [{ path: 'perceel:capakey', datatype: 'xsd:string', minCount: 1 }],
+      properties: [],
       ingested: 12,
-      views: [{ name: 'by-page', pageSize: 10, bucketised: 1, paginated: 1 }],
+      views: [
+        { name: 'by-page', pageSize: 10, bucketised: 1, paginated: 1 },
+        { name: 'by-time', pageSize: 10, fragmentations: [timeBased('prov:generatedAtTime')], bucketised: 1, paginated: 1 },
+      ],
     },
   ],
 }
@@ -310,26 +317,48 @@ export function shapeTurtle(baseUrl: string, spec: StreamSpec): string {
 `
 }
 
-export function catalogTurtle(baseUrl: string, name: string, specs: StreamSpec[]): string {
-  const datasets = specs.map((spec) => `<${baseUrl}/${spec.collection}>`)
-  const services = specs.flatMap((spec) => spec.views.map((view) => ({ spec, view })))
+/** The catalog of the server itself, the way the server expects it: a blank node */
+export function serverCatalogTurtle(name: string): string {
   return `${prefixLines('dcat', 'dcterms')}
 
-<${baseUrl}/catalog> a dcat:Catalog ;
+[] a dcat:Catalog ;
     dcterms:title "${name}"@en ;
-    dcterms:description "Linked Data Event Streams published by ${name}"@en${datasets.length ? ` ;
-    dcat:dataset ${datasets.join(' ,\n        ')}` : ''}${services.length ? ` ;
-    dcat:service ${services.map(({ spec, view }) => `<${baseUrl}/${spec.collection}/${view.name}>`).join(' ,\n        ')}` : ''} .
-${specs.map((spec) => `
-<${baseUrl}/${spec.collection}> a dcat:Dataset ;
-    dcterms:title "${spec.title}"@en ;
-    dcterms:description "${spec.description}"@en .`).join('\n')}
-${services.map(({ spec, view }) => `
-<${baseUrl}/${spec.collection}/${view.name}> a dcat:DataService ;
-    dcterms:title "${spec.title}, ${view.name}"@en ;
-    dcat:endpointURL <${baseUrl}/${spec.collection}/${view.name}> ;
-    dcat:servesDataset <${baseUrl}/${spec.collection}> .`).join('\n')}
+    dcterms:description "Linked Data Event Streams published by ${name}"@en .
 `
+}
+
+/**
+ * The catalog the server serves: its own, with the datasets of the given event streams (those
+ * with DCAT metadata) and a data service per view
+ */
+export function combinedCatalog(baseUrl: string, serverCatalog: ServerCatalog | undefined,
+  streams: EventStream[]): string {
+  if (!serverCatalog?.catalogId) return ''
+  // The server names its catalog after its base URL
+  const catalog = `<${baseUrl}>`
+  const own = serverCatalog.document.replace(/\[\s*\]/, catalog).trimEnd()
+  if (!streams.length) return `${own}\n`
+  const services = streams.flatMap((stream) => stream.views.map((view) => ({ stream, view })))
+  return `${own}
+
+${prefixLines('dcat', 'dcterms')}
+
+${catalog} dcat:dataset ${streams.map((stream) => `<${baseUrl}/${stream.collection}>`).join(' ,\n        ')}${services.length ? ` ;
+    dcat:service ${services.map(({ stream, view }) => `<${baseUrl}/${stream.collection}/${view}>`).join(' ,\n        ')}` : ''} .
+${streams.map((stream) => `
+<${baseUrl}/${stream.collection}> a dcat:Dataset ;
+    dcterms:title "${streamTitle(stream.collection)}"@en .`).join('\n')}
+${services.map(({ stream, view }) => `
+<${baseUrl}/${stream.collection}/${view}> a dcat:DataService ;
+    dcterms:title "${streamTitle(stream.collection)}, ${view}"@en ;
+    dcat:endpointURL <${baseUrl}/${stream.collection}/${view}> ;
+    dcat:servesDataset <${baseUrl}/${stream.collection}> .`).join('\n')}
+`
+}
+
+function streamTitle(collection: string): string {
+  return Object.values(streamSpecs).flat().find((spec) => spec.collection === collection)?.title
+    ?? collection
 }
 
 export function toEventStream(baseUrl: string, spec: StreamSpec): EventStream {
@@ -394,8 +423,9 @@ function instances(now: Date): Instance[] {
     {
       id: IDS.sandboxServer,
       type: 'LDES_SERVER',
-      name: 'Sandbox',
+      name: 'Sandbox LDES server',
       url: 'http://localhost:32768',
+      internalUrl: 'http://sandbox-ldes-server:8080',
       origin: 'LOCAL',
       sandbox: true,
       registeredAt: ago(0.05),
@@ -432,6 +462,7 @@ function instances(now: Date): Instance[] {
       type: 'LDIO',
       name: 'Sandbox LDIO',
       url: 'http://localhost:32771',
+      internalUrl: 'http://sandbox-ldio:8080',
       origin: 'LOCAL',
       sandbox: true,
       registeredAt: ago(0.05),
@@ -599,19 +630,22 @@ function pipelines(): Record<string, DeployedPipeline[]> {
         },
       },
     ],
-    [IDS.sandboxLdio]: [
-      {
-        status: 'RUNNING',
-        updateSource: 'AUTO',
-        pipeline: {
-          name: 'sandbox-console',
-          description: 'Logs everything posted to it',
-          input: { name: 'Ldio:HttpIn', adapter: { name: 'Ldio:RdfAdapter' } },
-          transformers: [],
-          outputs: [{ name: 'Ldio:ConsoleOut' }],
-        },
-      },
-    ],
+    [IDS.sandboxLdio]: [sandboxIngestPipeline()],
+  }
+}
+
+/** The pipeline that feeds the event stream of the sandbox, as the backend deploys it */
+export function sandboxIngestPipeline(eventStreamUrl = SANDBOX_EVENT_STREAM_URL): DeployedPipeline {
+  return {
+    status: 'RUNNING',
+    updateSource: 'AUTO',
+    pipeline: {
+      name: SANDBOX_INGEST_PIPELINE,
+      description: `Receives members over HTTP and ingests them in the ${SANDBOX_EVENT_STREAM} event stream of the sandbox LDES server`,
+      input: { name: 'Ldio:HttpIn', adapter: { name: 'Ldio:RdfAdapter', config: {} }, config: {} },
+      transformers: [],
+      outputs: [{ name: 'Ldio:HttpOut', config: { endpoint: eventStreamUrl } }],
+    },
   }
 }
 
@@ -629,83 +663,23 @@ function pipelineStatistics(): Record<string, PipelineStatistics[]> {
       stats('parcels-to-kafka', 1_283_955, 311_402),
       stats('addresses-sparql', 0, 0),
     ],
-    [IDS.sandboxLdio]: [stats('sandbox-console', 3, 3)],
+    [IDS.sandboxLdio]: [stats(SANDBOX_INGEST_PIPELINE, 12, 12)],
   }
 }
 
 // Background processes -----------------------------------------------------------------------
 
-function processes(now: Date, failingRetention: boolean, busy: boolean): BackgroundProcess[] {
-  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString()
-  const inMs = (ms: number) => new Date(now.getTime() + ms).toISOString()
-  const midnight = new Date(now)
-  midnight.setUTCHours(0, 0, 0, 0)
-  const nextMidnight = new Date(midnight.getTime() + 86_400_000).toISOString()
+export function processes(failingRetention: boolean, busy: boolean): BackgroundProcess[] {
   return [
+    { job: 'fragmentation', step: 'bucketisation', completedRuns: 2_874, failedRuns: 0, averageMillis: 412, longestMillis: 4_210, running: busy },
+    { job: 'fragmentation', step: 'pagination', completedRuns: 2_874, failedRuns: 0, averageMillis: 268, longestMillis: 2_904, running: false },
     {
-      id: 'bucketisation',
-      name: 'Bucketisation',
-      description: 'Assigns newly ingested members to the buckets of every view',
-      icon: 'pi pi-th-large',
-      status: busy ? 'RUNNING' : 'IDLE',
-      schedule: '*/30 * * * * *',
-      lastRun: ago(18_000),
-      nextRun: inMs(12_000),
-      lastDurationMs: 4_210,
-      processedItems: busy ? 18_442 : 0,
-      progress: busy ? 72 : undefined,
+      job: 'maintenance', step: 'viewRetentionStep', completedRuns: failingRetention ? 5 : 6, failedRuns: failingRetention ? 1 : 0,
+      averageMillis: 41_877, longestMillis: failingRetention ? 300_000 : 52_310, running: false,
     },
-    {
-      id: 'pagination',
-      name: 'Pagination',
-      description: 'Puts bucketised members on pages and links the pages together',
-      icon: 'pi pi-book',
-      status: 'IDLE',
-      schedule: '*/30 * * * * *',
-      lastRun: ago(14_000),
-      nextRun: inMs(16_000),
-      lastDurationMs: 2_904,
-      processedItems: busy ? 9_310 : 0,
-    },
-    {
-      id: 'retention',
-      name: 'Retention',
-      description: 'Removes members that no longer match the retention policies of a view',
-      icon: 'pi pi-clock',
-      status: failingRetention ? 'FAILED' : 'IDLE',
-      schedule: '0 0 0 * * *',
-      lastRun: midnight.toISOString(),
-      nextRun: nextMidnight,
-      lastDurationMs: failingRetention ? 300_000 : 41_877,
-      processedItems: failingRetention ? 0 : 12_044,
-      message: failingRetention
-        ? 'ERROR: canceling statement due to statement timeout (DELETE FROM page_members …)'
-        : undefined,
-    },
-    {
-      id: 'compaction',
-      name: 'Compaction',
-      description: 'Merges small immutable pages into larger ones',
-      icon: 'pi pi-compress',
-      status: 'IDLE',
-      schedule: '0 0 0 * * *',
-      lastRun: new Date(midnight.getTime() + 42_000).toISOString(),
-      nextRun: nextMidnight,
-      lastDurationMs: 96_402,
-      processedItems: 1_380,
-    },
-    {
-      id: 'deletion',
-      name: 'Deletion',
-      description: 'Deletes compacted pages once the compaction duration (P7D) has passed',
-      icon: 'pi pi-trash',
-      status: 'IDLE',
-      schedule: '0 0 0 * * *',
-      lastRun: new Date(midnight.getTime() + 140_000).toISOString(),
-      nextRun: nextMidnight,
-      lastDurationMs: 8_120,
-      processedItems: 211,
-    },
+    { job: 'maintenance', step: 'eventSourceRetentionStep', completedRuns: 6, failedRuns: 0, averageMillis: 3_120, longestMillis: 4_088, running: false },
+    { job: 'maintenance', step: 'compactionStep', completedRuns: 6, failedRuns: 0, averageMillis: 96_402, longestMillis: 120_118, running: false },
+    { job: 'maintenance', step: 'deletionStep', completedRuns: 6, failedRuns: 0, averageMillis: 8_120, longestMillis: 9_870, running: false },
   ]
 }
 
@@ -762,8 +736,9 @@ function activity(now: Date): ActivityEvent[] {
     },
     {
       id: 'a6', time: at(71), severity: 'info',
-      source: { type: 'LDES_SERVER', id: IDS.sandboxServer, name: 'Sandbox' },
-      title: 'Local LDES server started', detail: 'openldes/ldes-server:4.2.1 on port 32768',
+      source: { type: 'LDES_SERVER', id: IDS.sandboxServer, name: 'Sandbox LDES server' },
+      title: 'Local LDES server started',
+      detail: 'On http://localhost:32768, and on http://sandbox-ldes-server:8080 for other local instances',
     },
     {
       id: 'a7', time: at(128), severity: 'warn', source: ingest,
@@ -778,7 +753,11 @@ function activity(now: Date): ActivityEvent[] {
 
 export function createSampleState(now = new Date()): SampleState {
   const all = instances(now)
-  const urlOf = (id: string) => all.find((instance) => instance.id === id)!.url
+  // A local server publishes its IRIs on its internal URL, like the real one
+  const urlOf = (id: string) => {
+    const instance = all.find((candidate) => candidate.id === id)!
+    return instance.internalUrl ?? instance.url
+  }
   const nameOf = (id: string) => all.find((instance) => instance.id === id)!.name
   const state: SampleState = {
     instances: all,
@@ -790,7 +769,8 @@ export function createSampleState(now = new Date()): SampleState {
     eventStreams: {},
     views: {},
     shapes: {},
-    catalogs: {},
+    serverCatalogs: {},
+    datasets: {},
     statistics: {},
     processes: {},
     pipelines: pipelines(),
@@ -806,15 +786,18 @@ export function createSampleState(now = new Date()): SampleState {
     throughput: [
       { instanceId: IDS.production, label: 'Production', points: hourlySeries(now, 4_300, 7) },
       { instanceId: IDS.staging, label: 'Staging', points: hourlySeries(now, 640, 11) },
-      { instanceId: IDS.sandboxServer, label: 'Sandbox', points: hourlySeries(now, 40, 13) },
+      { instanceId: IDS.sandboxServer, label: 'Sandbox LDES server', points: hourlySeries(now, 40, 13) },
     ],
   }
   for (const [serverId, specs] of Object.entries(streamSpecs)) {
     const url = urlOf(serverId)
     state.eventStreams[serverId] = specs.map((spec) => toEventStream(url, spec))
     state.statistics[serverId] = specs.map(toStatistics)
-    state.catalogs[serverId] = catalogTurtle(url, `${nameOf(serverId)} LDES server`, specs)
-    state.processes[serverId] = processes(now, serverId === IDS.staging, serverId === IDS.production)
+    state.serverCatalogs[serverId] = serverId === IDS.sandboxServer
+      ? { catalogId: null, document: serverCatalogTurtle(nameOf(serverId)) }
+      : { catalogId: `${serverId.slice(-4)}-catalog`, document: serverCatalogTurtle(`${nameOf(serverId)} LDES server`) }
+    state.datasets[serverId] = serverId === IDS.sandboxServer ? [] : specs.map((spec) => spec.collection)
+    state.processes[serverId] = processes(serverId === IDS.staging, serverId === IDS.production)
     specs.forEach((spec) => {
       state.views[`${serverId}/${spec.collection}`] = spec.views.map((view) =>
         toView(url, spec.collection, view))

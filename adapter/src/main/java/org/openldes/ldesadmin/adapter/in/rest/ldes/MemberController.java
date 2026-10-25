@@ -8,9 +8,11 @@ import static org.openldes.ldesadmin.adapter.in.rest.RdfMediaTypes.TURTLE;
 import java.util.List;
 import java.util.UUID;
 import org.openldes.ldesadmin.adapter.in.rest.RdfMediaTypes;
+import org.openldes.ldesadmin.application.port.in.ldes.BackgroundProcessUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.IngestMemberUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.StreamStatisticsUseCase;
 import org.openldes.ldesadmin.model.instance.InstanceId;
+import org.openldes.ldesadmin.model.ldes.BackgroundProcess;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,11 +33,14 @@ class MemberController {
 
   private final IngestMemberUseCase ingestMemberUseCase;
   private final StreamStatisticsUseCase streamStatisticsUseCase;
+  private final BackgroundProcessUseCase backgroundProcessUseCase;
 
   MemberController(IngestMemberUseCase ingestMemberUseCase,
-      StreamStatisticsUseCase streamStatisticsUseCase) {
+      StreamStatisticsUseCase streamStatisticsUseCase,
+      BackgroundProcessUseCase backgroundProcessUseCase) {
     this.ingestMemberUseCase = ingestMemberUseCase;
     this.streamStatisticsUseCase = streamStatisticsUseCase;
+    this.backgroundProcessUseCase = backgroundProcessUseCase;
   }
 
   /**
@@ -56,5 +61,13 @@ class MemberController {
     return streamStatisticsUseCase.statistics(new InstanceId(serverId)).stream()
         .map(StreamStatisticsWebModel::fromDomain)
         .toList();
+  }
+
+  /**
+   * The steps of the jobs that fragment the members and maintain the event streams.
+   */
+  @GetMapping("/processes")
+  List<BackgroundProcess> processes(@PathVariable UUID serverId) {
+    return backgroundProcessUseCase.processes(new InstanceId(serverId));
   }
 }

@@ -12,10 +12,12 @@ import '@vue-flow/minimap/dist/style.css'
 import './assets/main.css'
 import App from './App.vue'
 import router from './router'
+import { initialMode, useModeStore } from './stores/mode'
 import { LdesAdminPreset } from './theme'
 
-createApp(App)
-  .use(createPinia())
+const pinia = createPinia()
+const app = createApp(App)
+  .use(pinia)
   .use(router)
   .use(PrimeVue, {
     ripple: true,
@@ -27,4 +29,9 @@ createApp(App)
   .use(ToastService)
   .use(ConfirmationService)
   .directive('tooltip', Tooltip)
-  .mount('#app')
+
+// The views call the API as soon as they mount, so decide on demo or production mode first
+initialMode().then(({ mode, backendUp }) => {
+  useModeStore(pinia).start(mode, backendUp)
+  app.mount('#app')
+})

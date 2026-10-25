@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { ActivityEvent, ActivitySeverity } from '@/domain/dashboard'
+import { useInstancesStore } from '@/stores/instances'
 import { formatRelative } from '@/utils/format'
 
 defineProps<{ events: ActivityEvent[] }>()
+
+const instances = useInstancesStore()
 
 const icons: Record<ActivitySeverity, string> = {
   info: 'pi pi-info-circle',
@@ -18,7 +21,9 @@ const severityLabel: Record<ActivitySeverity, string> = {
   error: 'Error',
 }
 
-function link(event: ActivityEvent) {
+/** The instance the event is about, unless it is gone by now */
+function link(event: ActivityEvent): string | undefined {
+  if (!instances.find(event.source.id)) return undefined
   return event.source.type === 'LDIO' ? `/ldios/${event.source.id}` : `/ldes-servers/${event.source.id}`
 }
 </script>
@@ -33,7 +38,8 @@ function link(event: ActivityEvent) {
         <div class="event-title">{{ event.title }}</div>
         <div v-if="event.detail" class="event-detail">{{ event.detail }}</div>
         <div class="event-meta">
-          <RouterLink :to="link(event)">{{ event.source.name }}</RouterLink>
+          <RouterLink v-if="link(event)" :to="link(event)!">{{ event.source.name }}</RouterLink>
+          <span v-else>{{ event.source.name }}</span>
           <span>·</span>
           <span>{{ formatRelative(event.time) }}</span>
         </div>

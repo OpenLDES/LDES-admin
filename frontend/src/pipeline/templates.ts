@@ -1,8 +1,10 @@
 import type { Pipeline } from '@/domain/ldio'
+import { SANDBOX_EVENT_STREAM_URL } from '@/domain/sandbox'
 import type { SimulationInput } from './simulator'
 
 /**
- * Example pipelines to start from in the sandbox, each with a member to run through it.
+ * Example pipelines to start from in the sandbox, each with a member to run through it. Deployed
+ * on the sandbox LDIO, they reach the sandbox LDES server on its host name in the Docker network.
  */
 export interface PipelineTemplate {
   id: string
@@ -12,6 +14,19 @@ export interface PipelineTemplate {
   pipeline: Pipeline
   sample: SimulationInput
 }
+
+const PARCEL_CONTEXT = JSON.stringify({
+  '@context': {
+    '@vocab': 'https://data.vlaanderen.be/ns/perceel#',
+    xsd: 'http://www.w3.org/2001/XMLSchema#',
+    geojson: 'https://purl.org/geojson/vocab#',
+    type: '@type',
+    lastModified: { '@type': 'xsd:dateTime' },
+    geometry: 'geojson:geometry',
+    Polygon: 'geojson:Polygon',
+    coordinates: { '@id': 'geojson:coordinates', '@container': '@list' },
+  },
+})
 
 export const templates: PipelineTemplate[] = [
   {
@@ -26,7 +41,9 @@ export const templates: PipelineTemplate[] = [
         name: 'Ldio:HttpIn',
         adapter: {
           name: 'Ldio:JsonToLdAdapter',
-          config: { context: '{"@vocab": "https://data.vlaanderen.be/ns/perceel#"}' },
+          // The geometry in the GeoJSON-LD vocabulary, for the WKT transformer, and a typed
+          // timestamp, for the version object creator
+          config: { context: PARCEL_CONTEXT },
         },
       },
       transformers: [
@@ -43,7 +60,7 @@ export const templates: PipelineTemplate[] = [
         {
           name: 'Ldio:HttpOut',
           config: {
-            endpoint: 'http://localhost:32768/sandbox-parcels',
+            endpoint: SANDBOX_EVENT_STREAM_URL,
             'rdf-writer': { 'content-type': 'text/turtle' },
           },
         },
@@ -102,7 +119,7 @@ export const templates: PipelineTemplate[] = [
       description: 'Keeps a triple store in sync with the latest state of every parcel',
       input: {
         name: 'Ldio:LdesClient',
-        config: { urls: ['http://localhost:32768/sandbox-parcels/by-page'], state: 'sqlite' },
+        config: { urls: [`${SANDBOX_EVENT_STREAM_URL}/by-page`], state: 'sqlite' },
       },
       transformers: [
         {

@@ -1,0 +1,34 @@
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX ldes: <https://w3id.org/ldes#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX sh:   <http://www.w3.org/ns/shacl#>
+PREFIX tree: <https://w3id.org/tree#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+<http://example.org/parcel/2/v1>
+        rdf:type              <https://data.vlaanderen.be/ns/perceel#Perceel>;
+        dcterms:isVersionOf   <http://example.org/parcel/2>;
+        prov:generatedAtTime  "2026-10-24T10:02:00Z"^^xsd:dateTime;
+        <http://example.org/geometry> [ <http://example.org/wkt> "POINT (4.4 51.2)" ] .
+
+<http://sandbox-ldes-server:8080/parcels>  rdf:type  ldes:EventStream;
+        tree:member  <http://example.org/parcel/2/v1> , <http://example.org/parcel/1/v1> .
+
+<http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=1>
+        rdf:type          tree:Node;
+        dcterms:isPartOf  <http://sandbox-ldes-server:8080/parcels>;
+        tree:relation     [ rdf:type   tree:Relation;
+                            tree:node  <http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=2>
+                          ] ;
+        tree:relation     [ rdf:type   tree:GreaterThanOrEqualToRelation;
+                            tree:path  prov:generatedAtTime;
+                            tree:value "2026-10-24T10:02:00Z"^^xsd:dateTime;
+                            tree:remainingItems 7;
+                            tree:node  <http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=3>
+                          ] .
+
+<http://example.org/parcel/1/v1>
+        rdf:type              <https://data.vlaanderen.be/ns/perceel#Perceel>;
+        dcterms:isVersionOf   <http://example.org/parcel/1>;
+        prov:generatedAtTime  "2026-10-24T10:01:00Z"^^xsd:dateTime .

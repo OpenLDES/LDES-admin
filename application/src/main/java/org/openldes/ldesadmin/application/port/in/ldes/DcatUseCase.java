@@ -1,6 +1,7 @@
 package org.openldes.ldesadmin.application.port.in.ldes;
 
 import org.openldes.ldesadmin.model.instance.InstanceId;
+import org.openldes.ldesadmin.model.ldes.CatalogDescription;
 import org.openldes.ldesadmin.model.ldes.DcatTarget;
 import org.openldes.ldesadmin.model.rdf.RdfDocument;
 
@@ -17,6 +18,18 @@ public interface DcatUseCase {
    * services.
    */
   RdfDocument getCatalog(InstanceId serverId);
+
+  /**
+   * The {@code dcat:Catalog} of the server itself, or an empty one to start from.
+   */
+  CatalogDescription getServerCatalog(InstanceId serverId);
+
+  /**
+   * Creates the catalog of the server, or replaces it if it has one.
+   *
+   * @return the id of the catalog
+   */
+  String saveServerCatalog(InstanceId serverId, RdfDocument catalog);
 
   void create(InstanceId serverId, DcatTarget target, RdfDocument dcat);
 

@@ -4,12 +4,14 @@ import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLogo from './AppLogo.vue'
 import { useInstancesStore } from '@/stores/instances'
+import { useModeStore } from '@/stores/mode'
 import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
 const ui = useUiStore()
 const { sidebarCollapsed } = storeToRefs(ui)
 const instances = useInstancesStore()
+const mode = useModeStore()
 
 interface NavItem {
   label: string
@@ -94,11 +96,15 @@ const links = [
     </nav>
 
     <div v-if="!sidebarCollapsed" class="sidebar-footer">
-      <div class="sample-notice">
-        <i class="pi pi-info-circle" />
-        <div>
-          <strong>Sample data</strong>
-          <p>The backend is not connected yet: everything you see is simulated.</p>
+      <div class="mode-notice" :class="mode.mode" data-cy="mode-notice">
+        <i :class="mode.production ? 'pi pi-server' : 'pi pi-sparkles'" />
+        <div v-if="mode.production">
+          <strong>Production mode</strong>
+          <p>You manage real LDES servers and LDIOs. Changes take effect right away.</p>
+        </div>
+        <div v-else>
+          <strong>Demo mode</strong>
+          <p>Everything you see is sample data. Switch to production in the top bar to manage real servers.</p>
         </div>
       </div>
       <div class="links">
@@ -235,7 +241,7 @@ const links = [
   border-top: 1px solid var(--sidebar-border);
 }
 
-.sample-notice {
+.mode-notice {
   display: flex;
   gap: 10px;
   padding: 12px;
@@ -245,16 +251,25 @@ const links = [
   font-size: 12px;
 }
 
-.sample-notice .pi {
+.mode-notice.demo {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.mode-notice .pi {
   color: #5eead4;
   margin-top: 2px;
 }
 
-.sample-notice strong {
+.mode-notice.demo .pi {
+  color: #fcd34d;
+}
+
+.mode-notice strong {
   color: var(--sidebar-text-strong);
 }
 
-.sample-notice p {
+.mode-notice p {
   margin: 2px 0 0;
   line-height: 1.45;
 }

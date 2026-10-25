@@ -24,7 +24,6 @@ import org.openldes.ldesadmin.model.ldio.InputDefinition;
 import org.openldes.ldesadmin.model.ldio.Pipeline;
 import org.openldes.ldesadmin.model.ldio.PipelineStatistics;
 import org.openldes.ldesadmin.model.ldio.PipelineStatus;
-import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -40,10 +39,10 @@ class RestLdioClientIT {
   static void startLdio() {
     runtime = new DockerLocalInstanceRuntime(new LocalRuntimeProperties(
         "openldes/ldes-server:4.2.1", "openldes/ldi-orchestrator:3.1.1", "postgres:16-alpine",
-        Duration.ofMinutes(5)));
+        Duration.ofMinutes(5), "*/5 * * * * *"));
     LocalRuntimeHandle handle = runtime.start(InstanceType.LDIO, "it-ldio");
-    ldio = Instance.local(InstanceType.LDIO, "it-ldio", handle.url(), handle.runtimeReference(),
-        true, Instant.now());
+    ldio = Instance.local(InstanceType.LDIO, "it-ldio", handle.url(), handle.internalUrl(),
+        handle.runtimeReference(), true, Instant.now());
     client = new RestLdioClient(new InstanceRestClients(RestClient.builder()), Clock.systemUTC(),
         Duration.ofSeconds(30));
   }
@@ -95,15 +94,17 @@ class RestLdioClientIT {
     client.createPipeline(ldio, httpToConsole("it-metrics"));
     awaitRunning("it-metrics");
 
-    RestClient.create(ldio.url().toString()).post()
-        .uri("/it-metrics")
-        .contentType(MediaType.valueOf("text/turtle"))
-        .body("<http://example.org/parcel/1> a <http://example.org/Parcel> .")
-        .retrieve().toBodilessEntity();
+    client.send(ldio, "it-metrics",
+        "<http://example.org/parcel/1> a <http://example.org/Parcel> .", "text/turtle");
 
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
         assertThat(client.getStatistics(ldio)).contains(
             new PipelineStatistics("it-metrics", 1, 1)));
+  }
+
+  @Test
+  void reportsNoLdesClientsWithoutPipelinesThatReadAnLdes() {
+    assertThat(client.getLdesClientStatuses(ldio)).isEmpty();
   }
 
   private static Pipeline httpToConsole(String name) {

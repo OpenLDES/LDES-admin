@@ -28,11 +28,36 @@ class InstanceTest {
   @Test
   void localInstanceKeepsItsRuntimeReference() {
     Instance instance = Instance.local(InstanceType.LDIO, "sandbox",
-        URI.create("http://localhost:32768"), "container-1", true, NOW);
+        URI.create("http://localhost:32768"), URI.create("http://sandbox-ldio:8080/"),
+        "container-1", true, NOW);
 
     assertThat(instance.isLocal()).isTrue();
     assertThat(instance.sandbox()).isTrue();
     assertThat(instance.runtimeReference()).isEqualTo("container-1");
+    assertThat(instance.internalUrl()).hasToString("http://sandbox-ldio:8080");
+  }
+
+  @Test
+  void translatesIrisPublishedOnTheInternalUrl() {
+    Instance instance = Instance.local(InstanceType.LDES_SERVER, "sandbox",
+        URI.create("http://localhost:32768"), URI.create("http://sandbox-ldes-server:8080"),
+        "container-1", true, NOW);
+
+    assertThat(instance.reachable("http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=2"))
+        .hasToString("http://localhost:32768/parcels/by-page?pageNumber=2");
+    assertThat(instance.reachable("http://localhost:32768/parcels"))
+        .hasToString("http://localhost:32768/parcels");
+  }
+
+  @Test
+  void onlyServesUrlsBelowItsBaseUrl() {
+    Instance instance = Instance.register(InstanceType.LDES_SERVER, "ldes",
+        URI.create("http://ldes.example.org/ldes"), false, NOW);
+
+    assertThat(instance.serves(URI.create("http://ldes.example.org/ldes/parcels"))).isTrue();
+    assertThat(instance.serves(URI.create("http://ldes.example.org/ldes"))).isTrue();
+    assertThat(instance.serves(URI.create("http://ldes.example.org/ldes-other/parcels"))).isFalse();
+    assertThat(instance.serves(URI.create("http://evil.example.org/ldes/parcels"))).isFalse();
   }
 
   @Test
@@ -75,6 +100,6 @@ class InstanceTest {
     URI url = URI.create("http://localhost:8080");
 
     assertThatIllegalArgumentException()
-        .isThrownBy(() -> Instance.local(InstanceType.LDIO, "ldio", url, null, false, NOW));
+        .isThrownBy(() -> Instance.local(InstanceType.LDIO, "ldio", url, null, null, false, NOW));
   }
 }

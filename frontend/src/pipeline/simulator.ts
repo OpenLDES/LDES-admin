@@ -602,6 +602,8 @@ function vocabularyOf(context: unknown): string {
       return BASE_IRI
     }
   }
+  // A context document, as LDIO expects it: {"@context": {...}}
+  if (isObject(context) && '@context' in context) return vocabularyOf(context['@context'])
   if (isObject(context) && typeof context['@vocab'] === 'string') return context['@vocab']
   if (typeof context === 'string' && isIri(context)) {
     return `${context.replace(/\.jsonld?$/, '').replace(/[#/]+$/, '')}#`

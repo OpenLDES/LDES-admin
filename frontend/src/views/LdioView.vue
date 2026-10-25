@@ -141,6 +141,10 @@ function toggle(name: string) {
         </template>
         <template #subtitle>
           <a :href="ldio.url" target="_blank" rel="noopener">{{ ldio.url }}</a>
+          <span v-if="ldio.internalUrl" v-tooltip.bottom="'Where other local instances reach this LDIO'"
+            class="internal-url" data-cy="internal-url">
+            <i class="pi pi-sitemap" /> {{ ldio.internalUrl }}
+          </span>
         </template>
         <template #actions>
           <Button icon="pi pi-refresh" severity="secondary" text rounded aria-label="Refresh"
@@ -279,6 +283,20 @@ function toggle(name: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.internal-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.internal-url .pi {
+  font-size: 11px;
 }
 
 .pipeline-name {

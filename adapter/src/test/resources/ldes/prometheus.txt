@@ -13,3 +13,19 @@ ldes_server_pagination_members_count{application="ldes-server",collection="parce
 # HELP jvm_threads_live_threads The current number of live threads
 # TYPE jvm_threads_live_threads gauge
 jvm_threads_live_threads{application="ldes-server"} 42.0
+# HELP spring_batch_step_seconds
+# TYPE spring_batch_step_seconds summary
+spring_batch_step_seconds_count{error="none",spring_batch_step_job_name="fragmentation",spring_batch_step_name="bucketisation",spring_batch_step_status="COMPLETED"} 4
+spring_batch_step_seconds_sum{error="none",spring_batch_step_job_name="fragmentation",spring_batch_step_name="bucketisation",spring_batch_step_status="COMPLETED"} 0.2
+spring_batch_step_seconds_count{error="none",spring_batch_step_job_name="fragmentation",spring_batch_step_name="pagination",spring_batch_step_status="COMPLETED"} 2
+spring_batch_step_seconds_sum{error="none",spring_batch_step_job_name="fragmentation",spring_batch_step_name="pagination",spring_batch_step_status="COMPLETED"} 0.037425375
+spring_batch_step_seconds_count{error="SQLException",spring_batch_step_job_name="fragmentation",spring_batch_step_name="pagination",spring_batch_step_status="FAILED"} 1
+spring_batch_step_seconds_sum{error="SQLException",spring_batch_step_job_name="fragmentation",spring_batch_step_name="pagination",spring_batch_step_status="FAILED"} 3.0
+# HELP spring_batch_step_seconds_max
+# TYPE spring_batch_step_seconds_max gauge
+spring_batch_step_seconds_max{error="none",spring_batch_step_job_name="fragmentation",spring_batch_step_name="bucketisation",spring_batch_step_status="COMPLETED"} 0.0506
+spring_batch_step_seconds_max{error="none",spring_batch_step_job_name="fragmentation",spring_batch_step_name="pagination",spring_batch_step_status="COMPLETED"} 0.0340395
+# HELP spring_batch_step_active_seconds
+# TYPE spring_batch_step_active_seconds summary
+spring_batch_step_active_seconds_count{spring_batch_step_job_name="fragmentation",spring_batch_step_name="bucketisation",spring_batch_step_status="EXECUTING"} 0
+spring_batch_step_active_seconds_count{spring_batch_step_job_name="fragmentation",spring_batch_step_name="pagination",spring_batch_step_status="EXECUTING"} 1

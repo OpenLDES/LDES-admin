@@ -16,6 +16,11 @@ declare global {
 Cypress.Commands.add('dialogOpened', (dataCy: string) =>
   cy.get(`[data-cy=${dataCy}]`).should('not.have.class', 'p-dialog-enter-active'))
 
+// Demo mode, unless a test chose otherwise: the tests must not depend on a running backend
+Cypress.on('window:before:load', (win) => {
+  if (!win.localStorage.getItem('ldes-admin.mode')) win.localStorage.setItem('ldes-admin.mode', 'demo')
+})
+
 Cypress.on('uncaught:exception', (error) => {
   // ResizeObserver noise from Vue Flow and CodeMirror is harmless
   return !error.message.includes('ResizeObserver')

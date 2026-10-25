@@ -13,7 +13,10 @@ import java.util.Objects;
  * and can stop it again). Sandbox instances are meant for experimenting: the sandbox ingests
  * members in them and deploys trial pipelines on them.
  *
- * @param url              base URL of the instance, without trailing slash
+ * @param url              base URL on which LDES-admin reaches the instance, without trailing slash
+ * @param internalUrl      base URL on which other local instances reach a {@code LOCAL} instance,
+ *                         e.g. {@code http://sandbox-ldes-server:8080}; {@code null} for registered
+ *                         instances
  * @param runtimeReference reference to the local runtime of a {@code LOCAL} instance, e.g. a
  *                         container id; {@code null} for registered instances
  */
@@ -22,6 +25,7 @@ public record Instance(
     InstanceType type,
     String name,
     URI url,
+    URI internalUrl,
     InstanceOrigin origin,
     boolean sandbox,
     String runtimeReference,
@@ -38,11 +42,13 @@ public record Instance(
     if (origin == InstanceOrigin.LOCAL && runtimeReference == null) {
       throw new IllegalArgumentException("A local instance needs a runtime reference");
     }
-    if (origin == InstanceOrigin.REGISTERED && runtimeReference != null) {
-      throw new IllegalArgumentException("A registered instance has no runtime reference");
+    if (origin == InstanceOrigin.REGISTERED && (runtimeReference != null || internalUrl != null)) {
+      throw new IllegalArgumentException(
+          "A registered instance has no runtime reference or internal URL");
     }
     name = name.strip();
     url = normalize(url);
+    internalUrl = internalUrl == null ? null : normalize(internalUrl);
   }
 
   /**
@@ -50,17 +56,17 @@ public record Instance(
    */
   public static Instance register(InstanceType type, String name, URI url, boolean sandbox,
       Instant now) {
-    return new Instance(InstanceId.randomId(), type, name, url, InstanceOrigin.REGISTERED, sandbox,
-        null, now);
+    return new Instance(InstanceId.randomId(), type, name, url, null, InstanceOrigin.REGISTERED,
+        sandbox, null, now);
   }
 
   /**
    * Creates an instance for something LDES-admin just started locally.
    */
-  public static Instance local(InstanceType type, String name, URI url, String runtimeReference,
-      boolean sandbox, Instant now) {
-    return new Instance(InstanceId.randomId(), type, name, url, InstanceOrigin.LOCAL, sandbox,
-        runtimeReference, now);
+  public static Instance local(InstanceType type, String name, URI url, URI internalUrl,
+      String runtimeReference, boolean sandbox, Instant now) {
+    return new Instance(InstanceId.randomId(), type, name, url, internalUrl, InstanceOrigin.LOCAL,
+        sandbox, runtimeReference, now);
   }
 
   public boolean isLocal() {
@@ -72,6 +78,26 @@ public record Instance(
    */
   public URI resolve(String path) {
     return URI.create(url + "/" + stripLeadingSlashes(path));
+  }
+
+  /**
+   * The URL on which LDES-admin can fetch an IRI this instance published. A local instance
+   * publishes IRIs on its internal URL, which only other local instances can resolve.
+   */
+  public URI reachable(String iri) {
+    if (internalUrl != null && iri.startsWith(internalUrl.toString())) {
+      return URI.create(url + iri.substring(internalUrl.toString().length()));
+    }
+    return URI.create(iri);
+  }
+
+  /**
+   * Whether a URL points to this instance, so LDES-admin may fetch it on behalf of a user.
+   */
+  public boolean serves(URI candidate) {
+    String target = candidate.toString();
+    return target.equals(url.toString()) || target.startsWith(url + "/")
+        || target.startsWith(url + "?");
   }
 
   public static URI normalize(URI url) {

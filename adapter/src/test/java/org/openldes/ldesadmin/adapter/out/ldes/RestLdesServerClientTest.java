@@ -13,6 +13,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.io.IOException;
 import java.net.ConnectException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,14 +23,18 @@ import org.openldes.ldesadmin.adapter.out.http.InstanceRestClients;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException.Reason;
 import org.openldes.ldesadmin.model.instance.Instance;
+import org.openldes.ldesadmin.model.ldes.BackgroundProcess;
+import org.openldes.ldesadmin.model.ldes.CatalogDescription;
 import org.openldes.ldesadmin.model.ldes.DcatTarget;
 import org.openldes.ldesadmin.model.ldes.EventStream;
+import org.openldes.ldesadmin.model.ldes.Fragment;
 import org.openldes.ldesadmin.model.ldes.StreamStatistics;
 import org.openldes.ldesadmin.model.ldes.View;
 import org.openldes.ldesadmin.model.ldes.ViewStatistics;
 import org.openldes.ldesadmin.model.rdf.RdfDocument;
 import org.openldes.ldesadmin.model.rdf.RdfFormat;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -186,6 +191,83 @@ class RestLdesServerClientTest {
         new StreamStatistics("parcels", 1200, List.of(
             new ViewStatistics("by-page", 1200, 1200),
             new ViewStatistics("by-time", 1100, 950))));
+  }
+
+  @Test
+  void fetchesAPageWithItsRelationsAndMembers() throws IOException {
+    URI url = URI.create("http://ldes.example.org/parcels/by-page?pageNumber=1");
+    HttpHeaders headers = new HttpHeaders();
+    headers.setCacheControl("public,max-age=31536000,immutable");
+    mockServer.expect(requestTo(url))
+        .andExpect(header("Accept", "text/turtle"))
+        .andRespond(withSuccess(resource("ldes/fragment-page.ttl"), TURTLE).headers(headers));
+
+    Fragment page = client.getFragment(server, url, "http://www.w3.org/ns/prov#generatedAtTime",
+        "http://purl.org/dc/terms/isVersionOf");
+
+    assertThat(page.url()).isEqualTo(
+        "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=1");
+    assertThat(page.immutable()).isTrue();
+    assertThat(page.relations()).containsExactlyInAnyOrder(
+        new Fragment.Relation("Relation", null, null,
+            "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=2", null),
+        new Fragment.Relation("GreaterThanOrEqualToRelation",
+            "http://www.w3.org/ns/prov#generatedAtTime", "2026-10-24T10:02:00Z",
+            "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=3", 7L));
+    assertThat(page.members()).extracting(Fragment.Member::id).containsExactly(
+        "http://example.org/parcel/1/v1", "http://example.org/parcel/2/v1");
+    Fragment.Member second = page.members().get(1);
+    assertThat(second.isVersionOf()).isEqualTo("http://example.org/parcel/2");
+    assertThat(second.timestamp()).isEqualTo("2026-10-24T10:02:00Z");
+    assertThat(second.content().content())
+        .contains("POINT (4.4 51.2)", "PREFIX dcterms:")
+        .doesNotContain("parcel/1/v1", "tree:", "PREFIX sh:");
+  }
+
+  @Test
+  void readsTheCatalogOfTheServerWithoutWhatTheServerAdds() throws IOException {
+    mockServer.expect(requestTo("http://ldes.example.org/admin/api/v1/dcat"))
+        .andRespond(withSuccess(resource("ldes/dcat.ttl"), TURTLE));
+
+    CatalogDescription catalog = client.getServerCatalog(server);
+
+    assertThat(catalog.catalogId()).isEqualTo("1d911b66-e610-41a5-88a5-65823acbb9cd");
+    assertThat(catalog.document().content())
+        .contains("dcat:Catalog", "Production catalog", "Digitaal Vlaanderen")
+        .doesNotContain("identifier", "dataset", "Parcels", "ldes.example.org");
+  }
+
+  @Test
+  void proposesACatalogWhenTheServerHasNone() {
+    mockServer.expect(requestTo("http://ldes.example.org/admin/api/v1/dcat"))
+        .andRespond(withSuccess("", TURTLE));
+
+    CatalogDescription catalog = client.getServerCatalog(server);
+
+    assertThat(catalog.catalogId()).isNull();
+    assertThat(catalog.document().content()).contains("[] a dcat:Catalog", "\"Production\"@en");
+  }
+
+  @Test
+  void returnsTheIdOfACreatedServerCatalog() {
+    mockServer.expect(requestTo("http://ldes.example.org/admin/api/v1/dcat"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withStatus(HttpStatus.CREATED).contentType(TURTLE)
+            .body("1d911b66-e610-41a5-88a5-65823acbb9cd"));
+
+    assertThat(client.createDcat(server, new DcatTarget.ServerCatalog(null),
+        RdfDocument.turtle("[] a <http://www.w3.org/ns/dcat#Catalog> .")))
+        .contains("1d911b66-e610-41a5-88a5-65823acbb9cd");
+  }
+
+  @Test
+  void readsTheBackgroundProcessesFromTheBatchMetrics() throws IOException {
+    mockServer.expect(requestTo("http://ldes.example.org/actuator/prometheus"))
+        .andRespond(withSuccess(resource("ldes/prometheus.txt"), MediaType.TEXT_PLAIN));
+
+    assertThat(client.getBackgroundProcesses(server)).containsExactly(
+        new BackgroundProcess("fragmentation", "bucketisation", 4, 0, 50, 51, false),
+        new BackgroundProcess("fragmentation", "pagination", 2, 1, 19, 34, true));
   }
 
   private static String resource(String path) throws IOException {

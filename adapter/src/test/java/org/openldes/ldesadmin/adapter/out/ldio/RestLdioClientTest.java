@@ -24,6 +24,7 @@ import org.openldes.ldesadmin.model.ldio.ComponentCatalog;
 import org.openldes.ldesadmin.model.ldio.ComponentDefinition;
 import org.openldes.ldesadmin.model.ldio.DeployedPipeline;
 import org.openldes.ldesadmin.model.ldio.InputDefinition;
+import org.openldes.ldesadmin.model.ldio.LdesClientStatus;
 import org.openldes.ldesadmin.model.ldio.Pipeline;
 import org.openldes.ldesadmin.model.ldio.PipelineStatistics;
 import org.openldes.ldesadmin.model.ldio.PipelineStatus;
@@ -181,5 +182,40 @@ class RestLdioClientTest {
     assertThat(client.getStatistics(ldio)).containsExactly(
         new PipelineStatistics("addresses", 40, 0),
         new PipelineStatistics("parcels", 120, 118));
+  }
+
+  @Test
+  void readsTheProgressOfTheLdesClients() {
+    mockServer.expect(requestTo("http://ldio.example.org/admin/api/v1/pipeline/ldes-client"))
+        .andRespond(withSuccess("""
+            [{"pipeline": "replicate", "status": "SYNCHRONISING"},
+             {"pipeline": "backfill", "status": "REPLICATING"},
+             {"pipeline": "future", "status": "SOMETHING_NEW"}]
+            """, MediaType.APPLICATION_JSON));
+
+    assertThat(client.getLdesClientStatuses(ldio)).containsExactly(
+        Map.entry("backfill", LdesClientStatus.REPLICATING),
+        Map.entry("replicate", LdesClientStatus.SYNCHRONISING));
+  }
+
+  @Test
+  void reportsNoLdesClientsForAnLdioThatDoesNotTrackThem() {
+    mockServer.expect(requestTo("http://ldio.example.org/admin/api/v1/pipeline/ldes-client"))
+        .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+    assertThat(client.getLdesClientStatuses(ldio)).isEmpty();
+  }
+
+  @Test
+  void postsAMemberToTheHttpInputOfAPipeline() {
+    mockServer.expect(requestTo("http://ldio.example.org/parcels"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(content().contentType("text/turtle"))
+        .andExpect(content().string("<a> <b> <c> ."))
+        .andRespond(withStatus(HttpStatus.ACCEPTED));
+
+    client.send(ldio, "parcels", "<a> <b> <c> .", "text/turtle");
+
+    mockServer.verify();
   }
 }

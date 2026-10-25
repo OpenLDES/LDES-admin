@@ -11,7 +11,7 @@ import CodeEditor from '@/components/common/CodeEditor.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { api } from '@/api'
 import { errorMessage } from '@/composables/useAsync'
-import type { Fragment, Relation, View } from '@/domain/ldes'
+import { type Fragment, type Relation, relationLabel, type View } from '@/domain/ldes'
 import { formatDateTime, formatNumber, shortIri } from '@/utils/format'
 
 /**
@@ -40,6 +40,38 @@ const relationLooks: Record<string, { icon: string; operator: string }> = {
 
 const viewOptions = computed(() => props.views.map((v) => ({ label: v.name, value: v.name })))
 
+/** A page the fragment links to, with every relation that leads there (e.g. ≥ and < a date) */
+interface Link {
+  node: string
+  label: string
+  type: string
+  /** The relation types, e.g. tree:GreaterThanOrEqualToRelation + tree:LessThanRelation */
+  types: string
+  path?: string | null
+  relations: Relation[]
+  remainingItems?: number
+}
+
+const links = computed<Link[]>(() => {
+  const byNode = new Map<string, Relation[]>()
+  fragment.value?.relations.forEach((relation) =>
+    byNode.set(relation.node, [...(byNode.get(relation.node) ?? []), relation]))
+  return [...byNode.entries()].map(([node, relations]) => {
+    const remaining = relations.map((r) => r.remainingItems).filter((n): n is number => n != null)
+    return {
+      node,
+      label: relationLabel(relations[0]),
+      type: relations[0].type,
+      types: [...new Set(relations.map((r) => `tree:${r.type}`))].join(' + '),
+      path: relations.find((r) => r.path)?.path,
+      // The same condition only once: some servers repeat relations
+      relations: relations.filter((r, i) => r.value && r.type !== 'Relation' && relations
+        .findIndex((other) => other.type === r.type && other.value === r.value) === i),
+      remainingItems: remaining.length ? Math.max(...remaining) : undefined,
+    }
+  })
+})
+
 async function load(url: string | undefined, label: string, push = true) {
   if (!view.value) return
   loading.value = true
@@ -54,8 +86,8 @@ async function load(url: string | undefined, label: string, push = true) {
   }
 }
 
-function follow(relation: Relation) {
-  load(relation.node, relation.label)
+function follow(link: Link) {
+  load(link.node, link.label)
 }
 
 function goTo(index: number) {
@@ -107,31 +139,32 @@ watch(() => props.views, (views) => {
         <div class="row-wrap">
           <span class="chip">
             <i :class="fragment.immutable ? 'pi pi-lock' : 'pi pi-lock-open'" />
-            {{ fragment.immutable ? 'Immutable, cacheable for a week' : 'Mutable, can still grow' }}
+            {{ fragment.immutable ? 'Immutable: it will not change' : 'Mutable: it can still grow' }}
           </span>
-          <span class="chip"><i class="pi pi-share-alt" />{{ fragment.relations.length }} relations</span>
+          <span class="chip"><i class="pi pi-share-alt" />{{ links.length }} {{ links.length === 1 ? 'link' : 'links' }}</span>
           <span class="chip"><i class="pi pi-file" />{{ fragment.members.length }} members</span>
         </div>
       </div>
 
-      <section v-if="fragment.relations.length">
+      <section v-if="links.length">
         <h3 class="section-title">Relations</h3>
         <div class="relations">
-          <button v-for="relation in fragment.relations" :key="relation.node" type="button"
-            class="card relation clickable" data-cy="relation" @click="follow(relation)">
-            <span class="relation-icon"><i :class="relationLooks[relation.type]?.icon ?? 'pi pi-arrow-right'" /></span>
+          <button v-for="link in links" :key="link.node" type="button"
+            class="card relation clickable" data-cy="relation" @click="follow(link)">
+            <span class="relation-icon"><i :class="relationLooks[link.type]?.icon ?? 'pi pi-arrow-right'" /></span>
             <span class="relation-body">
-              <span class="relation-label">{{ relation.label }}</span>
+              <span class="relation-label">{{ link.label }}</span>
               <span class="muted small">
-                tree:{{ relation.type }}
-                <template v-if="relation.path"> on {{ shortIri(relation.path) }}</template>
+                {{ link.types }}
+                <template v-if="link.path"> on {{ shortIri(link.path) }}</template>
               </span>
-              <span v-if="relation.value && relation.type !== 'Relation'" class="relation-value mono">
-                {{ relationLooks[relation.type]?.operator }} {{ relation.value }}
+              <span v-for="relation in link.relations" :key="`${relation.type} ${relation.value}`"
+                class="relation-value mono">
+                {{ relationLooks[relation.type]?.operator ?? relation.type }} {{ relation.value }}
               </span>
             </span>
-            <span v-if="relation.remainingItems" class="muted small remaining">
-              ~{{ formatNumber(relation.remainingItems) }} members
+            <span v-if="link.remainingItems" class="muted small remaining">
+              ~{{ formatNumber(link.remainingItems) }} members
             </span>
             <i class="pi pi-angle-right go" />
           </button>
@@ -157,7 +190,7 @@ watch(() => props.views, (views) => {
         </div>
       </section>
 
-      <div v-if="!fragment.relations.length && !fragment.members.length" class="card">
+      <div v-if="!links.length && !fragment.members.length" class="card">
         <EmptyState icon="pi pi-inbox" title="This fragment is empty" />
       </div>
     </div>

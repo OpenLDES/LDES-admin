@@ -1,6 +1,7 @@
 import { ApiError } from '@/api/LdesAdminApi'
 import { MockLdesAdminApi } from '@/api/mock/MockLdesAdminApi'
 import { IDS } from '@/api/mock/sampleData'
+import { relationLabel } from '@/domain/ldes'
 
 describe('mock LDES-admin API', () => {
   let api: MockLdesAdminApi
@@ -12,7 +13,7 @@ describe('mock LDES-admin API', () => {
   it('summarises every instance on the dashboard', async () => {
     const overview = await api.getDashboard()
 
-    expect(overview.ldesServers.map((s) => s.server.name)).toEqual(['Legacy 3.x', 'Production', 'Sandbox', 'Staging'])
+    expect(overview.ldesServers.map((s) => s.server.name)).toEqual(['Legacy 3.x', 'Production', 'Sandbox LDES server', 'Staging'])
     const legacy = overview.ldesServers[0]
     expect(legacy.health.status).toBe('DOWN')
     expect(legacy.streams).toEqual([])
@@ -25,7 +26,7 @@ describe('mock LDES-admin API', () => {
 
     expect(created).toMatchObject({ name: 'Acceptance', url: 'https://acc.example.org', origin: 'REGISTERED' })
     await expect(api.registerInstance('LDES_SERVER', { name: 'Again', url: 'https://acc.example.org' }))
-      .rejects.toEqual(new ApiError(409, 'A LDES_SERVER with URL https://acc.example.org is already registered'))
+      .rejects.toEqual(new ApiError(409, 'An LDES server with URL https://acc.example.org is already registered'))
   })
 
   it('rejects URLs that are not absolute http(s) URLs', async () => {
@@ -95,8 +96,80 @@ describe('mock LDES-admin API', () => {
     const page = await api.getFragment(IDS.production, 'parcels', 'by-time', root.relations[0].node)
     expect(page.members).toHaveLength(5)
     expect(page.members[0].content).toContain('perceel:Perceel')
-    expect(page.relations[0].label).toBe('Page 2')
+    expect(relationLabel(page.relations[0])).toMatch(/^\d{4}-\d{2}-\d{2} · page 2$/)
     expect(page.immutable).toBe(true)
+  })
+
+  it('starts a sandbox whose LDIO feeds its LDES server', async () => {
+    await api.stopSandbox()
+    expect((await api.getSandbox()).state).toBe('STOPPED')
+
+    const sandbox = await api.startSandbox()
+
+    expect(sandbox.state).toBe('RUNNING')
+    expect(sandbox.ldesServer?.internalUrl).toBe('http://sandbox-ldes-server:8080')
+    expect(sandbox.eventStreamUrl).toBe('http://sandbox-ldes-server:8080/sandbox-parcels')
+    const serverId = sandbox.ldesServer!.id
+    expect((await api.listViews(serverId, 'sandbox-parcels')).map((v) => v.name))
+      .toEqual(['by-page', 'by-time'])
+    const [ingest] = await api.listPipelines(sandbox.ldio!.id)
+    expect(ingest.pipeline.outputs?.[0].config?.endpoint).toBe(sandbox.eventStreamUrl)
+
+    await api.sendToPipeline(sandbox.ldio!.id, 'sandbox-ingest', '<a> <b> <c> .', 'text/turtle')
+
+    const [statistics] = await api.getStreamStatistics(serverId)
+    expect(statistics.ingestedMembers).toBe(1)
+    const root = await api.getFragment(serverId, 'sandbox-parcels', 'by-page')
+    expect(root.url).toBe('http://sandbox-ldes-server:8080/sandbox-parcels/by-page')
+  })
+
+  it('leaves a running sandbox as it is when started again', async () => {
+    const before = await api.getSandbox()
+
+    const after = await api.startSandbox()
+
+    expect(after.ldesServer?.id).toBe(before.ldesServer?.id)
+    expect((await api.listInstances('LDES_SERVER')).filter((s) => s.sandbox)).toHaveLength(1)
+  })
+
+  it('stops the sandbox', async () => {
+    await api.stopSandbox()
+
+    expect(await api.getSandbox()).toMatchObject({ state: 'STOPPED', ldesServer: null, ldio: null })
+    expect((await api.listInstances('LDIO')).map((ldio) => ldio.name)).not.toContain('Sandbox LDIO')
+  })
+
+  it('only sends to pipelines with an HTTP input', async () => {
+    await expect(api.sendToPipeline(IDS.consumerLdio, 'water-quality-replication', '{}',
+      'application/json')).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('publishes the server catalog with the datasets that have DCAT', async () => {
+    expect((await api.getServerCatalog(IDS.sandboxServer)).catalogId).toBeNull()
+    expect(await api.getCatalog(IDS.sandboxServer)).toBe('')
+
+    const saved = await api.saveServerCatalog(IDS.sandboxServer, `
+      @prefix dcat: <http://www.w3.org/ns/dcat#> .
+      @prefix dcterms: <http://purl.org/dc/terms/> .
+      [] a dcat:Catalog ; dcterms:title "Experiments"@en .`)
+
+    expect(saved.catalogId).toBeTruthy()
+    const published = await api.getCatalog(IDS.sandboxServer)
+    expect(published).toContain('<http://sandbox-ldes-server:8080> a dcat:Catalog')
+    expect(published).toContain('"Experiments"@en')
+    expect(published).not.toContain('dcat:Dataset')
+
+    await api.updateDcat(IDS.sandboxServer, { kind: 'eventStream', collection: 'sandbox-parcels' },
+      '<http://sandbox-ldes-server:8080/sandbox-parcels> a <http://www.w3.org/ns/dcat#Dataset> .')
+
+    expect(await api.getCatalog(IDS.sandboxServer))
+      .toContain('<http://sandbox-ldes-server:8080/sandbox-parcels> a dcat:Dataset')
+  })
+
+  it('wants the server catalog as a blank node', async () => {
+    await expect(api.saveServerCatalog(IDS.production, `
+      @prefix dcat: <http://www.w3.org/ns/dcat#> .
+      <http://example.org/catalog> a dcat:Catalog .`)).rejects.toMatchObject({ status: 400 })
   })
 
   it('returns copies, like an HTTP response', async () => {

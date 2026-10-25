@@ -4,7 +4,6 @@ import java.util.function.Supplier;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException.Reason;
 import org.openldes.ldesadmin.model.instance.Instance;
-import org.openldes.ldesadmin.model.instance.InstanceType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
@@ -62,7 +61,6 @@ public final class RemoteCalls {
   }
 
   private static String label(Instance instance) {
-    String type = instance.type() == InstanceType.LDES_SERVER ? "LDES server" : "LDIO";
-    return "%s '%s'".formatted(type, instance.name());
+    return "%s '%s'".formatted(instance.type().label(), instance.name());
   }
 }

@@ -5,6 +5,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import SelectButton from 'primevue/selectbutton'
 import type { Chart as ChartJs, Plugin, TooltipItem } from 'chart.js'
+import EmptyState from '@/components/common/EmptyState.vue'
 import type { ThroughputSeries } from '@/domain/dashboard'
 import { useUiStore } from '@/stores/ui'
 import { formatNumber, formatTime } from '@/utils/format'
@@ -27,20 +28,31 @@ const palette = computed(() => ui.dark
   ? { series: ['#3987e5', '#d95926', '#199e70'], grid: '#27272a', ink: '#9ca3af', text: '#e4e4e7', surface: '#18181b' }
   : { series: ['#2a78d6', '#eb6834', '#1baf7a'], grid: '#e8ebef', ink: '#6b7280', text: '#334155', surface: '#ffffff' })
 
-const visible = computed(() => props.series.slice(0, 3))
+const visible = computed(() => props.series.filter((series) => series.points.length).slice(0, 3))
+
+/** Every hour any series has a point for: series start when sampling of their server started */
+const hours = computed(() => [...new Set(visible.value.flatMap((series) =>
+  series.points.map((point) => point.time)))].sort())
+
+/** The members of a series per hour of the shared axis; null where it has no point */
+function valuesOf(series: ThroughputSeries): (number | null)[] {
+  const byHour = new Map(series.points.map((point) => [point.time, point.members]))
+  return hours.value.map((hour) => byHour.get(hour) ?? null)
+}
 
 const chartData = computed(() => ({
-  labels: visible.value[0]?.points.map((point) => formatTime(point.time)) ?? [],
+  labels: hours.value.map((hour) => formatTime(hour)),
   datasets: visible.value.map((series, i) => ({
     label: series.label,
-    data: series.points.map((point) => point.members),
+    data: valuesOf(series),
     borderColor: palette.value.series[i],
     backgroundColor: palette.value.series[i],
     borderWidth: 2,
     borderCapStyle: 'round',
     borderJoinStyle: 'round',
     tension: 0.35,
-    pointRadius: 0,
+    // A lone point would not show without a marker
+    pointRadius: series.points.length === 1 ? 4 : 0,
     pointHitRadius: 12,
     pointHoverRadius: 5,
     pointHoverBorderWidth: 2,
@@ -53,7 +65,8 @@ const chartOptions = computed(() => ({
   maintainAspectRatio: false,
   animation: { duration: 400 },
   interaction: { mode: 'index', intersect: false },
-  layout: { padding: { right: 92, top: 8 } },
+  // Room for the end labels: about 7 px per character of 12 px text, after a 23 px key
+  layout: { padding: { right: Math.min(180, 30 + 7 * Math.max(0, ...visible.value.map((series) => series.label.length))), top: 8 } },
   plugins: {
     legend: { display: false },
     tooltip: {
@@ -120,7 +133,8 @@ const endLabels: Plugin<'line'> = {
     const { ctx, chartArea } = chart
     const labels = chart.data.datasets.map((dataset, i) => {
       const points = chart.getDatasetMeta(i).data
-      const last = points[points.length - 1]
+      // Hours without a sample are skipped points
+      const last = [...points].reverse().find((point) => !(point as { skip?: boolean }).skip)
       return { label: String(dataset.label), color: String(dataset.borderColor), y: last?.y ?? 0 }
     }).sort((a, b) => a.y - b.y)
     let previous = -Infinity
@@ -143,9 +157,9 @@ const endLabels: Plugin<'line'> = {
   },
 }
 
-const rows = computed(() => (visible.value[0]?.points ?? []).map((point, i) => ({
-  time: formatTime(point.time),
-  ...Object.fromEntries(visible.value.map((series) => [series.instanceId, series.points[i]?.members ?? 0])),
+const rows = computed(() => hours.value.map((hour, i) => ({
+  time: formatTime(hour),
+  ...Object.fromEntries(visible.value.map((series) => [series.instanceId, valuesOf(series)[i]])),
 })).reverse())
 </script>
 
@@ -156,27 +170,29 @@ const rows = computed(() => (visible.value[0]?.points ?? []).map((point, i) => (
         <div class="card-title">Members ingested per hour</div>
         <div class="card-subtitle">All event streams of each LDES server, last 24 hours</div>
       </div>
-      <SelectButton v-model="mode" :options="modes" option-value="value" :allow-empty="false"
+      <SelectButton v-if="visible.length" v-model="mode" :options="modes" option-value="value" :allow-empty="false"
         aria-label="Chart or table" data-cy="throughput-mode">
         <template #option="{ option }">
           <i :class="option.icon" :aria-label="option.label" />
         </template>
       </SelectButton>
     </div>
-    <div class="legend">
+    <EmptyState v-if="!visible.length" icon="pi pi-chart-line" title="No throughput sampled yet"
+      description="LDES-admin samples the members every LDES server ingested once a minute; the chart fills up as it runs." />
+    <div v-else class="legend">
       <span v-for="(series, i) in visible" :key="series.instanceId" class="legend-item">
         <span class="legend-key" :style="{ background: palette.series[i] }" />{{ series.label }}
       </span>
     </div>
-    <div v-if="mode === 'chart'" class="plot">
+    <div v-if="visible.length && mode === 'chart'" class="plot">
       <Chart type="line" :data="chartData" :options="chartOptions" :plugins="[crosshair, endLabels]"
         class="chart" />
     </div>
-    <DataTable v-else :value="rows" scrollable scroll-height="300px" size="small" class="numeric">
+    <DataTable v-else-if="visible.length" :value="rows" scrollable scroll-height="300px" size="small" class="numeric">
       <Column field="time" header="Hour" />
       <Column v-for="series in visible" :key="series.instanceId" :field="series.instanceId"
         :header="series.label">
-        <template #body="{ data }">{{ formatNumber(data[series.instanceId]) }}</template>
+        <template #body="{ data }">{{ data[series.instanceId] === null ? '–' : formatNumber(data[series.instanceId]) }}</template>
       </Column>
     </DataTable>
   </div>

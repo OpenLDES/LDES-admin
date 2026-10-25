@@ -73,27 +73,77 @@ export type DcatTarget =
   | { kind: 'eventStream'; collection: string }
   | { kind: 'view'; collection: string; view: string }
 
-// ---------------------------------------------------------------------------------------------
-// Not served by the backend yet: shown with sample data until the endpoints exist.
-// ---------------------------------------------------------------------------------------------
+/** The catalog of an LDES server itself, without the datasets and data services it adds */
+export interface ServerCatalog {
+  /** The id the server gave the catalog; null when it has none yet */
+  catalogId: string | null
+  /** Turtle, ready to edit */
+  document: string
+}
 
-export type ProcessStatus = 'IDLE' | 'RUNNING' | 'FAILED'
-
-/** A background job of the LDES server: fragmentation, compaction, retention, ... */
+/**
+ * A step of a background job of the LDES server, e.g. step pagination of job fragmentation, as
+ * its batch metrics tell since the server started.
+ */
 export interface BackgroundProcess {
-  id: string
-  name: string
-  description: string
-  icon: string
-  status: ProcessStatus
-  schedule: string
-  lastRun?: string
-  nextRun?: string
-  lastDurationMs?: number
-  processedItems?: number
-  /** 0-100 while running */
-  progress?: number
-  message?: string
+  job: string
+  step: string
+  completedRuns: number
+  failedRuns: number
+  /** Average duration of a completed run; 0 when there was none */
+  averageMillis: number
+  /** Duration of the longest recent completed run */
+  longestMillis: number
+  running: boolean
+}
+
+const processInfos: Record<string, { name: string; description: string; icon: string }> = {
+  bucketisation: {
+    name: 'Bucketisation',
+    description: 'Assigns newly ingested members to the buckets of every view',
+    icon: 'pi pi-th-large',
+  },
+  pagination: {
+    name: 'Pagination',
+    description: 'Puts bucketised members on pages and links the pages together',
+    icon: 'pi pi-book',
+  },
+  viewRetentionStep: {
+    name: 'View retention',
+    description: 'Removes members from views whose retention policy no longer keeps them',
+    icon: 'pi pi-clock',
+  },
+  eventSourceRetentionStep: {
+    name: 'Event source retention',
+    description: 'Removes members that the retention policy of the event source no longer keeps',
+    icon: 'pi pi-history',
+  },
+  compactionStep: {
+    name: 'Compaction',
+    description: 'Merges small immutable pages into larger ones',
+    icon: 'pi pi-compress',
+  },
+  deletionStep: {
+    name: 'Deletion',
+    description: 'Deletes compacted pages once the compaction duration has passed',
+    icon: 'pi pi-trash',
+  },
+}
+
+/** Worker steps that process one view or event source on behalf of a step above */
+const processAliases: Record<string, string> = {
+  singleViewRetentionStep: 'viewRetentionStep',
+  singleEventSourceRetentionStep: 'eventSourceRetentionStep',
+  singleViewCompactionStep: 'compactionStep',
+}
+
+/** How to present a background process, e.g. "View retention" for viewRetentionStep */
+export function processInfo(process: Pick<BackgroundProcess, 'step'>):
+  { name: string; description?: string; icon: string } {
+  const known = processInfos[processAliases[process.step] ?? process.step]
+  if (known) return known
+  const words = process.step.replace(/Step$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
+  return { name: words.charAt(0).toUpperCase() + words.slice(1), icon: 'pi pi-cog' }
 }
 
 /** A page of an LDES view, as served by the fetch API */
@@ -110,12 +160,44 @@ export interface Fragment {
 export interface Relation {
   /** Local name of the tree relation type, e.g. GreaterThanOrEqualToRelation */
   type: string
-  path?: string
-  value?: string
+  path?: string | null
+  value?: string | null
+  /** IRI of the fragment it links to, as published by the server */
   node: string
-  label: string
-  remainingItems?: number
+  remainingItems?: number | null
 }
+
+const TIME_PARAMETERS = ['year', 'month', 'day', 'hour', 'minute', 'second']
+
+/**
+ * A short name for the fragment a relation links to, derived from its IRI: "Page 2", "2026-10-24"
+ * for a time bucket, "Tile 15/16812/10970" for a map tile, or the value of a reference.
+ */
+export function relationLabel(relation: Pick<Relation, 'node' | 'value'>): string {
+  let url: URL
+  try {
+    url = new URL(relation.node)
+  } catch {
+    return relation.value ?? relation.node
+  }
+  const bucket = [...url.searchParams].filter(([key]) => key !== 'pageNumber')
+  const page = url.searchParams.get('pageNumber')
+  let label: string | undefined
+  if (bucket.length && bucket.every(([key]) => TIME_PARAMETERS.includes(key))) {
+    const [year, month, day, hour, minute] = TIME_PARAMETERS.map((key) => url.searchParams.get(key))
+    const pad = (value: string) => value.padStart(2, '0')
+    label = [year, month && pad(month), day && pad(day)].filter(Boolean).join('-')
+    if (hour) label += ` ${pad(hour)}:${minute ? pad(minute) : '00'}`
+  } else if (bucket.length) {
+    label = bucket.map(([key, value]) => key === 'tile' ? `Tile ${value}` : value).join(' / ')
+  }
+  // A bucket links to its own pages as well as to smaller buckets
+  if (label && page) return `${label} · page ${page}`
+  if (label) return label
+  if (page) return `Page ${page}`
+  return relation.value ?? url.pathname.split('/').pop() ?? relation.node
+}
+
 
 export interface Member {
   id: string

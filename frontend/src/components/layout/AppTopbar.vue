@@ -3,12 +3,49 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Avatar from 'primevue/avatar'
+import { useToast } from 'primevue/usetoast'
+import type { ApiMode } from '@/api'
 import { useInstancesStore } from '@/stores/instances'
+import { useModeStore } from '@/stores/mode'
 import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
 const ui = useUiStore()
 const instances = useInstancesStore()
+const mode = useModeStore()
+const toast = useToast()
+
+const modes: { value: ApiMode; label: string; icon: string; tooltip: string }[] = [
+  {
+    value: 'demo',
+    label: 'Demo',
+    icon: 'pi pi-sparkles',
+    tooltip: 'Explore LDES-admin on sample data; nothing leaves your browser',
+  },
+  {
+    value: 'production',
+    label: 'Production',
+    icon: 'pi pi-server',
+    tooltip: 'Manage real LDES servers and LDIOs through the LDES-admin backend',
+  },
+]
+
+async function switchMode(next: ApiMode) {
+  if (next === mode.mode) return
+  await mode.switchTo(next)
+  if (next === 'demo') {
+    toast.add({ severity: 'info', summary: 'Demo mode', detail: 'You are looking at sample data.', life: 3500 })
+  } else if (mode.backendUp) {
+    toast.add({ severity: 'success', summary: 'Production mode', detail: 'Connected to the LDES-admin backend.', life: 3500 })
+  } else {
+    toast.add({
+      severity: 'warn',
+      summary: 'Production mode',
+      detail: 'The LDES-admin backend does not answer. Start it, or switch back to demo mode.',
+      life: 7000,
+    })
+  }
+}
 
 interface Crumb {
   label: string
@@ -53,9 +90,21 @@ const crumbs = computed<Crumb[]>(() => {
       </template>
     </nav>
     <div class="actions">
-      <span v-tooltip.bottom="'No backend calls: the API runs on in-memory sample data'" class="data-mode">
-        <span class="pulse" /> Sample data
+      <span v-if="mode.backendUnreachable" v-tooltip.bottom="'The LDES-admin backend does not answer'"
+        class="backend-down" data-cy="backend-down" role="status">
+        <i class="pi pi-exclamation-triangle" /> Backend unreachable
+        <Button label="Retry" text size="small" class="retry" @click="mode.checkBackend()" />
       </span>
+      <div class="mode-switch" :class="mode.mode" role="radiogroup" aria-label="Data mode" data-cy="mode-switch">
+        <button v-for="option in modes" :key="option.value" v-tooltip.bottom="option.tooltip" type="button"
+          role="radio" :aria-checked="mode.mode === option.value" class="mode-option"
+          :class="[option.value, { active: mode.mode === option.value }]" :data-cy="`mode-${option.value}`"
+          @click="switchMode(option.value)">
+          <span v-if="mode.mode === option.value && option.value === 'demo'" class="pulse" />
+          <i v-else :class="option.icon" />
+          {{ option.label }}
+        </button>
+      </div>
       <Button
         v-tooltip.bottom="ui.dark ? 'Light mode' : 'Dark mode'"
         :icon="ui.dark ? 'pi pi-sun' : 'pi pi-moon'"
@@ -115,23 +164,84 @@ const crumbs = computed<Crumb[]>(() => {
   gap: 10px;
 }
 
-.data-mode {
+.mode-switch {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
+  padding: 3px;
+  gap: 2px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--p-amber-700);
-  background: var(--p-amber-50);
-  border: 1px solid var(--p-amber-200);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
 }
 
-.app-dark .data-mode {
+.mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-option .pi {
+  font-size: 11px;
+}
+
+.mode-option:hover:not(.active) {
+  color: var(--text);
+}
+
+.mode-option:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 1px;
+}
+
+.mode-option.demo.active {
+  color: var(--p-amber-700);
+  background: var(--p-amber-50);
+  border-color: var(--p-amber-200);
+}
+
+.mode-option.production.active {
+  color: var(--p-primary-700);
+  background: var(--p-primary-50);
+  border-color: var(--p-primary-200);
+}
+
+.app-dark .mode-option.demo.active {
   color: var(--p-amber-300);
   background: color-mix(in srgb, var(--p-amber-500) 12%, transparent);
   border-color: color-mix(in srgb, var(--p-amber-500) 30%, transparent);
+}
+
+.app-dark .mode-option.production.active {
+  color: var(--p-primary-200);
+  background: color-mix(in srgb, var(--p-primary-500) 14%, transparent);
+  border-color: color-mix(in srgb, var(--p-primary-500) 32%, transparent);
+}
+
+.backend-down {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--p-red-600);
+}
+
+.app-dark .backend-down {
+  color: var(--p-red-300);
+}
+
+.retry {
+  padding: 2px 6px !important;
+  font-size: 12px !important;
 }
 
 .pulse {

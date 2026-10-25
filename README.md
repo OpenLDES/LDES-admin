@@ -12,9 +12,9 @@ Data Interaction Orchestrator (LDIO) pipelines.
 |---------------|----------------------------------------------------------------------------|
 | `model`       | Domain model (plain Java)                                                  |
 | `application` | Use cases, ports and services (plain Java)                                 |
-| `adapter`     | REST API, Postgres (JPA + Flyway), LDES server and LDIO clients, local Docker runtime |
+| `adapter`     | REST API, monitor, Postgres (JPA + Flyway), LDES server and LDIO clients, local Docker runtime |
 | `bootstrap`   | Spring Boot application                                                    |
-| `frontend`    | Vue 3 + TypeScript + PrimeVue + Vue Flow frontend, running on sample data  |
+| `frontend`    | Vue 3 + TypeScript + PrimeVue + Vue Flow frontend, in demo or production mode |
 
 ## Requirements
 
@@ -40,7 +40,8 @@ run `TestLdesAdminApplication` (bootstrap test sources) instead to get Postgres 
 ```
 
 Configuration is in `bootstrap/src/main/resources/application.yaml`: the Docker images for local
-instances (`ldes-admin.local-runtime.*`), and `ldes-admin.security.enabled` to require a JWT.
+instances (`ldes-admin.local-runtime.*`), how often the instances are monitored
+(`ldes-admin.monitor.*`), and `ldes-admin.security.enabled` to require a JWT.
 
 ## Frontend
 
@@ -53,5 +54,29 @@ pnpm test:e2e     # end-to-end tests (Cypress) against a production build
 pnpm build        # type-check and build to dist/
 ```
 
-The frontend runs on in-memory sample data for now; see
-[analysis/architecture.md](analysis/architecture.md#frontend) for connecting it to the backend.
+The switch in the top bar picks the mode:
+
+* **Demo** runs on sample data in the browser, to explore LDES-admin without any server.
+* **Production** talks to the backend, which manages real LDES servers and LDIOs. `pnpm dev` and
+  `pnpm preview` proxy `/api` and `/actuator` to <http://localhost:8080>; set `LDES_ADMIN_BACKEND`
+  to use another backend.
+
+Without an earlier choice, the frontend starts in production mode when the backend answers, and in
+demo mode otherwise.
+
+## Sandbox
+
+In production mode, *Start sandbox* (on the dashboard, or *Sandbox environment* in the sandbox)
+starts a local LDES server and LDIO in Docker, on the machine running the backend. They work
+together out of the box:
+
+* the LDES server has an event stream `sandbox-parcels`, with a paginated view `by-page` and a
+  time-based view `by-time`;
+* the LDIO has a pipeline `sandbox-ingest` that receives members over HTTP and ingests them in
+  `sandbox-parcels`;
+* inside the sandbox, pipelines reach the event stream on
+  `http://sandbox-ldes-server:8080/sandbox-parcels`, so pipelines designed in the sandbox can write
+  to it (`Ldio:HttpOut`) and read from it (`Ldio:LdesClient`).
+
+The first start pulls the Docker images, which takes a few minutes. The sandbox stops with *Stop*,
+and with the backend.

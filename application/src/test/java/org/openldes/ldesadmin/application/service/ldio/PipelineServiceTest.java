@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -23,6 +24,7 @@ import org.openldes.ldesadmin.application.port.out.ldio.LdioClient;
 import org.openldes.ldesadmin.application.port.out.persistence.InstanceRepository;
 import org.openldes.ldesadmin.application.service.TestFixtures;
 import org.openldes.ldesadmin.application.service.instance.InstanceLookup;
+import org.openldes.ldesadmin.application.service.monitoring.ActivityRecorder;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.ldio.DeployedPipeline;
 import org.openldes.ldesadmin.model.ldio.Pipeline;
@@ -35,13 +37,16 @@ class PipelineServiceTest {
   private InstanceRepository instanceRepository;
   @Mock
   private LdioClient ldioClient;
+  @Mock
+  private ActivityRecorder activity;
 
   private final Instance ldio = TestFixtures.ldio();
   private PipelineService service;
 
   @BeforeEach
   void setUp() {
-    service = new PipelineService(new InstanceLookup(instanceRepository), ldioClient);
+    service = new PipelineService(new InstanceLookup(instanceRepository), ldioClient,
+        activity);
   }
 
   @Test
@@ -78,6 +83,19 @@ class PipelineServiceTest {
     InOrder inOrder = inOrder(ldioClient);
     inOrder.verify(ldioClient).deletePipeline(ldio, "parcels");
     inOrder.verify(ldioClient).createPipeline(ldio, updated);
+    verify(activity).info(ldio, "Pipeline parcels updated");
+  }
+
+  @Test
+  void recordsADeployedPipeline() {
+    givenLdioExists();
+    Pipeline pipeline = TestFixtures.pipeline("parcels");
+    when(ldioClient.createPipeline(ldio, pipeline))
+        .thenReturn(TestFixtures.deployed("parcels", PipelineStatus.INIT));
+
+    service.create(ldio.id(), pipeline);
+
+    verify(activity).success(ldio, "Pipeline parcels deployed");
   }
 
   @Test
@@ -90,6 +108,7 @@ class PipelineServiceTest {
         .isInstanceOf(PipelineNotFoundException.class);
     verify(ldioClient, never()).deletePipeline(any(), anyString());
     verify(ldioClient, never()).createPipeline(any(), any());
+    verifyNoInteractions(activity);
   }
 
   @Test

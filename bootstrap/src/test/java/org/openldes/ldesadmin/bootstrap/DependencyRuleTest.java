@@ -42,6 +42,7 @@ class DependencyRuleTest {
       .domainModels("..model..")
       .applicationServices("..application..")
       .adapter("rest", "..adapter.in.rest..")
+      .adapter("scheduling", "..adapter.in.scheduling..")
       .adapter("persistence", "..adapter.out.persistence..")
       .adapter("remote instances", "..adapter.out.ldes..", "..adapter.out.ldio..",
           "..adapter.out.health..", "..adapter.out.http..")

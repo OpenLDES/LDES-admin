@@ -110,7 +110,7 @@ class InstanceControllerTest {
         .content("{\"name\": \"Production\", \"url\": \"http://ldes.example.org\"}"))
         .hasStatus(HttpStatus.CONFLICT)
         .bodyJson().extractingPath("$.detail")
-        .isEqualTo("A LDES_SERVER with URL http://ldes.example.org is already registered");
+        .isEqualTo("An LDES server with URL http://ldes.example.org is already registered");
   }
 
   @Test

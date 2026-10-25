@@ -7,6 +7,8 @@ import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction } from '@/composables/useAsync'
 import type { EventStream } from '@/domain/ldes'
+import type { DeployedPipeline } from '@/domain/ldio'
+import { SANDBOX_INGEST_PIPELINE } from '@/domain/sandbox'
 import { componentInfo, kinds } from '@/pipeline/catalog'
 import type { SimulationStep } from '@/pipeline/simulator'
 import { templateById } from '@/pipeline/templates'
@@ -22,6 +24,7 @@ const open = defineModel<boolean>('open', { required: true })
 const sandbox = useSandboxStore()
 const instances = useInstancesStore()
 const { run: act, busy: ingesting } = useAction()
+const { run: sendAction, busy: sending } = useAction()
 
 const contentTypes = [
   { label: 'JSON', value: 'application/json' },
@@ -93,6 +96,47 @@ async function ingest() {
   if (done) ingestPopover.value?.hide()
 }
 
+// Sending the input member to a real pipeline -------------------------------------------------
+
+const sendPopover = ref<InstanceType<typeof Popover>>()
+const sendLdio = ref<string>()
+const sendPipeline = ref<string>()
+const ldioPipelines = ref<DeployedPipeline[]>([])
+const ldioOptions = computed(() => [...instances.ldios]
+  .sort((a, b) => Number(b.sandbox) - Number(a.sandbox))
+  .map((ldio) => ({ label: ldio.name, value: ldio.id })))
+const pipelineOptions = computed(() => ldioPipelines.value
+  .filter((deployed) => deployed.pipeline.input.name === 'Ldio:HttpIn')
+  .map((deployed) => ({ label: deployed.pipeline.name, value: deployed.pipeline.name })))
+
+function openSend(event: Event) {
+  const origin = sandbox.origin
+  if (origin.kind === 'ldio') sendLdio.value = origin.ldioId
+  else sendLdio.value ??= ldioOptions.value[0]?.value
+  sendPopover.value?.toggle(event)
+}
+
+watch(sendLdio, async (id) => {
+  ldioPipelines.value = id ? await api.listPipelines(id).catch(() => []) : []
+  // Where this pipeline was deployed, else the pipeline that feeds the sandbox event stream
+  const origin = sandbox.origin
+  const preferred = origin.kind === 'ldio' && origin.ldioId === id ? sandbox.name : SANDBOX_INGEST_PIPELINE
+  sendPipeline.value = pipelineOptions.value.find((option) => option.value === preferred)?.value
+    ?? pipelineOptions.value[0]?.value
+})
+
+async function send() {
+  const ldioId = sendLdio.value
+  const pipeline = sendPipeline.value
+  if (!ldioId || !pipeline) return
+  const ldioName = instances.find(ldioId)?.name ?? 'the LDIO'
+  const sent = await sendAction(async () => {
+    await api.sendToPipeline(ldioId, pipeline, sandbox.sample.content, sandbox.sample.contentType)
+    return true
+  }, `Sent the member to ${pipeline} on ${ldioName}`)
+  if (sent) sendPopover.value?.hide()
+}
+
 function stepLabel(step: SimulationStep) {
   return componentInfo(step.component)?.label ?? step.component
 }
@@ -130,7 +174,24 @@ const statusIcon: Record<SimulationStep['status'], string> = {
             v-tooltip.top="'Use the sample member of the template'" aria-label="Sample member" @click="useTemplateSample" />
           <Select v-model="sandbox.sample.contentType" :options="contentTypes" option-label="label" option-value="value"
             size="small" aria-label="Content type" />
+          <Button icon="pi pi-send" severity="secondary" text rounded size="small"
+            v-tooltip.top="'Send this member to a pipeline on an LDIO'" aria-label="Send to an LDIO"
+            :disabled="!sandbox.sample.content.trim()" data-cy="open-send" @click="openSend" />
         </header>
+        <Popover ref="sendPopover">
+          <div class="ingest" data-cy="send-popover">
+            <div class="label">Send this member to a pipeline</div>
+            <p class="muted small hint">It is posted as it is, to a pipeline with an HTTP input. That pipeline really
+              processes it.</p>
+            <Select v-model="sendLdio" :options="ldioOptions" option-label="label" option-value="value"
+              placeholder="LDIO" size="small" fluid aria-label="LDIO" data-cy="send-ldio" />
+            <Select v-model="sendPipeline" :options="pipelineOptions" option-label="label" option-value="value"
+              placeholder="Pipeline with an HTTP input" size="small" fluid aria-label="Pipeline"
+              empty-message="No pipeline with an HTTP input" data-cy="send-pipeline" />
+            <Button icon="pi pi-send" label="Send" size="small" :disabled="!sendPipeline" :loading="sending"
+              data-cy="send-member" @click="send" />
+          </div>
+        </Popover>
         <CodeEditor v-model="sandbox.sample.content"
           :language="sandbox.sample.contentType.includes('json') ? 'json' : sandbox.sample.contentType.includes('csv') ? 'text' : 'turtle'"
           min-height="100%" class="editor" data-cy="sample-input" />
@@ -321,6 +382,12 @@ const statusIcon: Record<SimulationStep['status'], string> = {
 
 .editor :deep(.cm-editor) {
   height: 100%;
+}
+
+.hint {
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.45;
 }
 
 .ingest {

@@ -6,20 +6,25 @@ import org.openldes.ldesadmin.application.port.in.ldio.PipelineUseCase;
 import org.openldes.ldesadmin.application.port.out.ldio.LdioClient;
 import org.openldes.ldesadmin.application.service.ApplicationService;
 import org.openldes.ldesadmin.application.service.instance.InstanceLookup;
+import org.openldes.ldesadmin.application.service.monitoring.ActivityRecorder;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceId;
 import org.openldes.ldesadmin.model.ldio.DeployedPipeline;
 import org.openldes.ldesadmin.model.ldio.Pipeline;
+import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 
 @ApplicationService
 public class PipelineService implements PipelineUseCase {
 
   private final InstanceLookup instanceLookup;
   private final LdioClient ldioClient;
+  private final ActivityRecorder activity;
 
-  public PipelineService(InstanceLookup instanceLookup, LdioClient ldioClient) {
+  public PipelineService(InstanceLookup instanceLookup, LdioClient ldioClient,
+      ActivityRecorder activity) {
     this.instanceLookup = instanceLookup;
     this.ldioClient = ldioClient;
+    this.activity = activity;
   }
 
   @Override
@@ -34,7 +39,10 @@ public class PipelineService implements PipelineUseCase {
 
   @Override
   public DeployedPipeline create(InstanceId ldioId, Pipeline pipeline) {
-    return ldioClient.createPipeline(instanceLookup.requireLdio(ldioId), pipeline);
+    Instance ldio = instanceLookup.requireLdio(ldioId);
+    DeployedPipeline created = ldioClient.createPipeline(ldio, pipeline);
+    activity.success(ldio, "Pipeline " + pipeline.name() + " deployed");
+    return created;
   }
 
   @Override
@@ -42,7 +50,9 @@ public class PipelineService implements PipelineUseCase {
     Instance ldio = instanceLookup.requireLdio(ldioId);
     find(ldio, pipeline.name());
     ldioClient.deletePipeline(ldio, pipeline.name());
-    return ldioClient.createPipeline(ldio, pipeline);
+    DeployedPipeline updated = ldioClient.createPipeline(ldio, pipeline);
+    activity.info(ldio, "Pipeline " + pipeline.name() + " updated");
+    return updated;
   }
 
   @Override
@@ -50,6 +60,7 @@ public class PipelineService implements PipelineUseCase {
     Instance ldio = instanceLookup.requireLdio(ldioId);
     find(ldio, pipeline);
     ldioClient.deletePipeline(ldio, pipeline);
+    activity.record(ldio, Severity.WARN, "Pipeline " + pipeline + " deleted", null);
   }
 
   private DeployedPipeline find(Instance ldio, String pipeline) {

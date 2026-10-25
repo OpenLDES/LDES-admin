@@ -16,7 +16,7 @@ describe('the sandbox', () => {
     cy.get('[data-cy=inspector]').should('contain', 'HTTP Out')
     cy.get('[data-cy=component-yaml] .cm-content')
       .should('contain', 'name: Ldio:HttpOut')
-      .and('contain', 'endpoint: http://localhost:32768/sandbox-parcels')
+      .and('contain', 'endpoint: http://sandbox-ldes-server:8080/sandbox-parcels')
 
     cy.get('[data-cy=component-yaml] .cm-content').type('{selectall}{backspace}name: Ldio:Telepathy', { delay: 0 })
     cy.get('[data-cy=yaml-error]').should('contain', "Unknown component 'Ldio:Telepathy'")
@@ -102,5 +102,23 @@ describe('the sandbox', () => {
     cy.get('[data-cy=deploy-submit]').click()
     cy.location('pathname').should('match', /^\/ldios\//)
     cy.contains('[data-cy=pipelines-table] tr', 'parcels-from-sandbox')
+  })
+
+  it('shows the sandbox environment and sends a member to its LDIO', () => {
+    cy.get('[data-cy=open-environment]').click()
+    cy.get('[data-cy=sandbox-environment]')
+      .should('contain', 'Running')
+      .and('contain', 'sandbox-ingest')
+      .and('contain', 'sandbox-parcels')
+    cy.get('body').type('{esc}')
+
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=open-send]').click()
+    cy.get('[data-cy=send-popover]').within(() => {
+      cy.get('[data-cy=send-ldio]').should('contain', 'Sandbox LDIO')
+      cy.get('[data-cy=send-pipeline]').should('contain', 'sandbox-ingest')
+      cy.get('[data-cy=send-member]').click()
+    })
+    cy.contains('.p-toast', 'Sent the member to sandbox-ingest on Sandbox LDIO')
   })
 })

@@ -35,26 +35,25 @@ export interface PipelineSummary {
   membersOut: number
 }
 
-// ---------------------------------------------------------------------------------------------
-// Not served by the backend yet: shown with sample data until the endpoints exist.
-// ---------------------------------------------------------------------------------------------
-
+/** Members ingested per hour by an LDES server, as sampled by LDES-admin */
 export interface ThroughputSeries {
   instanceId: string
   label: string
-  /** Members ingested per hour, oldest first */
+  /** Per hour, oldest first; hours before LDES-admin started sampling are left out */
   points: { time: string; members: number }[]
 }
 
 export type ActivitySeverity = 'info' | 'success' | 'warn' | 'error'
 
+/** Something that happened to an instance: an action through LDES-admin, or a change it noticed */
 export interface ActivityEvent {
   id: string
   time: string
   severity: ActivitySeverity
+  /** The name is the one the instance had at the time; it may be gone by now */
   source: { type: InstanceType; id: string; name: string }
   title: string
-  detail?: string
+  detail?: string | null
 }
 
 export const healthSeverity: Record<HealthStatus, 'success' | 'danger' | 'secondary'> = {

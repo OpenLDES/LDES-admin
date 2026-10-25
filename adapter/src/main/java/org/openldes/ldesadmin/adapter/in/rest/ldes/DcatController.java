@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.openldes.ldesadmin.adapter.in.rest.RdfMediaTypes;
 import org.openldes.ldesadmin.application.port.in.ldes.DcatUseCase;
 import org.openldes.ldesadmin.model.instance.InstanceId;
+import org.openldes.ldesadmin.model.ldes.CatalogDescription;
 import org.openldes.ldesadmin.model.ldes.DcatTarget;
 import org.openldes.ldesadmin.model.ldes.DcatTarget.EventStreamDataset;
 import org.openldes.ldesadmin.model.ldes.DcatTarget.ServerCatalog;
@@ -49,6 +50,26 @@ class DcatController {
   @GetMapping(value = "/dcat", produces = TURTLE)
   String catalog(@PathVariable UUID serverId) {
     return dcatUseCase.getCatalog(new InstanceId(serverId)).content();
+  }
+
+  /**
+   * The catalog of the server itself, ready to edit.
+   */
+  @GetMapping("/server-catalog")
+  ServerCatalogWebModel serverCatalog(@PathVariable UUID serverId) {
+    CatalogDescription catalog = dcatUseCase.getServerCatalog(new InstanceId(serverId));
+    return new ServerCatalogWebModel(catalog.catalogId(), catalog.document().content());
+  }
+
+  /**
+   * Creates or replaces the catalog of the server itself.
+   */
+  @PutMapping(value = "/server-catalog", consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  ServerCatalogWebModel saveServerCatalog(@PathVariable UUID serverId, @RequestBody String dcat,
+      @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+    String catalogId = dcatUseCase.saveServerCatalog(new InstanceId(serverId),
+        RdfMediaTypes.document(dcat, contentType));
+    return new ServerCatalogWebModel(catalogId, dcat);
   }
 
   @PostMapping(value = "/dcat", consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
@@ -112,6 +133,14 @@ class DcatController {
   void deleteDataService(@PathVariable UUID serverId, @PathVariable String collection,
       @PathVariable String view) {
     dcatUseCase.delete(new InstanceId(serverId), new ViewDataService(collection, view));
+  }
+
+  /**
+   * @param catalogId the id the server gave the catalog, {@code null} if it has none yet
+   * @param document  the catalog in Turtle
+   */
+  record ServerCatalogWebModel(String catalogId, String document) {
+
   }
 
   private void create(UUID serverId, DcatTarget target, String dcat, String contentType) {

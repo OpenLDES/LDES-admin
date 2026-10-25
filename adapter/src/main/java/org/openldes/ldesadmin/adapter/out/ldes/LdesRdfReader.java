@@ -22,6 +22,7 @@ import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFParser;
 import org.apache.jena.riot.RDFWriter;
 import org.apache.jena.riot.RiotException;
+import org.apache.jena.riot.system.ErrorHandlerFactory;
 import org.apache.jena.vocabulary.RDF;
 import org.openldes.ldesadmin.model.ldes.EventStream;
 import org.openldes.ldesadmin.model.ldes.Fragmentation;
@@ -52,6 +53,12 @@ final class LdesRdfReader {
   private static final Property PAGE_SIZE = ResourceFactory.createProperty(TREE, "pageSize");
   private static final Property FRAGMENTATION_STRATEGY = ResourceFactory.createProperty(TREE,
       "fragmentationStrategy");
+  /**
+   * Datatypes Turtle writes without naming them.
+   */
+  private static final Set<String> IMPLICIT_DATATYPES = Set.of(
+      "http://www.w3.org/2001/XMLSchema#string",
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString");
 
   private LdesRdfReader() {
   }
@@ -158,9 +165,16 @@ final class LdesRdfReader {
   /**
    * Everything that can be reached from a subject, serialised as Turtle.
    */
-  private static RdfDocument describe(Resource subject) {
+  static RdfDocument describe(Resource subject) {
+    return describe(subject, Set.of());
+  }
+
+  /**
+   * Everything that can be reached from a subject without passing the given resources,
+   * serialised as Turtle.
+   */
+  static RdfDocument describe(Resource subject, Set<Resource> boundaries) {
     Model description = ModelFactory.createDefaultModel();
-    description.setNsPrefixes(subject.getModel().getNsPrefixMap());
     Deque<Resource> toVisit = new ArrayDeque<>(List.of(subject));
     Set<Resource> visited = new HashSet<>();
     while (!toVisit.isEmpty()) {
@@ -168,18 +182,51 @@ final class LdesRdfReader {
       if (visited.add(current)) {
         current.listProperties().forEach(statement -> {
           description.add(statement);
-          if (statement.getObject().isResource()) {
+          if (statement.getObject().isResource()
+              && !boundaries.contains(statement.getResource())) {
             toVisit.push(statement.getResource());
           }
         });
       }
     }
-    return RdfDocument.turtle(RDFWriter.source(description).lang(Lang.TURTLE).asString());
+    return write(description, subject.getModel().getNsPrefixMap());
   }
 
-  private static Model parse(RdfDocument document, String base) {
+  /**
+   * Serialises a model as Turtle, with the prefixes it uses.
+   */
+  static RdfDocument write(Model model, Map<String, String> prefixes) {
+    Set<String> iris = new HashSet<>();
+    model.listStatements().forEach(statement -> {
+      collectIris(statement.getSubject(), iris);
+      iris.add(statement.getPredicate().getURI());
+      collectIris(statement.getObject(), iris);
+    });
+    prefixes.forEach((prefix, namespace) -> {
+      // One prefix per namespace, e.g. not both dct: and terms: for Dublin Core
+      if (!model.getNsPrefixMap().containsValue(namespace)
+          && iris.stream().anyMatch(iri -> iri.startsWith(namespace))) {
+        model.setNsPrefix(prefix, namespace);
+      }
+    });
+    return RdfDocument.turtle(RDFWriter.source(model).lang(Lang.TURTLE).asString());
+  }
+
+  private static void collectIris(RDFNode node, Set<String> iris) {
+    if (node.isURIResource()) {
+      iris.add(node.asResource().getURI());
+    } else if (node.isLiteral() && !IMPLICIT_DATATYPES.contains(
+        node.asLiteral().getDatatypeURI())) {
+      iris.add(node.asLiteral().getDatatypeURI());
+    }
+  }
+
+  static Model parse(RdfDocument document, String base) {
     try {
-      return RDFParser.fromString(document.content(), lang(document)).base(base).toModel();
+      // Servers write timestamps such as "2026-10-24T00:00"^^xsd:dateTime, which is fine to read
+      return RDFParser.fromString(document.content(), lang(document)).base(base)
+          .errorHandler(ErrorHandlerFactory.errorHandlerNoWarnings)
+          .toModel();
     } catch (RiotException e) {
       throw new IllegalArgumentException("Invalid RDF: " + e.getMessage(), e);
     }

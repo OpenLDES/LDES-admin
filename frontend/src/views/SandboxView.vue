@@ -7,6 +7,7 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
+import Popover from 'primevue/popover'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import ComponentInspector from '@/components/sandbox/ComponentInspector.vue'
@@ -14,6 +15,7 @@ import ComponentPalette from '@/components/sandbox/ComponentPalette.vue'
 import DeployDialog from '@/components/sandbox/DeployDialog.vue'
 import PipelineNode from '@/components/sandbox/PipelineNode.vue'
 import PipelineYamlDialog from '@/components/sandbox/PipelineYamlDialog.vue'
+import SandboxEnvironmentPanel from '@/components/sandbox/SandboxEnvironmentPanel.vue'
 import SimulationPanel from '@/components/sandbox/SimulationPanel.vue'
 import { api } from '@/api'
 import { errorMessage } from '@/composables/useAsync'
@@ -23,9 +25,17 @@ import { connectionProblem, type GraphNode } from '@/pipeline/graph'
 import { defaultTemplate, templates } from '@/pipeline/templates'
 import { useInstancesStore } from '@/stores/instances'
 import { useSandboxStore } from '@/stores/sandbox'
+import { useSandboxEnvironmentStore } from '@/stores/sandboxEnvironment'
 import { useUiStore } from '@/stores/ui'
 
 const FLOW_ID = 'sandbox'
+
+const environment = useSandboxEnvironmentStore()
+const environmentPopover = ref<InstanceType<typeof Popover>>()
+const environmentTone = computed(() => {
+  if (environment.busy) return 'busy'
+  return environment.state === 'RUNNING' ? 'running' : environment.state === 'PARTIAL' ? 'partial' : 'stopped'
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -81,6 +91,7 @@ const originLabel = computed(() => {
 onMounted(async () => {
   sidebarWasCollapsed = ui.sidebarCollapsed
   ui.sidebarCollapsed = true
+  environment.ensureLoaded()
   await instances.ensureLoaded()
   const { ldio, pipeline, template } = route.query
   if (typeof ldio === 'string' && typeof pipeline === 'string') {
@@ -212,6 +223,16 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
           </button>
         </div>
         <div class="toolbar-actions">
+          <button type="button" class="environment-toggle" :class="environmentTone"
+            v-tooltip.bottom="'The local LDES server and LDIO to try pipelines on'" aria-haspopup="true"
+            data-cy="open-environment" @click="environmentPopover?.toggle($event)">
+            <span class="environment-dot" /> Sandbox environment
+            <i class="pi pi-angle-down" />
+          </button>
+          <Popover ref="environmentPopover">
+            <SandboxEnvironmentPanel compact />
+          </Popover>
+          <span class="toolbar-divider" />
           <Button icon="pi pi-clone" severity="secondary" text size="small" v-tooltip.bottom="'Templates'"
             aria-label="Templates" aria-haspopup="true" data-cy="templates" @click="templateMenu?.toggle($event)" />
           <Menu ref="templateMenu" :model="templateItems" popup />
@@ -383,6 +404,62 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
   align-items: center;
   flex: none;
   gap: 4px;
+}
+
+.environment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.environment-toggle:hover {
+  background: var(--hover-bg);
+}
+
+.environment-toggle .pi {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.environment-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--p-surface-400);
+}
+
+.environment-toggle.running .environment-dot {
+  background: var(--p-green-500);
+}
+
+.environment-toggle.partial .environment-dot {
+  background: var(--p-amber-500);
+}
+
+.environment-toggle.busy .environment-dot {
+  background: var(--p-sky-500);
+  animation: blink 1.2s infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--card-border);
 }
 
 .canvas {

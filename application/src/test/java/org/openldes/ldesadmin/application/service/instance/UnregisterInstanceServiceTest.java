@@ -19,8 +19,10 @@ import org.openldes.ldesadmin.application.port.in.instance.InstanceNotFoundExcep
 import org.openldes.ldesadmin.application.port.out.persistence.InstanceRepository;
 import org.openldes.ldesadmin.application.port.out.runtime.LocalInstanceRuntime;
 import org.openldes.ldesadmin.application.service.TestFixtures;
+import org.openldes.ldesadmin.application.service.monitoring.ActivityRecorder;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceType;
+import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 
 @ExtendWith(MockitoExtension.class)
 class UnregisterInstanceServiceTest {
@@ -29,13 +31,15 @@ class UnregisterInstanceServiceTest {
   private InstanceRepository instanceRepository;
   @Mock
   private LocalInstanceRuntime localInstanceRuntime;
+  @Mock
+  private ActivityRecorder activity;
 
   private UnregisterInstanceService service;
 
   @BeforeEach
   void setUp() {
     service = new UnregisterInstanceService(new InstanceLookup(instanceRepository),
-        instanceRepository, localInstanceRuntime);
+        instanceRepository, localInstanceRuntime, activity);
   }
 
   @Test
@@ -47,6 +51,7 @@ class UnregisterInstanceServiceTest {
 
     verify(instanceRepository).deleteById(server.id());
     verifyNoInteractions(localInstanceRuntime);
+    verify(activity).record(server, Severity.INFO, "LDES server removed", null);
   }
 
   @Test
@@ -59,6 +64,7 @@ class UnregisterInstanceServiceTest {
     InOrder inOrder = inOrder(localInstanceRuntime, instanceRepository);
     inOrder.verify(localInstanceRuntime).stop("container-42");
     inOrder.verify(instanceRepository).deleteById(ldio.id());
+    verify(activity).record(ldio, Severity.INFO, "Local LDIO stopped", null);
   }
 
   @Test

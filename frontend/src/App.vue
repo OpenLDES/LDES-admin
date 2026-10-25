@@ -1,18 +1,33 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
 import { useInstancesStore } from '@/stores/instances'
+import { useModeStore } from '@/stores/mode'
+import { useSandboxStore } from '@/stores/sandbox'
+import { useSandboxEnvironmentStore } from '@/stores/sandboxEnvironment'
 import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
+const router = useRouter()
 const instances = useInstancesStore()
+const mode = useModeStore()
+const sandboxEnvironment = useSandboxEnvironmentStore()
+const sandbox = useSandboxStore()
 useUiStore()
 
 onMounted(() => instances.ensureLoaded())
+
+// Another mode means other instances: start afresh on the dashboard
+watch(() => mode.generation, async () => {
+  sandboxEnvironment.reset()
+  sandbox.forgetDeployment()
+  await router.push('/')
+  await instances.load().catch(() => undefined)
+})
 </script>
 
 <template>
@@ -21,7 +36,7 @@ onMounted(() => instances.ensureLoaded())
     <div class="layout-main">
       <AppTopbar />
       <main class="layout-content" :class="{ 'full-bleed': route.meta.fullBleed }">
-        <RouterView />
+        <RouterView :key="mode.generation" />
       </main>
     </div>
     <Toast position="bottom-right" />

@@ -5,16 +5,20 @@ import org.openldes.ldesadmin.application.port.in.instance.InstanceAlreadyRegist
 import org.openldes.ldesadmin.application.port.in.instance.RegisterInstanceUseCase;
 import org.openldes.ldesadmin.application.port.out.persistence.InstanceRepository;
 import org.openldes.ldesadmin.application.service.ApplicationService;
+import org.openldes.ldesadmin.application.service.monitoring.ActivityRecorder;
 import org.openldes.ldesadmin.model.instance.Instance;
 
 @ApplicationService
 public class RegisterInstanceService implements RegisterInstanceUseCase {
 
   private final InstanceRepository instanceRepository;
+  private final ActivityRecorder activity;
   private final Clock clock;
 
-  public RegisterInstanceService(InstanceRepository instanceRepository, Clock clock) {
+  public RegisterInstanceService(InstanceRepository instanceRepository, ActivityRecorder activity,
+      Clock clock) {
     this.instanceRepository = instanceRepository;
+    this.activity = activity;
     this.clock = clock;
   }
 
@@ -26,6 +30,7 @@ public class RegisterInstanceService implements RegisterInstanceUseCase {
       throw new InstanceAlreadyRegisteredException(instance.type(), instance.url());
     }
     instanceRepository.save(instance);
+    activity.success(instance, instance.type().label() + " added");
     return instance;
   }
 }

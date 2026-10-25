@@ -15,6 +15,7 @@ final class InstanceMapper {
     entity.setType(instance.type());
     entity.setName(instance.name());
     entity.setUrl(instance.url().toString());
+    entity.setInternalUrl(instance.internalUrl() == null ? null : instance.internalUrl().toString());
     entity.setOrigin(instance.origin());
     entity.setSandbox(instance.sandbox());
     entity.setRuntimeReference(instance.runtimeReference());
@@ -28,6 +29,7 @@ final class InstanceMapper {
         entity.getType(),
         entity.getName(),
         URI.create(entity.getUrl()),
+        entity.getInternalUrl() == null ? null : URI.create(entity.getInternalUrl()),
         entity.getOrigin(),
         entity.isSandbox(),
         entity.getRuntimeReference(),

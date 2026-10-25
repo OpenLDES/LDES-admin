@@ -197,6 +197,11 @@ export const useSandboxStore = defineStore('sandbox', () => {
     }
   }
 
+  /** The LDIO the pipeline was deployed on belongs to another mode: keep the pipeline, not the link */
+  function forgetDeployment() {
+    if (origin.value.kind === 'ldio') origin.value = { kind: 'scratch' }
+  }
+
   function setRunStatus(id: string, runStatus: NodeRunStatus) {
     nodes.value = nodes.value.map((node) => node.id === id
       ? { ...node, data: { ...node.data, runStatus } } : node)
@@ -237,5 +242,6 @@ export const useSandboxStore = defineStore('sandbox', () => {
     applyYaml,
     run,
     resetSimulation,
+    forgetDeployment,
   }
 })

@@ -34,3 +34,9 @@ ldes-admin:
     ldio-image: openldes/ldi-orchestrator:3.1.1
     postgres-image: postgres:16-alpine
     startup-timeout: 5m
+    # Local LDES servers fragment new members more often than the server default (every 30s)
+    fragmentation-cron: "*/5 * * * * *"
+  monitor:
+    # Samples the throughput of the LDES servers and notices instances going down or coming back
+    enabled: true
+    interval: 1m

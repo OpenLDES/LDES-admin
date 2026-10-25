@@ -3,7 +3,10 @@ package org.openldes.ldesadmin.adapter.out.ldes;
 import static org.openldes.ldesadmin.adapter.out.http.RemoteCalls.call;
 import static org.openldes.ldesadmin.adapter.out.http.RemoteCalls.run;
 
+import java.net.URI;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import org.openldes.ldesadmin.adapter.out.http.InstanceRestClients;
 import org.openldes.ldesadmin.adapter.out.http.PrometheusMetrics;
@@ -11,21 +14,25 @@ import org.openldes.ldesadmin.application.port.out.RemoteInstanceException;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException.Reason;
 import org.openldes.ldesadmin.application.port.out.ldes.LdesServerClient;
 import org.openldes.ldesadmin.model.instance.Instance;
+import org.openldes.ldesadmin.model.ldes.BackgroundProcess;
+import org.openldes.ldesadmin.model.ldes.CatalogDescription;
 import org.openldes.ldesadmin.model.ldes.DcatTarget;
 import org.openldes.ldesadmin.model.ldes.DcatTarget.EventStreamDataset;
 import org.openldes.ldesadmin.model.ldes.DcatTarget.ServerCatalog;
 import org.openldes.ldesadmin.model.ldes.DcatTarget.ViewDataService;
 import org.openldes.ldesadmin.model.ldes.EventStream;
+import org.openldes.ldesadmin.model.ldes.Fragment;
 import org.openldes.ldesadmin.model.ldes.StreamStatistics;
 import org.openldes.ldesadmin.model.ldes.View;
 import org.openldes.ldesadmin.model.rdf.RdfDocument;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Talks to the admin API ({@code /admin/api/v1}), the ingest endpoint and the Prometheus metrics
- * of an LDES server.
+ * Talks to the admin API ({@code /admin/api/v1}), the ingest and fetch endpoints and the
+ * Prometheus metrics of an LDES server.
  *
  * <p>Assumes the admin, ingest and fetch endpoints and the actuator share the base URL of the
  * server (the default, single-port deployment).
@@ -145,12 +152,30 @@ public class RestLdesServerClient implements LdesServerClient {
   }
 
   @Override
-  public void createDcat(Instance server, DcatTarget target, RdfDocument dcat) {
+  public CatalogDescription getServerCatalog(Instance server) {
+    String turtle = call(server, "get DCAT catalog", () -> rest(server).get()
+        .uri(DCAT).accept(TURTLE)
+        .retrieve().body(String.class));
+    try {
+      return DcatCatalogReader.readServerCatalog(RdfDocument.turtle(turtle == null ? "" : turtle),
+          server.url() + DCAT, server.name());
+    } catch (IllegalArgumentException e) {
+      throw invalidRdf(server, e);
+    }
+  }
+
+  @Override
+  public Optional<String> createDcat(Instance server, DcatTarget target, RdfDocument dcat) {
     Path path = target instanceof ServerCatalog ? new Path(DCAT) : dcatPath(target);
-    run(server, "create DCAT", () -> rest(server).post()
+    String response = call(server, "create DCAT", () -> rest(server).post()
         .uri(path.template(), path.variables()).contentType(mediaType(dcat))
+        .accept(MediaType.TEXT_PLAIN, TURTLE, MediaType.ALL)
         .body(dcat.content())
-        .retrieve().toBodilessEntity());
+        .retrieve().body(String.class));
+    // Only the server catalog gets an id, which the server returns as plain text
+    return target instanceof ServerCatalog && response != null && !response.isBlank()
+        ? Optional.of(response.strip())
+        : Optional.empty();
   }
 
   @Override
@@ -179,12 +204,36 @@ public class RestLdesServerClient implements LdesServerClient {
   }
 
   @Override
+  public Fragment getFragment(Instance server, URI url, String timestampPath,
+      String versionOfPath) {
+    ResponseEntity<String> response = call(server, "fetch " + url, () -> rest(server).get()
+        .uri(url).accept(TURTLE)
+        .retrieve().toEntity(String.class));
+    String cacheControl = response.getHeaders().getCacheControl();
+    boolean immutable = cacheControl != null && cacheControl.contains("immutable");
+    try {
+      return LdesFragmentReader.read(RdfDocument.turtle(Objects.requireNonNullElse(
+          response.getBody(), "")), url.toString(), immutable, timestampPath, versionOfPath);
+    } catch (IllegalArgumentException e) {
+      throw invalidRdf(server, e);
+    }
+  }
+
+  @Override
   public List<StreamStatistics> getStatistics(Instance server) {
+    return LdesStatisticsReader.read(metrics(server));
+  }
+
+  @Override
+  public List<BackgroundProcess> getBackgroundProcesses(Instance server) {
+    return LdesStatisticsReader.readBackgroundProcesses(metrics(server));
+  }
+
+  private PrometheusMetrics metrics(Instance server) {
     String exposition = call(server, "get metrics", () -> rest(server).get()
         .uri("/actuator/prometheus").accept(MediaType.TEXT_PLAIN)
         .retrieve().body(String.class));
-    return LdesStatisticsReader.read(PrometheusMetrics.parse(exposition == null ? ""
-        : exposition));
+    return PrometheusMetrics.parse(exposition == null ? "" : exposition);
   }
 
   private RestClient rest(Instance server) {
@@ -220,9 +269,14 @@ public class RestLdesServerClient implements LdesServerClient {
     try {
       return reader.apply(RdfDocument.turtle(turtle == null ? "" : turtle), base(server));
     } catch (IllegalArgumentException e) {
-      throw new RemoteInstanceException(Reason.UNAVAILABLE,
-          "LDES server '%s' returned invalid RDF: %s".formatted(server.name(), e.getMessage()), e);
+      throw invalidRdf(server, e);
     }
+  }
+
+  private static RemoteInstanceException invalidRdf(Instance server,
+      IllegalArgumentException e) {
+    return new RemoteInstanceException(Reason.UNAVAILABLE,
+        "LDES server '%s' returned invalid RDF: %s".formatted(server.name(), e.getMessage()), e);
   }
 
   private static <T> T single(Instance server, String what, List<T> items) {

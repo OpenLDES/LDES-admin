@@ -43,6 +43,15 @@ final class LdioApi {
 
   }
 
+  /**
+   * The progress of a pipeline with an LDES client input, as listed by
+   * {@code GET /admin/api/v1/pipeline/ldes-client}.
+   */
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record LdesClientStatusTO(String pipeline, String status) {
+
+  }
+
   @JsonIgnoreProperties(ignoreUnknown = true)
   record CatalogTO(List<String> inputs, List<String> adapters, List<String> transformers,
                    List<String> outputs) {

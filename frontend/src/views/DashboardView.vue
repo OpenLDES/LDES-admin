@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Skeleton from 'primevue/skeleton'
@@ -10,15 +10,37 @@ import PipelineStatusTag from '@/components/common/PipelineStatusTag.vue'
 import ThroughputChart from '@/components/dashboard/ThroughputChart.vue'
 import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
 import RegisterInstanceDialog from '@/components/instances/RegisterInstanceDialog.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import SandboxEnvironmentPanel from '@/components/sandbox/SandboxEnvironmentPanel.vue'
 import { api } from '@/api'
 import { useAsync } from '@/composables/useAsync'
 import type { Instance, InstanceType } from '@/domain/instance'
+import { useSandboxEnvironmentStore } from '@/stores/sandboxEnvironment'
 import { formatCompact, formatNumber, shortUrl } from '@/utils/format'
 
+/** How often the dashboard refreshes itself */
+const REFRESH_INTERVAL = 30_000
+
 const router = useRouter()
-const { data: overview } = useAsync(() => api.getDashboard())
-const { data: throughput } = useAsync(() => api.getThroughput())
-const { data: activity } = useAsync(() => api.getActivity())
+const environment = useSandboxEnvironmentStore()
+const { data: overview, reload: reloadOverview } = useAsync(() => api.getDashboard())
+const { data: throughput, reload: reloadThroughput } = useAsync(() => api.getThroughput())
+const { data: activity, reload: reloadActivity } = useAsync(() => api.getActivity())
+
+function refresh() {
+  reloadOverview()
+  reloadThroughput()
+  reloadActivity()
+}
+
+// Starting or stopping the sandbox adds or removes instances
+watch(() => environment.sandbox?.state, (state, previous) => {
+  if (previous !== undefined && state !== previous) refresh()
+})
+
+let timer: ReturnType<typeof setInterval> | undefined
+onMounted(() => (timer = setInterval(refresh, REFRESH_INTERVAL)))
+onBeforeUnmount(() => clearInterval(timer))
 
 const registerType = ref<InstanceType>('LDES_SERVER')
 const showRegister = ref(false)
@@ -42,8 +64,11 @@ const kpis = computed(() => {
   const running = pipelines.filter((p) => p.status === 'RUNNING').length
   const halted = pipelines.filter((p) => p.status === 'HALTED').length
   const starting = pipelines.filter((p) => ['INIT', 'STARTING', 'RESUMING'].includes(p.status)).length
-  const hourly = (throughput.value ?? [])[0]?.points.map((_, i) =>
-    (throughput.value ?? []).reduce((sum, series) => sum + (series.points[i]?.members ?? 0), 0)) ?? []
+  // Series start when LDES-admin started sampling a server, so add them up per hour
+  const perHour = new Map<string, number>()
+  ;(throughput.value ?? []).forEach((series) => series.points.forEach((point) =>
+    perHour.set(point.time, (perHour.get(point.time) ?? 0) + point.members)))
+  const hourly = [...perHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, members]) => members)
   const problems = servers.reduce((n, s) => n + s.problems.length + (s.health.status === 'DOWN' ? 1 : 0), 0)
     + ldios.reduce((n, l) => n + l.problems.length + (l.health.status === 'DOWN' ? 1 : 0), 0)
   const backlog = servers.flatMap((s) => s.streams).reduce((n, s) => n + s.backlog, 0)
@@ -101,9 +126,15 @@ const kpis = computed(() => {
           </div>
         </div>
         <div class="activity-scroll">
-          <ActivityFeed v-if="activity" :events="activity" />
+          <ActivityFeed v-if="activity?.length" :events="activity" />
+          <EmptyState v-else-if="activity" icon="pi pi-history" title="Nothing happened yet"
+            description="Actions taken through LDES-admin, and instances going down or coming back, show up here." />
         </div>
       </div>
+    </section>
+
+    <section class="card">
+      <SandboxEnvironmentPanel />
     </section>
 
     <section class="grid-2">

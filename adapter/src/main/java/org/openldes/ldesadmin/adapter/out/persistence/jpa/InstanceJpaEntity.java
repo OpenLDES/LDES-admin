@@ -34,6 +34,8 @@ public class InstanceJpaEntity {
   @Column(nullable = false)
   private String url;
 
+  private String internalUrl;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private InstanceOrigin origin;

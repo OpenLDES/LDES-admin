@@ -15,6 +15,7 @@ import type {
   Fragment,
   RdfFormat,
   Relation,
+  ServerCatalog,
   StreamStatistics,
   TypedConfig,
   View,
@@ -30,11 +31,28 @@ import type {
 } from '@/domain/ldio'
 import { canBeHalted, canBeResumed } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
+import {
+  type Sandbox,
+  SANDBOX_EVENT_STREAM,
+  SANDBOX_INGEST_PIPELINE,
+} from '@/domain/sandbox'
 import { componentsOfKind } from '@/pipeline/catalog'
 import { PIPELINE_NAME } from '@/pipeline/graph'
-import { expand, PREFIXES } from '@/domain/rdf'
+import { expand, PREFIXES, prefixLines as prefixLinesFor } from '@/domain/rdf'
 import { ApiError, type LdesAdminApi } from '../LdesAdminApi'
-import { createSampleState, sampleMember, type SampleState } from './sampleData'
+import {
+  combinedCatalog,
+  createSampleState,
+  eventStreamTurtle,
+  sampleMember,
+  type SampleState,
+  sandboxIngestPipeline,
+  serverCatalogTurtle,
+  toView,
+} from './sampleData'
+
+const SANDBOX_LDES_SERVER = 'Sandbox LDES server'
+const SANDBOX_LDIO = 'Sandbox LDIO'
 
 export interface MockOptions {
   /** Average response time in ms, to make loading states visible */
@@ -108,6 +126,44 @@ export class MockLdesAdminApi implements LdesAdminApi {
     return this.respond(() => this.state.activity)
   }
 
+  // Sandbox ------------------------------------------------------------------------------------
+
+  getSandbox(): Promise<Sandbox> {
+    return this.respond(() => this.sandbox())
+  }
+
+  startSandbox(): Promise<Sandbox> {
+    return this.respond(() => {
+      let { ldesServer, ldio } = this.sandbox()
+      ldesServer ??= this.startLocal('LDES_SERVER', SANDBOX_LDES_SERVER, true)
+      ldio ??= this.startLocal('LDIO', SANDBOX_LDIO, true)
+      if (!this.state.eventStreams[ldesServer.id].some((s) => s.collection === SANDBOX_EVENT_STREAM)) {
+        this.seedEventStream(ldesServer)
+      }
+      const eventStreamUrl = `${ldesServer.internalUrl}/${SANDBOX_EVENT_STREAM}`
+      const pipelines = this.state.pipelines[ldio.id]
+      const ingest = pipelines.find((deployed) => deployed.pipeline.name === SANDBOX_INGEST_PIPELINE)
+      if (!ingest || ingest.pipeline.outputs?.[0]?.config?.endpoint !== eventStreamUrl) {
+        this.state.pipelines[ldio.id] = [...pipelines.filter((deployed) => deployed !== ingest),
+          sandboxIngestPipeline(eventStreamUrl)]
+        this.state.pipelineStatistics[ldio.id] = [...this.state.pipelineStatistics[ldio.id]
+          .filter((stats) => stats.pipeline !== SANDBOX_INGEST_PIPELINE),
+        { pipeline: SANDBOX_INGEST_PIPELINE, membersIn: 0, membersOut: 0, inFlight: 0 }]
+        this.log('success', ldio, `Pipeline ${SANDBOX_INGEST_PIPELINE} deployed`)
+      }
+      return this.sandbox()
+    }, this.options.startupDelay ?? 2200)
+  }
+
+  stopSandbox(): Promise<void> {
+    return this.respond(() => {
+      const { ldesServer, ldio } = this.sandbox()
+      for (const instance of [ldesServer, ldio]) {
+        if (instance) this.remove(instance)
+      }
+    })
+  }
+
   // Instances ----------------------------------------------------------------------------------
 
   listInstances(type: InstanceType): Promise<Instance[]> {
@@ -123,7 +179,7 @@ export class MockLdesAdminApi implements LdesAdminApi {
       if (!request.name?.trim()) throw new ApiError(400, "'name' must not be blank")
       const url = normalizeUrl(request.url)
       if (this.state.instances.some((i) => i.type === type && i.url === url)) {
-        throw new ApiError(409, `A ${type} with URL ${url} is already registered`)
+        throw new ApiError(409, `${type === 'LDIO' ? 'An LDIO' : 'An LDES server'} with URL ${url} is already registered`)
       }
       const instance: Instance = {
         id: crypto.randomUUID(),
@@ -135,6 +191,7 @@ export class MockLdesAdminApi implements LdesAdminApi {
         registeredAt: this.now().toISOString(),
       }
       this.add(instance, /down|unreachable/.test(url) ? 'DOWN' : 'UP')
+      this.log('success', instance, `${instanceTypeLabel[type]} added`)
       return instance
     })
   }
@@ -142,27 +199,12 @@ export class MockLdesAdminApi implements LdesAdminApi {
   startLocalInstance(type: InstanceType, request: StartLocalInstanceRequest): Promise<Instance> {
     return this.respond(() => {
       if (!request.name?.trim()) throw new ApiError(400, "'name' must not be blank")
-      const instance: Instance = {
-        id: crypto.randomUUID(),
-        type,
-        name: request.name.trim(),
-        url: `http://localhost:${this.localPorts++}`,
-        origin: 'LOCAL',
-        sandbox: request.sandbox ?? false,
-        registeredAt: this.now().toISOString(),
-      }
-      this.add(instance, 'UP')
-      this.log('info', instance, `Local ${instanceTypeLabel[type]} started`,
-        `${type === 'LDIO' ? 'openldes/ldi-orchestrator:3.1.1' : 'openldes/ldes-server:4.2.1'} on ${instance.url}`)
-      return instance
+      return this.startLocal(type, request.name.trim(), request.sandbox ?? false)
     }, this.options.startupDelay ?? 2200)
   }
 
   unregisterInstance(type: InstanceType, id: string): Promise<void> {
-    return this.respond(() => {
-      this.instance(type, id)
-      this.state.instances = this.state.instances.filter((instance) => instance.id !== id)
-    })
+    return this.respond(() => this.remove(this.instance(type, id)))
   }
 
   checkHealth(type: InstanceType, id: string): Promise<InstanceHealth> {
@@ -308,17 +350,49 @@ export class MockLdesAdminApi implements LdesAdminApi {
 
   getCatalog(serverId: string): Promise<string> {
     return this.respond(() => {
-      this.reachable('LDES_SERVER', serverId, 'get DCAT catalog')
-      return this.state.catalogs[serverId] ?? ''
+      const server = this.reachable('LDES_SERVER', serverId, 'get DCAT catalog')
+      const datasets = this.state.datasets[serverId] ?? []
+      return combinedCatalog(server.internalUrl ?? server.url, this.state.serverCatalogs[serverId],
+        (this.state.eventStreams[serverId] ?? []).filter((s) => datasets.includes(s.collection)))
     })
   }
 
-  updateDcat(serverId: string, target: DcatTarget, dcat: string): Promise<void> {
+  getServerCatalog(serverId: string): Promise<ServerCatalog> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, 'get DCAT catalog')
+      return this.state.serverCatalogs[serverId]
+        ?? { catalogId: null, document: serverCatalogTurtle(server.name) }
+    })
+  }
+
+  saveServerCatalog(serverId: string, document: string): Promise<ServerCatalog> {
+    return this.respond(() => {
+      const server = this.reachable('LDES_SERVER', serverId, 'create DCAT')
+      validateRdf(document, 'text/turtle', (reason) =>
+        new ApiError(400, `LDES server '${server.name}' could not create DCAT: 400 BAD_REQUEST - ${reason}`))
+      if (!/\[\s*\]\s+(a|rdf:type)\s+dcat:Catalog/.test(document)) {
+        throw new ApiError(400, `LDES server '${server.name}' could not create DCAT: 400 BAD_REQUEST - The catalog must be a blank node of type dcat:Catalog`)
+      }
+      const catalog = {
+        catalogId: this.state.serverCatalogs[serverId]?.catalogId ?? crypto.randomUUID(),
+        document,
+      }
+      this.state.serverCatalogs[serverId] = catalog
+      return catalog
+    })
+  }
+
+  updateDcat(serverId: string, target: Exclude<DcatTarget, { kind: 'server' }>, dcat: string):
+    Promise<void> {
     return this.respond(() => {
       const server = this.reachable('LDES_SERVER', serverId, 'update DCAT')
+      this.stream(serverId, target.collection, 'update DCAT')
       validateRdf(dcat, 'text/turtle', (reason) =>
         new ApiError(400, `LDES server '${server.name}' could not update DCAT: 400 BAD_REQUEST - ${reason}`))
-      if (target.kind === 'server') this.state.catalogs[serverId] = dcat
+      const datasets = this.state.datasets[serverId] ?? []
+      if (!datasets.includes(target.collection)) {
+        this.state.datasets[serverId] = [...datasets, target.collection]
+      }
     })
   }
 
@@ -329,15 +403,7 @@ export class MockLdesAdminApi implements LdesAdminApi {
       this.stream(serverId, collection, `ingest member in ${collection}`)
       validateRdf(member, format, (reason) => new ApiError(400,
         `LDES server '${server.name}' could not ingest member in ${collection}: 400 BAD_REQUEST - ${reason}`))
-      const statistics = this.statisticsOf(serverId, collection)
-      if (statistics) {
-        statistics.ingestedMembers += 1
-        statistics.views.forEach((view) => {
-          view.bucketisedMembers += 1
-          view.paginatedMembers += 1
-        })
-      }
-      this.log('info', server, `Member ingested in ${collection}`)
+      this.countIngested(serverId, collection)
     })
   }
 
@@ -364,8 +430,9 @@ export class MockLdesAdminApi implements LdesAdminApi {
       if (!definition) {
         throw new ApiError(404, `LDES server '${server.name}' could not fetch ${collection}/${view}: 404 NOT_FOUND`)
       }
-      return buildFragment(`${server.url}/${collection}/${view}`, url, collection, definition,
-        this.now())
+      // Like the real server, a local one publishes its IRIs on its internal URL
+      return buildFragment(`${server.internalUrl ?? server.url}/${collection}/${view}`, url,
+        collection, definition, this.now())
     })
   }
 
@@ -393,7 +460,7 @@ export class MockLdesAdminApi implements LdesAdminApi {
       this.state.pipelineStatistics[ldioId] = [...(this.state.pipelineStatistics[ldioId] ?? []),
         { pipeline: pipeline.name, membersIn: 0, membersOut: 0, inFlight: 0 }]
       this.startSoon(ldioId, pipeline.name)
-      this.log('success', ldio, `Pipeline ${pipeline.name} created`)
+      this.log('success', ldio, `Pipeline ${pipeline.name} deployed`)
       return deployed
     })
   }
@@ -477,7 +544,144 @@ export class MockLdesAdminApi implements LdesAdminApi {
     })
   }
 
+  sendToPipeline(ldioId: string, pipeline: string, content: string, contentType: string):
+    Promise<void> {
+    return this.respond(() => {
+      const ldio = this.reachable('LDIO', ldioId, `receive a message in pipeline ${pipeline}`)
+      if (!content.trim()) throw new ApiError(400, 'A message must not be empty')
+      const deployed = this.pipeline(ldioId, pipeline)
+      const input = deployed.pipeline.input.name
+      if (input !== 'Ldio:HttpIn') {
+        throw new ApiError(400, `Pipeline ${pipeline} reads from ${input}, so it does not accept members over HTTP`)
+      }
+      const rdf = RDF_FORMATS.find((format) => contentType.startsWith(format))
+      if (rdf) {
+        validateRdf(content, rdf, (reason) => new ApiError(400,
+          `LDIO '${ldio.name}' could not receive a message in pipeline ${pipeline}: 400 BAD_REQUEST - ${reason}`))
+      }
+      const stats = this.state.pipelineStatistics[ldioId]?.find((s) => s.pipeline === pipeline)
+      if (stats) {
+        stats.membersIn += 1
+        stats.membersOut += 1
+      }
+      // An HTTP output that points to the event stream of a local LDES server ingests there
+      for (const output of deployed.pipeline.outputs ?? []) {
+        const endpoint = output.name === 'Ldio:HttpOut' ? String(output.config?.endpoint ?? '') : ''
+        const server = this.instancesOf('LDES_SERVER').find((candidate) => candidate.internalUrl
+          && endpoint.startsWith(`${candidate.internalUrl}/`))
+        if (server && this.isUp(server)) {
+          this.countIngested(server.id, endpoint.slice(server.internalUrl!.length + 1))
+        }
+      }
+    })
+  }
+
   // Helpers ------------------------------------------------------------------------------------
+
+  private sandbox(): Sandbox {
+    const find = (type: InstanceType, name: string) => this.instancesOf(type)
+      .find((instance) => instance.origin === 'LOCAL' && instance.sandbox && instance.name === name)
+      ?? null
+    const ldesServer = find('LDES_SERVER', SANDBOX_LDES_SERVER)
+    const ldio = find('LDIO', SANDBOX_LDIO)
+    return {
+      state: ldesServer && ldio ? 'RUNNING' : ldesServer || ldio ? 'PARTIAL' : 'STOPPED',
+      ldesServer,
+      ldio,
+      eventStream: SANDBOX_EVENT_STREAM,
+      ingestPipeline: SANDBOX_INGEST_PIPELINE,
+      eventStreamUrl: ldesServer
+        ? `${ldesServer.internalUrl ?? ldesServer.url}/${SANDBOX_EVENT_STREAM}` : null,
+    }
+  }
+
+  private startLocal(type: InstanceType, name: string, sandbox: boolean): Instance {
+    const alias = slug(name) || slug(instanceTypeLabel[type])
+    const taken = (candidate: string) => this.state.instances
+      .some((instance) => instance.internalUrl === `http://${candidate}:8080`)
+    let host = alias
+    for (let i = 2; taken(host); i++) host = `${alias}-${i}`
+    const instance: Instance = {
+      id: crypto.randomUUID(),
+      type,
+      name,
+      url: `http://localhost:${this.localPorts++}`,
+      internalUrl: `http://${host}:8080`,
+      origin: 'LOCAL',
+      sandbox,
+      registeredAt: this.now().toISOString(),
+    }
+    this.add(instance, 'UP')
+    this.log('success', instance, `Local ${instanceTypeLabel[type]} started`,
+      `On ${instance.url}, and on ${instance.internalUrl} for other local instances`)
+    return instance
+  }
+
+  private seedEventStream(server: Instance): void {
+    const base = server.internalUrl ?? server.url
+    const spec = {
+      collection: SANDBOX_EVENT_STREAM,
+      title: 'Sandbox parcels',
+      description: 'Try out ingesting and fragmenting parcels',
+      targetClass: 'perceel:Perceel',
+      timestampPath: 'prov:generatedAtTime',
+      properties: [],
+      ingested: 0,
+      views: [
+        { name: 'by-page', pageSize: 10, bucketised: 0, paginated: 0 },
+        {
+          name: 'by-time',
+          pageSize: 10,
+          fragmentations: [{
+            type: 'HierarchicalTimeBasedFragmentation',
+            properties: { maxGranularity: 'day', fragmentationPath: `${PREFIXES.prov}generatedAtTime` },
+          }],
+          bucketised: 0,
+          paginated: 0,
+        },
+      ],
+    }
+    this.state.eventStreams[server.id] = [...this.state.eventStreams[server.id], {
+      collection: SANDBOX_EVENT_STREAM,
+      timestampPath: `${PREFIXES.prov}generatedAtTime`,
+      versionOfPath: `${PREFIXES.dcterms}isVersionOf`,
+      createVersions: false,
+      views: spec.views.map((view) => view.name),
+      definition: eventStreamTurtle(base, spec),
+    }]
+    this.state.views[`${server.id}/${SANDBOX_EVENT_STREAM}`] = spec.views
+      .map((view) => toView(base, SANDBOX_EVENT_STREAM, view))
+    this.state.statistics[server.id] = [...this.state.statistics[server.id], {
+      collection: SANDBOX_EVENT_STREAM,
+      ingestedMembers: 0,
+      backlog: 0,
+      views: spec.views.map((view) => ({ view: view.name, bucketisedMembers: 0, paginatedMembers: 0 })),
+    }]
+    this.state.shapes[`${server.id}/${SANDBOX_EVENT_STREAM}`] = `${prefixLinesFor('sh')}
+
+[] a sh:NodeShape .
+`
+    this.log('success', server, `Event stream ${SANDBOX_EVENT_STREAM} created`)
+    spec.views.forEach((view) =>
+      this.log('success', server, `View ${SANDBOX_EVENT_STREAM}/${view.name} created`))
+  }
+
+  private remove(instance: Instance): void {
+    this.state.instances = this.state.instances.filter((candidate) => candidate.id !== instance.id)
+    this.log('info', instance, instance.origin === 'LOCAL'
+      ? `Local ${instanceTypeLabel[instance.type]} stopped`
+      : `${instanceTypeLabel[instance.type]} removed`)
+  }
+
+  private countIngested(serverId: string, collection: string): void {
+    const statistics = this.statisticsOf(serverId, collection)
+    if (!statistics) return
+    statistics.ingestedMembers += 1
+    statistics.views.forEach((view) => {
+      view.bucketisedMembers += 1
+      view.paginatedMembers += 1
+    })
+  }
 
   private now(): Date {
     return this.options.now?.() ?? new Date()
@@ -548,7 +752,8 @@ export class MockLdesAdminApi implements LdesAdminApi {
     if (instance.type === 'LDES_SERVER') {
       this.state.eventStreams[instance.id] = []
       this.state.statistics[instance.id] = []
-      this.state.catalogs[instance.id] = ''
+      this.state.serverCatalogs[instance.id] = { catalogId: null, document: serverCatalogTurtle(instance.name) }
+      this.state.datasets[instance.id] = []
       this.state.processes[instance.id] = []
     } else {
       this.state.pipelines[instance.id] = []
@@ -628,7 +833,6 @@ function buildFragment(root: string, url: string | undefined, collection: string
     fragment.relations = [{
       type: 'Relation',
       node: next.toString(),
-      label: `Page ${page + 1}`,
       remainingItems: (pages - page) * view.pageSize,
     }]
   }
@@ -656,7 +860,6 @@ function rootRelations(root: string, fragmentation: TypedConfig | undefined, vie
             month: String(day.getUTCMonth() + 1),
             day: String(day.getUTCDate()),
           }),
-          label: day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }),
           remainingItems: 3 * view.pageSize,
         }
       })
@@ -666,7 +869,6 @@ function rootRelations(root: string, fragmentation: TypedConfig | undefined, vie
         path,
         value: `POLYGON ((${tileLon(x)} ${tileLat(y)}, ${tileLon(x + 1)} ${tileLat(y)}, ${tileLon(x + 1)} ${tileLat(y + 1)}, ${tileLon(x)} ${tileLat(y + 1)}, ${tileLon(x)} ${tileLat(y)}))`,
         node: firstPage({ tile: `15/${x}/${y}` }),
-        label: `Tile 15/${x}/${y}`,
       }))
     case 'ReferenceFragmentation': {
       const key = fragmentation.properties.fragmentationKey ?? 'reference'
@@ -675,14 +877,12 @@ function rootRelations(root: string, fragmentation: TypedConfig | undefined, vie
         path,
         value,
         node: firstPage({ [key]: value }),
-        label: value,
       }))
     }
     default:
       return [{
         type: 'Relation',
         node: firstPage({}),
-        label: 'Page 1',
         remainingItems: 6 * view.pageSize,
       }]
   }
@@ -727,6 +927,15 @@ function expandTerm(term: string): string {
 function lastSegment(term: string): string {
   const value = term.replace(/^<|>$/g, '').replace(/[#/]+$/, '')
   return value.split(/[#/:]/).pop() || value
+}
+
+const RDF_FORMATS: RdfFormat[] = ['text/turtle', 'application/ld+json', 'application/n-quads',
+  'application/n-triples']
+
+/** A host name derived from a name, like the backend does: "Sandbox LDIO" becomes sandbox-ldio */
+function slug(name: string): string {
+  return name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '')
 }
 
 function normalizeUrl(value: string): string {

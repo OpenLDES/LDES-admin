@@ -42,7 +42,27 @@ describe('an LDES server', () => {
 
   it('shows the background processes', () => {
     cy.get('[data-cy=tab-processes]').click()
-    cy.get('[data-cy=process]').should('have.length', 5)
-    cy.contains('[data-cy=process]', 'Retention')
+    cy.get('[data-cy=process]').should('have.length', 6)
+    cy.contains('[data-cy=process]', 'Pagination').should('contain', 'Completed runs')
+    cy.contains('[data-cy=process]', 'View retention')
+  })
+
+  it('publishes a catalog of the server', () => {
+    cy.get('[data-cy=internal-url]').should('contain', 'http://sandbox-ldes-server:8080')
+    cy.get('[data-cy=tab-dcat]').click()
+    cy.contains('This server has no catalog yet')
+    cy.contains('Nothing published yet')
+
+    cy.get('[data-cy=server-catalog]').within(() => {
+      cy.get('[data-cy=save-document]').should('be.disabled')
+      cy.get('.cm-content').type('{selectall}{backspace}@prefix dcat: <http://www.w3.org/ns/dcat#> . '
+        + '@prefix dcterms: <http://purl.org/dc/terms/> . [] a dcat:Catalog ; dcterms:title "Experiments"@en .', { delay: 0 })
+      cy.get('[data-cy=save-document]').click()
+    })
+
+    cy.contains('.p-toast', 'Server catalog saved')
+    cy.get('[data-cy=published-catalog]')
+      .should('contain', 'sandbox-ldes-server:8080> a dcat:Catalog')
+      .and('contain', '"Experiments"@en')
   })
 })

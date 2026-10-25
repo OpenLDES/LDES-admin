@@ -9,8 +9,10 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.openldes.ldesadmin.application.port.in.ldes.BackgroundProcessUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.DcatUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.EventStreamUseCase;
+import org.openldes.ldesadmin.application.port.in.ldes.FragmentUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.IngestMemberUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.ShapeUseCase;
 import org.openldes.ldesadmin.application.port.in.ldes.StreamStatisticsUseCase;
@@ -18,8 +20,12 @@ import org.openldes.ldesadmin.application.port.in.ldes.ViewUseCase;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException.Reason;
 import org.openldes.ldesadmin.model.instance.InstanceId;
+import org.openldes.ldesadmin.model.ldes.BackgroundProcess;
+import org.openldes.ldesadmin.model.ldes.CatalogDescription;
 import org.openldes.ldesadmin.model.ldes.DcatTarget;
 import org.openldes.ldesadmin.model.ldes.EventStream;
+import org.openldes.ldesadmin.model.ldes.Fragment;
+import org.openldes.ldesadmin.model.ldes.Fragment.Relation;
 import org.openldes.ldesadmin.model.ldes.StreamStatistics;
 import org.openldes.ldesadmin.model.ldes.ViewStatistics;
 import org.openldes.ldesadmin.model.rdf.RdfDocument;
@@ -32,7 +38,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 @WebMvcTest(controllers = {EventStreamController.class, ViewController.class,
-    ShapeController.class, DcatController.class, MemberController.class})
+    ShapeController.class, DcatController.class, MemberController.class,
+    FragmentController.class})
 class LdesServerControllersTest {
 
   private static final String TURTLE = "text/turtle";
@@ -53,6 +60,99 @@ class LdesServerControllersTest {
   private IngestMemberUseCase ingestMemberUseCase;
   @MockitoBean
   private StreamStatisticsUseCase streamStatisticsUseCase;
+  @MockitoBean
+  private BackgroundProcessUseCase backgroundProcessUseCase;
+  @MockitoBean
+  private FragmentUseCase fragmentUseCase;
+
+  @Test
+  void fetchesTheRootOfAView() {
+    when(fragmentUseCase.fetch(SERVER, "parcels", "by-page", null)).thenReturn(new Fragment(
+        "http://sandbox-ldes-server:8080/parcels/by-page", false,
+        List.of(new Relation("Relation", null, null,
+            "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=1", null)),
+        List.of()));
+
+    assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}/eventstreams/parcels/views/by-page"
+        + "/fragment", SERVER))
+        .hasStatusOk()
+        .bodyJson()
+        .isLenientlyEqualTo("""
+            {"url": "http://sandbox-ldes-server:8080/parcels/by-page", "collection": "parcels",
+             "view": "by-page", "root": true, "immutable": false, "members": [],
+             "relations": [{"type": "Relation",
+               "node": "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=1"}]}
+            """);
+  }
+
+  @Test
+  void fetchesAPageWithItsMembers() {
+    String page = "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=1";
+    when(fragmentUseCase.fetch(SERVER, "parcels", "by-page", page)).thenReturn(new Fragment(
+        page, true, List.of(), List.of(new Fragment.Member("http://example.org/parcel/1/v1",
+            "http://example.org/parcel/1", "2026-10-24T10:01:00Z",
+            RdfDocument.turtle("<http://example.org/parcel/1/v1> a <Parcel> .")))));
+
+    assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}/eventstreams/parcels/views/by-page"
+        + "/fragment", SERVER).param("url", page))
+        .hasStatusOk()
+        .bodyJson()
+        .isLenientlyEqualTo("""
+            {"root": false, "immutable": true,
+             "members": [{"id": "http://example.org/parcel/1/v1",
+               "isVersionOf": "http://example.org/parcel/1",
+               "timestamp": "2026-10-24T10:01:00Z",
+               "content": "<http://example.org/parcel/1/v1> a <Parcel> ."}]}
+            """);
+  }
+
+  @Test
+  void refusesToFetchFromAnotherHost() {
+    when(fragmentUseCase.fetch(SERVER, "parcels", "by-page", "http://evil.example.org"))
+        .thenThrow(new IllegalArgumentException("not a fragment of this server"));
+
+    assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}/eventstreams/parcels/views/by-page"
+        + "/fragment", SERVER).param("url", "http://evil.example.org"))
+        .hasStatus(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void reportsTheBackgroundProcesses() {
+    when(backgroundProcessUseCase.processes(SERVER)).thenReturn(List.of(
+        new BackgroundProcess("fragmentation", "pagination", 12, 1, 40, 120, true)));
+
+    assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}/processes", SERVER))
+        .hasStatusOk()
+        .bodyJson()
+        .isLenientlyEqualTo("""
+            [{"job": "fragmentation", "step": "pagination", "completedRuns": 12,
+              "failedRuns": 1, "averageMillis": 40, "longestMillis": 120, "running": true}]
+            """);
+  }
+
+  @Test
+  void servesTheServerCatalogForEditing() {
+    when(dcatUseCase.getServerCatalog(SERVER)).thenReturn(new CatalogDescription(null,
+        RdfDocument.turtle("[] a dcat:Catalog .")));
+
+    assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}/server-catalog", SERVER))
+        .hasStatusOk()
+        .bodyJson()
+        .isLenientlyEqualTo("""
+            {"catalogId": null, "document": "[] a dcat:Catalog ."}
+            """);
+  }
+
+  @Test
+  void savesTheServerCatalog() {
+    when(dcatUseCase.saveServerCatalog(SERVER, RdfDocument.turtle("[] a dcat:Catalog .")))
+        .thenReturn("catalog-1");
+
+    assertThat(mvc.put().uri("/api/v1/ldes-servers/{id}/server-catalog", SERVER)
+        .contentType(TURTLE).content("[] a dcat:Catalog ."))
+        .hasStatusOk()
+        .bodyJson().extractingPath("$.catalogId").isEqualTo("catalog-1");
+  }
 
   @Test
   void listsEventStreams() {

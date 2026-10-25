@@ -23,6 +23,7 @@ import BackgroundProcesses from '@/components/ldes/BackgroundProcesses.vue'
 import CreateEventStreamDialog from '@/components/ldes/CreateEventStreamDialog.vue'
 import IngestPanel from '@/components/ldes/IngestPanel.vue'
 import RdfDocumentEditor from '@/components/ldes/RdfDocumentEditor.vue'
+import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction, useAsync } from '@/composables/useAsync'
 import { type EventStream, paginatedShare, type StreamStatistics } from '@/domain/ldes'
@@ -46,6 +47,7 @@ const streams = useAsync(() => api.listEventStreams(props.id), { watch: [() => p
 const statistics = useAsync(() => api.getStreamStatistics(props.id), { watch: [() => props.id] })
 const processes = useAsync(() => api.getBackgroundProcesses(props.id), { watch: [() => props.id] })
 const catalog = useAsync(() => api.getCatalog(props.id), { watch: [() => props.id] })
+const serverCatalog = useAsync(() => api.getServerCatalog(props.id), { watch: [() => props.id] })
 
 const tab = ref(String(route.query.tab ?? 'streams'))
 watch(tab, (value) => router.replace({ query: { ...route.query, tab: value } }))
@@ -63,9 +65,9 @@ watch(() => streams.data.value, (list) => {
 
 const up = computed(() => health.value?.status === 'UP')
 const runningProcesses = computed(() =>
-  (processes.data.value ?? []).filter((p) => p.status === 'RUNNING').length)
+  (processes.data.value ?? []).filter((p) => p.running).length)
 const failedProcesses = computed(() =>
-  (processes.data.value ?? []).filter((p) => p.status === 'FAILED').length)
+  (processes.data.value ?? []).filter((p) => p.failedRuns > 0).length)
 
 interface StreamRow extends EventStream {
   stats?: StreamStatistics
@@ -132,8 +134,11 @@ function saveShape(document: string) {
   return api.updateShape(props.id, shapeCollection.value!, document)
 }
 
-function saveCatalog(document: string) {
-  return api.updateDcat(props.id, { kind: 'server', catalogId: 'catalog' }, document)
+async function saveCatalog(document: string) {
+  const saved = await api.saveServerCatalog(props.id, document)
+  serverCatalog.data.value = saved
+  catalog.reload()
+  return saved
 }
 </script>
 
@@ -152,6 +157,10 @@ function saveCatalog(document: string) {
         </template>
         <template #subtitle>
           <a :href="server.url" target="_blank" rel="noopener">{{ server.url }}</a>
+          <span v-if="server.internalUrl" v-tooltip.bottom="'Where other local instances, like a local LDIO, reach this server. It publishes its IRIs on this URL.'"
+            class="internal-url" data-cy="internal-url">
+            <i class="pi pi-sitemap" /> {{ server.internalUrl }}
+          </span>
         </template>
         <template #actions>
           <Button icon="pi pi-refresh" severity="secondary" text rounded aria-label="Refresh"
@@ -267,8 +276,8 @@ function saveCatalog(document: string) {
             <BackgroundProcesses v-if="processes.data.value" :processes="processes.data.value" />
             <Skeleton v-else height="200px" border-radius="12px" />
             <p class="muted small note">
-              <i class="pi pi-info-circle" /> Schedules come from <code>ldes-server.fragmentation-cron</code>
-              and <code>ldes-server.maintenance-cron</code> (UTC).
+              <i class="pi pi-info-circle" /> From the batch metrics of the server, since it started. The jobs run on
+              <code>ldes-server.fragmentation-cron</code> and <code>ldes-server.maintenance-cron</code>.
             </p>
           </TabPanel>
 
@@ -287,10 +296,28 @@ function saveCatalog(document: string) {
           </TabPanel>
 
           <TabPanel value="dcat">
-            <RdfDocumentEditor :document="catalog.data.value" title="DCAT catalog"
-              description="The dcat:Catalog of the server, with a dcat:Dataset per event stream and a dcat:DataService per view"
-              :save="saveCatalog"
-              saved-message="DCAT catalog saved" />
+            <div class="dcat">
+              <RdfDocumentEditor :document="serverCatalog.data.value?.document" title="Server catalog"
+                data-cy="server-catalog"
+                :description="serverCatalog.data.value?.catalogId
+                  ? 'The dcat:Catalog describing this server. Keep it a blank node: the server gives it its IRI.'
+                  : 'This server has no catalog yet. Describe it, and save to publish it.'"
+                :save="saveCatalog"
+                saved-message="Server catalog saved" />
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <div class="card-title">Published catalog</div>
+                    <div class="card-subtitle">What the server serves: its catalog, with the datasets and data services of the event streams and views that have DCAT</div>
+                  </div>
+                </div>
+                <CodeEditor v-if="catalog.data.value" :model-value="catalog.data.value" language="turtle" readonly
+                  min-height="320px" max-height="560px" data-cy="published-catalog" />
+                <EmptyState v-else-if="catalog.data.value !== undefined" icon="pi pi-book"
+                  title="Nothing published yet" description="The server publishes DCAT once it has a catalog." />
+                <Skeleton v-else height="320px" />
+              </div>
+            </div>
           </TabPanel>
         </TabPanels>
       </Tabs>
@@ -356,6 +383,27 @@ function saveCatalog(document: string) {
 
 .note {
   margin-top: 16px;
+}
+
+.internal-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.internal-url .pi {
+  font-size: 11px;
+}
+
+.dcat {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
 .shapes {
