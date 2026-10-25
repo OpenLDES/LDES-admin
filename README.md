@@ -3,7 +3,7 @@
 Administration, monitoring and sandboxing for [OpenLDES](https://openldes.org/) servers and Linked
 Data Interaction Orchestrator (LDIO) pipelines.
 
-![The dashboard: health, throughput and recent activity of all LDES servers and LDIOs](docs/screenshots/dashboard.png)
+[![The dashboard: health, throughput and recent activity of all LDES servers and LDIOs](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png)
 
 ## Features
 
@@ -19,7 +19,7 @@ Data Interaction Orchestrator (LDIO) pipelines.
   pagination, retention, compaction, deletion) with their runs, failures and durations, refreshed
   every 2 seconds (or as often as you choose).
 
-| ![Views of an event stream and how far they are paginated](docs/screenshots/event-stream.png) | ![The background processes of an LDES server](docs/screenshots/background-processes.png) |
+| [![Views of an event stream and how far they are paginated](docs/screenshots/event-stream.png)](docs/screenshots/event-stream.png) | [![The background processes of an LDES server](docs/screenshots/background-processes.png)](docs/screenshots/background-processes.png) |
 |:---:|:---:|
 | Views of an event stream, and how far they are paginated | Background processes, with a failed retention run |
 
@@ -34,10 +34,10 @@ Data Interaction Orchestrator (LDIO) pipelines.
 * **Browse** a view page by page: follow its relations and read its members.
 * **Ingest** members directly on an event stream, in Turtle, JSON-LD, N-Quads or N-Triples.
 
-| ![LDES servers, registered and local](docs/screenshots/ldes-servers.png) | ![The event streams of an LDES server](docs/screenshots/ldes-server.png) |
+| [![LDES servers, registered and local](docs/screenshots/ldes-servers.png)](docs/screenshots/ldes-servers.png) | [![The event streams of an LDES server](docs/screenshots/ldes-server.png)](docs/screenshots/ldes-server.png) |
 |:---:|:---:|
 | LDES servers, registered and local | Event streams with their statistics |
-| ![Creating a view: a form and Turtle that stay in step](docs/screenshots/create-view.png) | ![Browsing the pages and members of a view](docs/screenshots/fragment-browser.png) |
+| [![Creating a view: a form and Turtle that stay in step](docs/screenshots/create-view.png)](docs/screenshots/create-view.png) | [![Browsing the pages and members of a view](docs/screenshots/fragment-browser.png)](docs/screenshots/fragment-browser.png) |
 | Creating a view: form and Turtle stay in step | Browsing the pages and members of a view |
 
 ### Manage LDIOs
@@ -47,7 +47,7 @@ Data Interaction Orchestrator (LDIO) pipelines.
   edit and delete them.
 * **Component catalog**: the inputs, adapters, transformers and outputs an LDIO has installed.
 
-![The pipelines of an LDIO](docs/screenshots/ldio.png)
+[![The pipelines of an LDIO](docs/screenshots/ldio.png)](docs/screenshots/ldio.png)
 
 ### Experiment in the sandbox
 
@@ -58,7 +58,7 @@ Data Interaction Orchestrator (LDIO) pipelines.
 * **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
   LDIO in Docker that work together out of the box.
 
-| ![Designing a pipeline in the sandbox](docs/screenshots/sandbox.png) | ![Simulating a pipeline step by step](docs/screenshots/simulation.png) |
+| [![Designing a pipeline in the sandbox](docs/screenshots/sandbox.png)](docs/screenshots/sandbox.png) | [![Simulating a pipeline step by step](docs/screenshots/simulation.png)](docs/screenshots/simulation.png) |
 |:---:|:---:|
 | Designing a pipeline, with a form for every component | Running a member through the pipeline |
 
