@@ -15,8 +15,8 @@ import { objectOf, RDF_TYPE, type RdfGraph, type Resource, setObjects } from '@/
 import DefinitionFields from './DefinitionFields.vue'
 
 /**
- * A fragmentation or retention policy of a definition: its kind, which can be changed, and its
- * properties. Fragmentations come in order, so they can be moved.
+ * A fragmentation or retention policy of a definition: its kind, which can be changed unless it is
+ * fixed, and its properties.
  */
 const props = defineProps<{
   graph: RdfGraph
@@ -26,16 +26,16 @@ const props = defineProps<{
   noun: string
   problems: DefinitionProblem[]
   stream?: StreamContext
-  /** The place in an ordered list; only then can it move */
-  position?: { index: number; count: number }
+  /** Whether there is one and of what kind is decided elsewhere, e.g. by the template of a view */
+  fixed?: boolean
 }>()
-const emit = defineEmits<{ change: [graph: RdfGraph]; remove: []; move: [offset: number] }>()
+const emit = defineEmits<{ change: [graph: RdfGraph]; remove: [] }>()
 
 const kind = computed(() => kindOf(props.graph, props.node, props.kinds))
 const type = computed(() => objectOf(props.graph, props.node, RDF_TYPE)?.value)
 const options = computed(() => props.kinds.map((candidate) => ({ label: candidate.label, value: candidate.type })))
 const order = computed(() => propertyOrder(kind.value?.properties ?? []))
-const scope = computed(() => `${props.noun.replace(/\s/g, '-')}-${props.position?.index ?? props.node.value}`)
+const scope = computed(() => `${props.noun.replace(/\s/g, '-')}-${props.node.value}`)
 
 function changeType(value: string) {
   const to = props.kinds.find((candidate) => candidate.type === value)
@@ -46,9 +46,9 @@ function changeType(value: string) {
 <template>
   <article class="resource-card" :data-cy="`${noun.replace(/\s/g, '-')}-card`">
     <header class="head">
-      <span v-if="position" class="index" :aria-label="`Level ${position.index + 1}`">{{ position.index + 1 }}</span>
-      <i v-else :class="kind?.icon ?? 'pi pi-question-circle'" class="icon" />
-      <Select :model-value="kind?.type" :options="options" option-label="label" option-value="value" size="small"
+      <i :class="kind?.icon ?? 'pi pi-question-circle'" class="icon" />
+      <span v-if="fixed" class="kind-label" data-cy="resource-kind">{{ kind?.label ?? `Unknown ${noun}` }}</span>
+      <Select v-else :model-value="kind?.type" :options="options" option-label="label" option-value="value" size="small"
         :placeholder="type ? `Unknown: ${predicateKey(graph, type)}` : `Choose the kind of ${noun}`"
         :aria-label="`Kind of ${noun}`" class="kind" data-cy="resource-kind"
         @update:model-value="changeType" />
@@ -56,14 +56,7 @@ function changeType(value: string) {
       <span class="spacer" />
       <a v-if="kind" :href="kind.docs" target="_blank" rel="noopener" class="docs" v-tooltip.top="'Documentation'"
         :aria-label="`Documentation of ${kind.label.toLowerCase()} ${noun}`"><i class="pi pi-external-link" /></a>
-      <template v-if="position">
-        <Button icon="pi pi-arrow-up" text rounded size="small" severity="secondary" :disabled="position.index === 0"
-          aria-label="Move up" v-tooltip.top="'Move up'" @click="emit('move', -1)" />
-        <Button icon="pi pi-arrow-down" text rounded size="small" severity="secondary"
-          :disabled="position.index === position.count - 1" aria-label="Move down" v-tooltip.top="'Move down'"
-          @click="emit('move', 1)" />
-      </template>
-      <Button icon="pi pi-trash" text rounded size="small" severity="secondary" :aria-label="`Remove ${noun}`"
+      <Button v-if="!fixed" icon="pi pi-trash" text rounded size="small" severity="secondary" :aria-label="`Remove ${noun}`"
         v-tooltip.top="'Remove'" data-cy="remove-resource" @click="emit('remove')" />
     </header>
     <p v-if="kind" class="muted small description">{{ kind.description }}</p>
@@ -92,25 +85,16 @@ function changeType(value: string) {
   min-width: 0;
 }
 
-.index {
-  width: 22px;
-  height: 22px;
-  flex: none;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--p-primary-color);
-  background: color-mix(in srgb, var(--p-primary-500) 14%, transparent);
-}
-
 .icon {
   color: var(--p-primary-color);
 }
 
 .kind {
   min-width: 150px;
+}
+
+.kind-label {
+  font-weight: 600;
 }
 
 .type {

@@ -19,12 +19,9 @@ import {
 import { hasErrors, kindOf } from '@/ldes/definition'
 import { setObjects } from '@/ldes/turtle'
 import {
-  addFragmentation,
   addViewRetentionPolicy,
   descriptionOf,
   fragmentationsOf,
-  moveFragmentation,
-  removeFragmentation,
   removeViewRetentionPolicy,
   renameView,
   viewNameOf,
@@ -136,23 +133,20 @@ async function submit() {
             @change="(property, value) => change(writeDescriptionValue(graph, property, value))"
             @remove="(predicate) => change(setObjects(graph, description!, predicate, []))" />
 
-          <section class="section" data-cy="fragmentations">
+          <section class="section" data-cy="fragmentation">
             <div class="section-head">
-              <span class="section-title">Fragmentations</span>
-              <span class="muted small">The first one makes the top-level buckets, each next one divides those
-                further. Every bucket is paginated; without fragmentations, the view is just pages.</span>
+              <span class="section-title">Fragmentation</span>
+              <span class="muted small">Divides the members into buckets, each of them paginated. The template
+                you start from decides which one, if any.</span>
             </div>
             <template v-if="fragmentations">
-              <ResourceCard v-for="(fragmentation, index) in fragmentations" :key="fragmentation.value" :graph="graph"
+              <ResourceCard v-for="fragmentation in fragmentations" :key="fragmentation.value" :graph="graph"
                 :node="fragmentation" :kinds="fragmentationKinds" noun="fragmentation" :problems="problems"
-                :stream="context" :position="{ index, count: fragmentations.length }"
-                @change="change" @move="change(moveFragmentation(graph, index, $event))"
-                @remove="change(removeFragmentation(graph, index))" />
-              <div class="add-row">
-                <Button v-for="kind in fragmentationKinds" :key="kind.type" :label="`Add ${kind.label.toLowerCase()}`"
-                  icon="pi pi-plus" text size="small" :data-cy="`add-fragmentation-${kind.label.toLowerCase()}`"
-                  @click="change(addFragmentation(graph, kind, context))" />
-              </div>
+                :stream="context" fixed @change="change" />
+              <p v-if="!fragmentations.length" class="muted small none" data-cy="no-fragmentation">
+                None: the members are only paginated. Start from Time-based, Geospatial or Reference to divide
+                them into buckets.
+              </p>
             </template>
           </section>
 
@@ -306,6 +300,10 @@ async function submit() {
 .section-title {
   font-size: 13.5px;
   font-weight: 600;
+}
+
+.none {
+  margin: 0;
 }
 
 .add-row {

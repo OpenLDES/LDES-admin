@@ -88,7 +88,8 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   retention policy kinds), `ldes/definition.ts` (read/write/validate a resource's properties),
   `ldes/eventStream.ts` and `ldes/view.ts` (templates, presets, validation as the server does it).
   `composables/useTurtleDraft.ts` keeps graph and Turtle in step; `ConfigField.vue` is shared with
-  the sandbox. Errors block creating.
+  the sandbox. Errors block creating. The view template decides the fragmentation (none for
+  Pagination and Recent members); the form edits its properties but cannot add, remove or swap it.
 * Patterns: `useAsync`/`useAction` composables; `data-cy` attributes for Cypress;
   `cy.dialogOpened(dataCy)` before typing in a PrimeVue dialog; Cypress pins demo mode in
   `cypress/support/e2e.ts`; e2e for production mode stubs the backend with `cy.intercept`.
@@ -152,9 +153,11 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
     Statements about subjects nothing refers to are rejected (closed shape). An invalid event
     source retention policy (unknown type, untyped duration) answers 400/500 *but the stream is
     created anyway*. `ldes:kafkaSource` without the Kafka module: 500.
-  * View: `tree:fragmentationStrategy` required, also when empty (`()`); unknown fragmentation
-    types are accepted silently; at most one retention policy per type (`ldes:DurationAgoPolicy`,
-    `ldes:LatestVersionSubset`); page size 0 is accepted; unknown predicates are ignored.
+  * View: one fragmentation at most (the definition holds a list, and the admin API still answers
+    201 to several); `tree:fragmentationStrategy` required, also when empty (`()`); unknown
+    fragmentation types are accepted silently; at most one retention policy per type
+    (`ldes:DurationAgoPolicy`, `ldes:LatestVersionSubset`); page size 0 is accepted; unknown
+    predicates are ignored.
   * SHACL checks datatypes exactly: `tree:maxZoom` and `ldes:amount` `xsd:integer` (not `xsd:int`),
     `tree:value` `xsd:duration` (no weeks: `P1W` is rejected), `tree:maxGranularity` and
     `tree:fragmentationKey` `xsd:string`. `maxGranularity` ∈ year…second, `maxZoom` 0–23, `amount` ≥ 1.

@@ -159,28 +159,6 @@ goes down or comes back, and samples the members every healthy LDES server inges
 kept 48 hours. On startup it removes the local instances whose container stopped with a previous
 run of LDES-admin.
 
-### Event streams and views
-
-Creating an event stream or a view shows its definition as a form and as Turtle, next to each
-other; both edit the same RDF graph. A change in the form writes the Turtle anew, a change in the
-Turtle is parsed (N3.js) into the graph once typing pauses. The Turtle that is shown is what gets
-sent, so hand-written comments survive until the form is used again.
-
-`ldes/catalog.ts` describes what can be configured, after the documentation of the LDES server
-and the SHACL shapes of its admin API: the predicates of an event stream (paths, version creation,
-skolemisation, retention of the event source, a Kafka source) and of a view description (page
-size, fragmentations in order, retention policies), and the kinds of fragmentation (time-based,
-geospatial, reference) and retention policy (time-based, version-based) with their properties.
-Each property has its predicate, its datatype (or holds an IRI), whether the server only accepts
-that datatype, and what the form needs: the input (text, IRI, number, ISO duration, a choice such
-as the granularities year…second), required, default, limits. `ldes/turtle.ts` reads and changes
-the graph and writes it like hand-written Turtle: blank nodes used once are nested, lists written
-as `( … )`, prefixed names where a prefix fits (a well-known prefix is declared when the form uses
-it). `ldes/definition.ts`, `ldes/eventStream.ts` and `ldes/view.ts` read, write and validate
-the definition the way the server does: required predicates, datatypes, ranges, names the server
-keeps, one retention policy per kind, known fragmentation and retention policy types, and
-predicates the server ignores. Problems show at their fields; errors block creating.
-
 ### Sandbox
 
 `SandboxService` starts the missing sandbox instances side by side (virtual threads), through the
@@ -302,7 +280,7 @@ sent, so hand-written comments survive until the form is used again.
 `ldes/catalog.ts` describes what can be configured, after the documentation of the LDES server
 and the SHACL shapes of its admin API: the predicates of an event stream (paths, version creation,
 skolemisation, retention of the event source, a Kafka source) and of a view description (page
-size, fragmentations in order, retention policies), and the kinds of fragmentation (time-based,
+size, at most one fragmentation, retention policies), and the kinds of fragmentation (time-based,
 geospatial, reference) and retention policy (time-based, version-based) with their properties.
 Each property has its predicate, its datatype (or holds an IRI), whether the server only accepts
 that datatype, and what the form needs: the input (text, IRI, number, ISO duration, a choice such
@@ -311,8 +289,14 @@ the graph and writes it like hand-written Turtle: blank nodes used once are nest
 as `( … )`, prefixed names where a prefix fits (a well-known prefix is declared when the form uses
 it). `ldes/definition.ts`, `ldes/eventStream.ts` and `ldes/view.ts` read, write and validate
 the definition the way the server does: required predicates, datatypes, ranges, names the server
-keeps, one retention policy per kind, known fragmentation and retention policy types, and
-predicates the server ignores. Problems show at their fields; errors block creating.
+keeps, one fragmentation per view, one retention policy per kind, known fragmentation and
+retention policy types, and predicates the server ignores. Problems show at their fields; errors
+block creating.
+
+A view starts from a template (pagination, time-based, geospatial, reference, recent members),
+which decides its fragmentation: none for pagination and recent members, else one of its kind.
+The form edits the properties of that fragmentation, but does not add, remove or swap it; another
+fragmentation means another template.
 
 ### Sandbox
 

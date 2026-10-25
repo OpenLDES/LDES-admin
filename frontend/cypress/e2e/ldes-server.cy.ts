@@ -59,17 +59,27 @@ describe('an LDES server', () => {
     cy.contains('[data-cy=view-card]', 'by-week').should('contain', 'Hierarchical Time Based')
   })
 
-  it('orders the fragmentations of a view', () => {
+  it('gives a view the fragmentation of its template, and none to a paginated or recent members view', () => {
     cy.contains('[data-cy=streams-table] tbody tr', 'sandbox-parcels').click()
     cy.get('[data-cy=new-view]').click()
     cy.dialogOpened('create-view-dialog')
     cy.get('[data-cy=create-view-dialog]').within(() => {
-      cy.get('[data-cy=preset-reference]').click()
-      cy.get('[data-cy=add-fragmentation-time-based]').click()
-      cy.get('[data-cy=fragmentation-card]').should('have.length', 2).last().find('[aria-label="Move up"]').click()
-      cy.get('[data-cy=fragmentation-card]').first().should('contain', 'Time-based')
-      cy.get('[data-cy=definition] .cm-content').invoke('text')
-        .should('match', /HierarchicalTimeBasedFragmentation.*ReferenceFragmentation/)
+      // Pagination is where the dialog starts
+      cy.get('[data-cy=preset-pagination]').should('have.class', 'selected')
+      cy.get('[data-cy=no-fragmentation]').should('contain', 'only paginated')
+      cy.get('[data-cy^=add-fragmentation]').should('not.exist')
+
+      cy.get('[data-cy=preset-retention]').click()
+      cy.get('[data-cy=no-fragmentation]').should('exist')
+      cy.get('[data-cy=fragmentation-card]').should('not.exist')
+      cy.get('[data-cy^=add-fragmentation]').should('not.exist')
+
+      cy.get('[data-cy=preset-geo]').click()
+      cy.get('[data-cy=fragmentation-card]').should('have.length', 1).within(() => {
+        cy.get('[data-cy=resource-kind]').should('have.text', 'Geospatial')
+        cy.get('[data-cy=remove-resource]').should('not.exist')
+      })
+      cy.get('[data-cy=definition] .cm-content').should('contain', 'a tree:GeospatialFragmentation')
     })
   })
 

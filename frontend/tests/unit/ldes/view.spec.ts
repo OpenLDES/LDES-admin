@@ -2,12 +2,9 @@ import { fragmentationKinds, retentionPolicyKinds, viewDescriptionProperties } f
 import { changeKind, type DefinitionProblem, kindOf, readValue, writeValue } from '@/ldes/definition'
 import { parseTurtle, type RdfGraph, writeTurtle } from '@/ldes/turtle'
 import {
-  addFragmentation,
   addViewRetentionPolicy,
   descriptionOf,
   fragmentationsOf,
-  moveFragmentation,
-  removeFragmentation,
   removeViewRetentionPolicy,
   renameView,
   viewNameOf,
@@ -73,18 +70,27 @@ describe('view definitions', () => {
       .toEqual(['tree:maxZoom: Enter a number from 0 to 23'])
   })
 
-  it('keeps fragmentations in order, to move and remove', () => {
-    let graph = addFragmentation(preset('time'), reference, STREAM)
-    graph = addFragmentation(graph, geospatial, STREAM)
-    const kinds = () => fragmentationsOf(graph)!.map((node) => kindOf(graph, node, fragmentationKinds)?.label)
-    expect(kinds()).toEqual(['Time-based', 'Reference', 'Geospatial'])
+  it('gives a view the fragmentation of its template, and none to a paginated or recent members view', () => {
+    const fragmentationOf = (id: string) => {
+      const graph = preset(id)
+      return fragmentationsOf(graph)!.map((node) => kindOf(graph, node, fragmentationKinds))
+    }
 
-    graph = moveFragmentation(graph, 2, -1)
-    expect(kinds()).toEqual(['Time-based', 'Geospatial', 'Reference'])
+    expect(fragmentationOf('pagination')).toEqual([])
+    expect(fragmentationOf('retention')).toEqual([])
+    expect(fragmentationOf('time')).toEqual([timeBased])
+    expect(fragmentationOf('geo')).toEqual([geospatial])
+    expect(fragmentationOf('reference')).toEqual([reference])
+  })
 
-    graph = removeFragmentation(graph, 0)
-    expect(kinds()).toEqual(['Geospatial', 'Reference'])
-    expect(writeTurtle(graph)).not.toContain('maxGranularity')
+  it('allows one fragmentation per view', () => {
+    const graph = parsed(`server:by-time tree:viewDescription [ tree:fragmentationStrategy (
+      [ a tree:ReferenceFragmentation ] [ a tree:ReferenceFragmentation ] ) ] .`)
+    const [first, second] = fragmentationsOf(graph)!
+
+    expect(viewProblems(graph).filter((problem) => first.equals(problem.node!))).toEqual([])
+    expect(viewProblems(graph).filter((problem) => second.equals(problem.node!)).map((problem) => problem.message))
+      .toEqual(['A view has one fragmentation at most: remove this one from the definition'])
   })
 
   it('keeps the path when a fragmentation becomes another kind', () => {
@@ -147,17 +153,17 @@ describe('view definitions', () => {
 
   it('reports what the server refuses or ignores', () => {
     const graph = parsed(`server:odd tree:viewDescription [ tree:pageSize 10 ; tree:pageSise 20 ] .
-      server:pages tree:viewDescription [ tree:fragmentationStrategy ( [ a tree:PaginationFragmentation ]
-        [ a tree:FooFragmentation ] ) ] .`)
+      server:pages tree:viewDescription [ tree:fragmentationStrategy () ] .`)
+    const fragmentedBy = (type: string) => messages(viewProblems(parsed(
+      `server:pages tree:viewDescription [ tree:fragmentationStrategy ( [ a tree:${type} ] ) ] .`)))
 
     expect(messages(viewProblems(graph))).toEqual([
       ': Define one view at a time',
       'tree:pageSise: Not a property of a view description; the server ignores it',
       'tree:fragmentationStrategy: Required, even without fragmentations: tree:fragmentationStrategy ()',
     ])
-    expect(messages(viewProblems(parsed(`server:pages tree:viewDescription [ tree:fragmentationStrategy (
-      [ a tree:PaginationFragmentation ] [ a tree:FooFragmentation ] ) ] .`)))).toEqual([
-      ': Leave pagination out: the server paginates every view',
+    expect(fragmentedBy('PaginationFragmentation')).toEqual([': Leave pagination out: the server paginates every view'])
+    expect(fragmentedBy('FooFragmentation')).toEqual([
       ': Not a fragmentation the server knows: use tree:HierarchicalTimeBasedFragmentation, tree:GeospatialFragmentation, tree:ReferenceFragmentation',
     ])
   })

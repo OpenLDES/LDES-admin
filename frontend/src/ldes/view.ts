@@ -13,7 +13,6 @@ import {
   viewDescriptionProperties,
 } from './catalog'
 import {
-  changeKind,
   createResource,
   type DefinitionProblem,
   kindOf,
@@ -41,7 +40,7 @@ import {
 
 /**
  * The definition of a view, as the admin API of an LDES server takes it, and what the form changes
- * in it: the name, the page size, the fragmentations in order and the retention policies.
+ * in it: the name, the page size, the fragmentation and the retention policies.
  */
 const { ldes, tree } = PREFIXES
 const { namedNode } = DataFactory
@@ -50,6 +49,7 @@ const VIEW_DESCRIPTION = `${tree}viewDescription`
 const FRAGMENTATION_STRATEGY = `${tree}fragmentationStrategy`
 const RETENTION_POLICY = `${ldes}retentionPolicy`
 
+/** A kind of view to start from; it decides the fragmentation, if any: the form cannot add one */
 export interface ViewPreset {
   id: string
   title: string
@@ -108,7 +108,7 @@ server:${preset.name} tree:viewDescription [
 `)
   if (!parsed.ok) throw new Error(parsed.error)
   let graph = parsed.graph
-  if (preset.fragmentation) graph = addFragmentation(graph, preset.fragmentation, stream)
+  if (preset.fragmentation) graph = setFragmentation(graph, preset.fragmentation, stream)
   if (preset.retentionPolicy) graph = addViewRetentionPolicy(graph, preset.retentionPolicy)
   return graph
 }
@@ -143,9 +143,12 @@ export function writeDescriptionValue(graph: RdfGraph, property: RdfProperty, va
   return description ? writeValue(graph, description, property, value, VIEW_DESCRIPTION_ORDER) : graph
 }
 
-// Fragmentations ------------------------------------------------------------------------------
+// Fragmentation -------------------------------------------------------------------------------
 
-/** The fragmentations in order; undefined when they are not a list */
+/**
+ * The fragmentations of the view; undefined when they are not a list. The definition holds a list,
+ * but a view has one fragmentation at most.
+ */
 export function fragmentationsOf(graph: RdfGraph): Resource[] | undefined {
   const description = descriptionOf(graph)
   if (!description) return undefined
@@ -155,34 +158,12 @@ export function fragmentationsOf(graph: RdfGraph): Resource[] | undefined {
   return items?.every(isResource) ? items : undefined
 }
 
-function setFragmentations(graph: RdfGraph, fragmentations: Resource[]): RdfGraph {
+/** Gives a new view the fragmentation of its template */
+function setFragmentation(graph: RdfGraph, kind: ResourceKind, stream: StreamContext): RdfGraph {
   const description = descriptionOf(graph)
-  return description
-    ? setList(graph, description, FRAGMENTATION_STRATEGY, fragmentations, VIEW_DESCRIPTION_ORDER)
-    : graph
-}
-
-export function addFragmentation(graph: RdfGraph, kind: ResourceKind, stream: StreamContext): RdfGraph {
+  if (!description) return graph
   const created = createResource(graph, kind, stream)
-  return setFragmentations(created.graph, [...(fragmentationsOf(graph) ?? []), created.node])
-}
-
-/** Moves a fragmentation up (-1) or down (1) */
-export function moveFragmentation(graph: RdfGraph, index: number, offset: number): RdfGraph {
-  const fragmentations = [...(fragmentationsOf(graph) ?? [])]
-  const target = index + offset
-  if (target < 0 || target >= fragmentations.length) return graph
-  ;[fragmentations[index], fragmentations[target]] = [fragmentations[target], fragmentations[index]]
-  return setFragmentations(graph, fragmentations)
-}
-
-export function removeFragmentation(graph: RdfGraph, index: number): RdfGraph {
-  return setFragmentations(graph, (fragmentationsOf(graph) ?? []).filter((_, i) => i !== index))
-}
-
-export function changeFragmentationKind(graph: RdfGraph, node: Resource, kind: ResourceKind,
-  stream: StreamContext): RdfGraph {
-  return changeKind(graph, node, kindOf(graph, node, fragmentationKinds), kind, stream)
+  return setList(created.graph, description, FRAGMENTATION_STRATEGY, [created.node], VIEW_DESCRIPTION_ORDER)
 }
 
 // Retention policies --------------------------------------------------------------------------
@@ -235,10 +216,11 @@ export function viewProblems(graph: RdfGraph): DefinitionProblem[] {
   const fragmentations = fragmentationsOf(graph)
   if (strategies.length === 0) strategy('Required, even without fragmentations: tree:fragmentationStrategy ()')
   else if (!fragmentations) strategy('Must be one list of fragmentations: ( [ … ] [ … ] )')
-  for (const fragmentation of fragmentations ?? []) {
+  for (const [index, fragmentation] of (fragmentations ?? []).entries()) {
     const types = objectsOf(graph, fragmentation, RDF_TYPE)
     const kind = kindOf(graph, fragmentation, fragmentationKinds)
     const problem = (message: string) => problems.push({ node: fragmentation, severity: 'error', message })
+    if (index > 0) problem('A view has one fragmentation at most: remove this one from the definition')
     if (types.length !== 1) problem('A fragmentation has exactly one type')
     else if (types[0].value === `${tree}PaginationFragmentation`) problem('Leave pagination out: the server paginates every view')
     else if (!kind) {

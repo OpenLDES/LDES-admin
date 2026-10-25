@@ -1,11 +1,11 @@
 import { mount } from '@vue/test-utils'
 import DefinitionFields from '@/components/ldes/DefinitionFields.vue'
 import ResourceCard from '@/components/ldes/ResourceCard.vue'
-import { eventStreamProperties, fragmentationKinds } from '@/ldes/catalog'
+import { eventStreamProperties, fragmentationKinds, retentionPolicyKinds } from '@/ldes/catalog'
 import { kindOf, readValue } from '@/ldes/definition'
 import { eventStreamProblems, eventStreamTemplate, streamOf, writeStreamValue } from '@/ldes/eventStream'
 import { parseTurtle, type RdfGraph, type Resource, writeTurtle } from '@/ldes/turtle'
-import { fragmentationsOf, viewPresets, viewProblems, viewTemplate } from '@/ldes/view'
+import { fragmentationsOf, viewPresets, viewProblems, viewRetentionPolicies, viewTemplate } from '@/ldes/view'
 import { withPrimeVue } from './primevue'
 
 const STREAM = { timestampPath: 'http://purl.org/dc/terms/created' }
@@ -21,7 +21,7 @@ function card(graph: RdfGraph) {
       noun: 'fragmentation',
       problems: viewProblems(graph),
       stream: STREAM,
-      position: { index: 0, count: 1 },
+      fixed: true,
     },
   })
   return { wrapper, fragmentation }
@@ -57,15 +57,29 @@ describe('definition forms', () => {
       .toContain('Choose one of year, month, day, hour, minute, second')
   })
 
-  it('turns the fragmentation into another kind', () => {
-    const { wrapper, fragmentation } = card(timeBased())
+  it('shows the fragmentation of the template, without another kind to choose or a way to remove it', () => {
+    const { wrapper } = card(timeBased())
+
+    expect(wrapper.find('[data-cy=resource-kind]').text()).toBe('Time-based')
+    expect(wrapper.find('[data-cy=resource-kind]').findComponent({ name: 'Select' }).exists()).toBe(false)
+    expect(wrapper.find('[data-cy=remove-resource]').exists()).toBe(false)
+  })
+
+  it('turns a retention policy into another kind', () => {
+    const graph = viewTemplate(viewPresets.find((preset) => preset.id === 'retention')!, 'http://localhost:8080/parcels', STREAM)
+    const [policy] = viewRetentionPolicies(graph)
+    const wrapper = mount(ResourceCard, {
+      ...withPrimeVue,
+      props: { graph, node: policy, kinds: retentionPolicyKinds, noun: 'retention policy', problems: [] },
+    })
 
     wrapper.find('[data-cy=resource-kind]').findComponent({ name: 'Select' }).vm
-      .$emit('update:modelValue', 'https://w3id.org/tree#GeospatialFragmentation')
+      .$emit('update:modelValue', 'https://w3id.org/ldes#LatestVersionSubset')
 
-    const graph = changed(wrapper)
-    expect(kindOf(graph, fragmentation, fragmentationKinds)?.label).toBe('Geospatial')
-    expect(writeTurtle(graph)).toContain('tree:maxZoom 15')
+    const turned = wrapper.emitted('change')!.at(-1)![0] as RdfGraph
+    expect(kindOf(turned, policy, retentionPolicyKinds)?.label).toBe('Version-based')
+    expect(writeTurtle(turned)).toContain('ldes:amount 1')
+    expect(writeTurtle(turned)).not.toContain('tree:value')
   })
 
   it('lists predicates that are no property, to remove them', async () => {
