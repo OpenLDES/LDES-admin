@@ -5,24 +5,72 @@ describe('an LDES server', () => {
     cy.visit(SANDBOX_SERVER, { onBeforeLoad: (win) => win.localStorage.setItem('ldes-admin.dark', 'false') })
   })
 
-  it('creates an event stream and a view on it', () => {
+  it('creates an event stream and a view on it, configured in forms that stay in step with the Turtle', () => {
     cy.get('[data-cy=new-stream]').click()
     cy.dialogOpened('create-stream-dialog')
     cy.get('[data-cy=create-stream-dialog]').within(() => {
+      const turtle = () => cy.get('[data-cy=definition] .cm-content')
       cy.get('[data-cy=stream-collection]').clear().type('trees')
-      cy.get('.cm-content').should('contain', 'server:trees a ldes:EventStream')
-      cy.get('[data-cy=create-stream-submit]').click()
+      turtle().should('contain', 'server:trees a ldes:EventStream')
+
+      // A choice of the usual timestamp paths; the prefix gets declared
+      cy.get('[data-cy="config-ldes:timestampPath"] .p-select-dropdown').click()
+    })
+    cy.contains('.p-select-option', 'Generated at').click()
+    cy.get('[data-cy=create-stream-dialog]').within(() => {
+      const turtle = () => cy.get('[data-cy=definition] .cm-content')
+      turtle().should('contain', 'ldes:timestampPath prov:generatedAtTime').and('contain', '@prefix prov:')
+
+      // A retention policy, validated as the server would
+      cy.get('[data-cy=add-retention-version-based]').click()
+      turtle().should('contain', 'a ldes:LatestVersionSubset')
+      cy.get('[data-cy="config-ldes:amount"] input').clear().type('0')
+      cy.get('[data-cy="config-ldes:amount"]').should('contain', 'Enter 1 or more')
+      cy.get('[data-cy=create-stream-submit]').should('be.disabled')
+      cy.get('[data-cy="config-ldes:amount"] input').clear().type('3')
+      turtle().should('contain', 'ldes:amount 3')
+      cy.get('[data-cy=create-stream-submit]').should('be.enabled').click()
     })
     cy.contains('[data-cy=streams-table] tbody tr', 'trees').click()
 
     cy.get('[data-cy=new-view]').click()
     cy.dialogOpened('create-view-dialog')
     cy.get('[data-cy=create-view-dialog]').within(() => {
-      cy.contains('button', 'Time-based').click()
-      cy.get('.cm-content').should('contain', 'HierarchicalTimeBasedFragmentation')
-      cy.get('[data-cy=create-view-submit]').click()
+      const turtle = () => cy.get('[data-cy=definition] .cm-content')
+      cy.get('[data-cy=preset-time]').click()
+      turtle().should('contain', 'HierarchicalTimeBasedFragmentation').and('contain', 'tree:fragmentationPath prov:generatedAtTime')
+
+      // The Turtle drives the form, which shows what the server would refuse
+      turtle().type('{selectall}{backspace}@prefix tree: <https://w3id.org/tree#> . @prefix server: <http://localhost/trees/> . '
+        + 'server:by-week tree:viewDescription [ tree:fragmentationStrategy ( [ a tree:HierarchicalTimeBasedFragmentation ; '
+        + 'tree:maxGranularity "week" ; tree:fragmentationPath <http://purl.org/dc/terms/created> ] ) ] .', { delay: 0 })
+      cy.get('[data-cy=view-name]').should('have.value', 'by-week')
+      cy.get('[data-cy="config-tree:maxGranularity"]').should('contain', 'Choose one of year, month, day, hour, minute, second')
+      cy.get('[data-cy=create-view-submit]').should('be.disabled')
+
+      // ... and a dropdown offers the granularities there are
+      cy.get('[data-cy="config-tree:maxGranularity"] .p-select').click()
     })
-    cy.contains('[data-cy=view-card]', 'by-time').should('contain', 'Hierarchical Time Based')
+    cy.contains('.p-select-option', 'hour').click()
+    cy.get('[data-cy=create-view-dialog]').within(() => {
+      cy.get('[data-cy=definition] .cm-content').should('contain', 'tree:maxGranularity "hour"')
+      cy.get('[data-cy=create-view-submit]').should('be.enabled').click()
+    })
+    cy.contains('[data-cy=view-card]', 'by-week').should('contain', 'Hierarchical Time Based')
+  })
+
+  it('orders the fragmentations of a view', () => {
+    cy.contains('[data-cy=streams-table] tbody tr', 'sandbox-parcels').click()
+    cy.get('[data-cy=new-view]').click()
+    cy.dialogOpened('create-view-dialog')
+    cy.get('[data-cy=create-view-dialog]').within(() => {
+      cy.get('[data-cy=preset-reference]').click()
+      cy.get('[data-cy=add-fragmentation-time-based]').click()
+      cy.get('[data-cy=fragmentation-card]').should('have.length', 2).last().find('[aria-label="Move up"]').click()
+      cy.get('[data-cy=fragmentation-card]').first().should('contain', 'Time-based')
+      cy.get('[data-cy=definition] .cm-content').invoke('text')
+        .should('match', /HierarchicalTimeBasedFragmentation.*ReferenceFragmentation/)
+    })
   })
 
   it('ingests a member', () => {

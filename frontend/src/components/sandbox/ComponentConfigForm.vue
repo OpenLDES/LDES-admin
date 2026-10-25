@@ -12,7 +12,7 @@ import {
   unknownKeys,
   writeProperty,
 } from '@/pipeline/config'
-import ConfigField from './ConfigField.vue'
+import ConfigField from '@/components/common/ConfigField.vue'
 
 /**
  * The configuration of a pipeline component as a form: a field per property that applies, with

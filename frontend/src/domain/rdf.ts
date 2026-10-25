@@ -2,6 +2,7 @@
  * Prefixes of the vocabularies that show up in LDES definitions and members.
  */
 export const PREFIXES: Record<string, string> = {
+  rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
   ldes: 'https://w3id.org/ldes#',
   tree: 'https://w3id.org/tree#',
   dcterms: 'http://purl.org/dc/terms/',

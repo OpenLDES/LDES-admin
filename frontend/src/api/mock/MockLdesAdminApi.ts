@@ -38,7 +38,11 @@ import {
 } from '@/domain/sandbox'
 import { componentsOfKind } from '@/pipeline/catalog'
 import { PIPELINE_NAME } from '@/pipeline/graph'
-import { expand, PREFIXES, prefixLines as prefixLinesFor } from '@/domain/rdf'
+import { PREFIXES, prefixLines as prefixLinesFor } from '@/domain/rdf'
+import { localName } from '@/ldes/definition'
+import { streamOf } from '@/ldes/eventStream'
+import { objectOf, parseTurtle, predicatesOf, RDF_TYPE, type RdfGraph, type Resource } from '@/ldes/turtle'
+import { descriptionOf, fragmentationsOf, viewOf, viewRetentionPolicies } from '@/ldes/view'
 import { ApiError, type LdesAdminApi } from '../LdesAdminApi'
 import {
   combinedCatalog,
@@ -229,23 +233,20 @@ export class MockLdesAdminApi implements LdesAdminApi {
       const server = this.reachable('LDES_SERVER', serverId, 'create event stream')
       const reject = (reason: string) =>
         new ApiError(400, `LDES server '${server.name}' could not create event stream: 400 BAD_REQUEST - ${reason}`)
-      validateRdf(definition, 'text/turtle', reject)
-      const subject = definition.match(/(<[^>]*>|[\w-]*:[\w-]+)\s+a\s+ldes:EventStream/)
+      const graph = parseDefinition(definition, reject)
+      const subject = streamOf(graph)
       if (!subject) throw reject('No ldes:EventStream found in the definition')
-      const collection = lastSegment(subject[1])
+      const collection = localName(subject.value)
       const streams = this.state.eventStreams[serverId] ?? []
       if (streams.some((stream) => stream.collection === collection)) {
         throw reject(`Collection ${collection} already exists`)
       }
-      const path = (property: string) => {
-        const value = definition.match(new RegExp(`ldes:${property}\\s+(\\S+?)\\s*[;.]`))?.[1]
-        return value ? expandTerm(value) : undefined
-      }
+      const value = (property: string) => objectOf(graph, subject, PREFIXES.ldes + property)?.value
       const stream: EventStream = {
         collection,
-        timestampPath: path('timestampPath'),
-        versionOfPath: path('versionOfPath'),
-        createVersions: /ldes:createVersions\s+true/.test(definition),
+        timestampPath: value('timestampPath'),
+        versionOfPath: value('versionOfPath'),
+        createVersions: value('createVersions') === 'true',
         views: [],
         definition,
       }
@@ -285,10 +286,11 @@ export class MockLdesAdminApi implements LdesAdminApi {
       const stream = this.stream(serverId, collection, `create view on ${collection}`)
       const reject = (reason: string) =>
         new ApiError(400, `LDES server '${server.name}' could not create view on ${collection}: 400 BAD_REQUEST - ${reason}`)
-      validateRdf(definition, 'text/turtle', reject)
-      const subject = definition.match(/(<[^>]*>|[\w-]*:[\w-]+)\s+(?:a\s+tree:Node\s*;\s*)?tree:viewDescription/)
-      if (!subject) throw reject('No tree:viewDescription found in the definition')
-      const name = lastSegment(subject[1])
+      const graph = parseDefinition(definition, reject)
+      const subject = viewOf(graph)
+      const description = descriptionOf(graph)
+      if (!subject || !description) throw reject('No tree:viewDescription found in the definition')
+      const name = localName(subject.value)
       const key = `${serverId}/${collection}`
       if ((this.state.views[key] ?? []).some((view) => view.name === name)) {
         throw reject(`View ${name} already exists`)
@@ -296,11 +298,9 @@ export class MockLdesAdminApi implements LdesAdminApi {
       const view: View = {
         collection,
         name,
-        pageSize: Number(definition.match(/tree:pageSize\s+"?(\d+)/)?.[1] ?? 100),
-        fragmentations: [...definition.matchAll(/a\s+tree:(\w+Fragmentation)/g)]
-          .map((match) => ({ type: match[1], properties: propertiesNear(definition, match.index!) })),
-        retentionPolicies: [...definition.matchAll(/a\s+ldes:(\w+(?:Policy|Subset))/g)]
-          .map((match) => ({ type: match[1], properties: propertiesNear(definition, match.index!) })),
+        pageSize: Number(objectOf(graph, description, `${PREFIXES.tree}pageSize`)?.value ?? 100),
+        fragmentations: (fragmentationsOf(graph) ?? []).map((node) => typedConfig(graph, node)),
+        retentionPolicies: viewRetentionPolicies(graph).map((node) => typedConfig(graph, node)),
         definition,
       }
       this.state.views[key] = [...(this.state.views[key] ?? []), view]
@@ -911,22 +911,21 @@ function validateRdf(content: string, format: RdfFormat, reject: (reason: string
   }
 }
 
-/** The quoted values of the properties right after a type statement, e.g. maxZoom "15" */
-function propertiesNear(definition: string, index: number): Record<string, string> {
-  const block = definition.slice(index, definition.indexOf(']', index))
-  return Object.fromEntries([...block.matchAll(/(?:tree|ldes):(\w+)\s+"?([^";\s\]]+)"?/g)]
-    .map((match) => [match[1], expandTerm(match[2])]))
+function parseDefinition(definition: string, reject: (reason: string) => Error): RdfGraph {
+  validateRdf(definition, 'text/turtle', reject)
+  const parsed = parseTurtle(definition)
+  if (!parsed.ok) throw reject(`Invalid RDF: ${parsed.error}`)
+  return parsed.graph
 }
 
-function expandTerm(term: string): string {
-  if (term.startsWith('<') && term.endsWith('>')) return term.slice(1, -1)
-  const [prefix] = term.split(':')
-  return PREFIXES[prefix] ? expand(term) : term
-}
-
-function lastSegment(term: string): string {
-  const value = term.replace(/^<|>$/g, '').replace(/[#/]+$/, '')
-  return value.split(/[#/:]/).pop() || value
+/** A fragmentation or retention policy as the backend describes it: local names and values */
+function typedConfig(graph: RdfGraph, node: Resource): TypedConfig {
+  return {
+    type: localName(objectOf(graph, node, RDF_TYPE)?.value ?? ''),
+    properties: Object.fromEntries(predicatesOf(graph, node)
+      .filter((predicate) => predicate !== RDF_TYPE)
+      .map((predicate) => [localName(predicate), objectOf(graph, node, predicate)!.value])),
+  }
 }
 
 const RDF_FORMATS: RdfFormat[] = ['text/turtle', 'application/ld+json', 'application/n-quads',

@@ -79,8 +79,16 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   validation; `valid` blocks deploy, `runnable` only structural errors block simulation),
   `pipeline/catalog.ts` (every LDIO component and its typed properties: type, required, default,
   options, group, `when`, cross-property `check`), `pipeline/config.ts` (read/write/validate
-  config; keys matched like LDIO does), `components/sandbox/ComponentConfigForm.vue` + `ConfigField.vue`
-  (form kept in step with the component YAML), `pipeline/simulator.ts` (in-browser approximation).
+  config; keys matched like LDIO does), `components/sandbox/ComponentConfigForm.vue` +
+  `components/common/ConfigField.vue` (form kept in step with the component YAML),
+  `pipeline/simulator.ts` (in-browser approximation).
+* Event stream and view dialogs (`components/ldes/Create*Dialog.vue`): a form and the Turtle edit one
+  RDF graph. `ldes/turtle.ts` (parse with N3.js, graph changes, a writer that nests blank nodes and
+  lists like hand-written Turtle), `ldes/catalog.ts` (configurable predicates, fragmentation and
+  retention policy kinds), `ldes/definition.ts` (read/write/validate a resource's properties),
+  `ldes/eventStream.ts` and `ldes/view.ts` (templates, presets, validation as the server does it).
+  `composables/useTurtleDraft.ts` keeps graph and Turtle in step; `ConfigField.vue` is shared with
+  the sandbox. Errors block creating.
 * Patterns: `useAsync`/`useAction` composables; `data-cy` attributes for Cypress;
   `cy.dialogOpened(dataCy)` before typing in a PrimeVue dialog; Cypress pins demo mode in
   `cypress/support/e2e.ts`; e2e for production mode stubs the backend with `cy.intercept`.
@@ -135,6 +143,24 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
 * DCAT: `POST /admin/api/v1/dcat` takes the catalog as a blank node and returns its id as plain
   text; `GET /admin/api/v1/dcat` names the catalog after the server base URL, has
   `dct:identifier`, and lists datasets/data services only when they have DCAT.
+* Event stream and view definitions (admin API SHACL shapes + converters):
+  * The name is the Jena local name of the subject IRI: collection `2026-data` becomes `data`; a
+    view named `2026` gets an empty name and breaks listing the views of its stream.
+  * Event stream: `tree:shape` (a `sh:NodeShape`, a blank node is fine), `ldes:timestampPath` and
+    `ldes:versionOfPath` required, IRIs; `ldes:createVersions` must be `xsd:boolean`;
+    `ldes:versionDelimiter` only with `createVersions true`; `ldes:skolemizationDomain` an IRI.
+    Statements about subjects nothing refers to are rejected (closed shape). An invalid event
+    source retention policy (unknown type, untyped duration) answers 400/500 *but the stream is
+    created anyway*. `ldes:kafkaSource` without the Kafka module: 500.
+  * View: `tree:fragmentationStrategy` required, also when empty (`()`); unknown fragmentation
+    types are accepted silently; at most one retention policy per type (`ldes:DurationAgoPolicy`,
+    `ldes:LatestVersionSubset`); page size 0 is accepted; unknown predicates are ignored.
+  * SHACL checks datatypes exactly: `tree:maxZoom` and `ldes:amount` `xsd:integer` (not `xsd:int`),
+    `tree:value` `xsd:duration` (no weeks: `P1W` is rejected), `tree:maxGranularity` and
+    `tree:fragmentationKey` `xsd:string`. `maxGranularity` ∈ year…second, `maxZoom` 0–23, `amount` ≥ 1.
+  * The time-based subject filter is read as `tree:fragmentationSubjectFilter` (docs say
+    `fragmenterSubjectFilter`, the shape `fragmentSubjectFilter`); geospatial reads
+    `tree:fragmenterSubjectFilter`. Reference defaults: path `rdf:type`, key `reference`.
 * LDIO matches config keys ignoring case, `-` and `_` and returns them normalised
   (`membertype`, `rdfwriter.contenttype`). Deleting a pipeline returns 202 (wait until gone).
   `GET /admin/api/v1/pipeline/ldes-client` → `[{pipeline, status}]`. `POST /{pipeline}` feeds an

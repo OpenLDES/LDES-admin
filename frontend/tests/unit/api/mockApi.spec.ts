@@ -55,6 +55,30 @@ describe('mock LDES-admin API', () => {
     expect((await api.listEventStreams(IDS.sandboxServer)).map((s) => s.collection)).toContain('trees')
   })
 
+  it('creates a view with the fragmentations and retention policies of its definition', async () => {
+    const view = await api.createView(IDS.sandboxServer, 'sandbox-parcels', `
+      @prefix ldes: <https://w3id.org/ldes#> .
+      @prefix tree: <https://w3id.org/tree#> .
+      @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+      @prefix server: <http://localhost:32768/sandbox-parcels/> .
+      server:by-zone tree:viewDescription [
+        tree:fragmentationStrategy ( [ a tree:GeospatialFragmentation ; tree:maxZoom 14 ;
+          tree:fragmentationPath <http://www.opengis.net/ont/geosparql#asWKT> ] ) ;
+        ldes:retentionPolicy [ a ldes:LatestVersionSubset ; ldes:amount 2 ] ;
+        tree:pageSize "50"^^xsd:int
+      ] .`)
+
+    expect(view).toMatchObject({
+      name: 'by-zone',
+      pageSize: 50,
+      fragmentations: [{
+        type: 'GeospatialFragmentation',
+        properties: { maxZoom: '14', fragmentationPath: 'http://www.opengis.net/ont/geosparql#asWKT' },
+      }],
+      retentionPolicies: [{ type: 'LatestVersionSubset', properties: { amount: '2' } }],
+    })
+  })
+
   it('validates ingested members and counts them', async () => {
     await expect(api.ingestMember(IDS.sandboxServer, 'sandbox-parcels', 'not turtle', 'text/turtle'))
       .rejects.toMatchObject({ status: 400 })

@@ -11,17 +11,19 @@ import type { ConfigProblem, ConfigProperty, SelectOption } from '@/pipeline/cat
 import { asBoolean, asHeaders, asList, type HttpHeader, isBlank } from '@/pipeline/config'
 
 /**
- * Edits one property of a component configuration, with the input that fits its type, and shows
- * what is wrong with it.
+ * Edits one property of a configuration (of an LDIO component, or in the definition of an event
+ * stream or view), with the input that fits its type, and shows what is wrong with it.
  */
 const props = defineProps<{
   property: ConfigProperty
   value: unknown
   problems: ConfigProblem[]
+  /** Tells apart the inputs of fields with the same key in one form, e.g. of two fragmentations */
+  scope?: string
 }>()
 const emit = defineEmits<{ change: [value: unknown] }>()
 
-const id = computed(() => `config-${props.property.key.replace(/[^\w-]/g, '-')}`)
+const id = computed(() => `config-${props.scope ? `${props.scope}-` : ''}${props.property.key.replace(/[^\w-]/g, '-')}`)
 const set = computed(() => !isBlank(props.value))
 const text = computed(() => (isBlank(props.value) || typeof props.value === 'object' ? '' : String(props.value)))
 const placeholder = computed(() => props.property.default ?? props.property.example ?? '')
@@ -33,7 +35,13 @@ const monospace = computed(() => ['url', 'iri', 'propertyPath', 'duration', 'cro
 // Booleans: unset shows the default
 const checked = computed(() => asBoolean(props.value) ?? asBoolean(props.property.default) ?? false)
 
-// Selects: the label and the value, so the YAML value is never a surprise
+// Selects: the label and the value, so the YAML value is never a surprise; a value that is no
+// option stays visible, next to what is wrong with it
+const options = computed(() => (text.value && !props.property.custom
+  && !props.property.options?.some((option) => option.value === text.value)
+  ? [...(props.property.options ?? []), { value: text.value }]
+  : props.property.options))
+
 function optionLabel(option: SelectOption) {
   return option.label && !props.property.custom ? `${option.label} — ${option.value}` : option.value
 }
@@ -108,7 +116,7 @@ const mapPreview = computed(() => (set.value && typeof props.value === 'object'
     </div>
 
     <Select v-else-if="property.type === 'select'" :input-id="id" :model-value="text || undefined"
-      :options="property.options" :option-label="optionLabel" option-value="value" :editable="property.custom"
+      :options="options" :option-label="optionLabel" option-value="value" :editable="property.custom"
       :placeholder="property.default ? `Default: ${property.default}` : 'Choose…'"
       :invalid="invalid" fluid size="small"
       @update:model-value="emit('change', $event ?? undefined)">

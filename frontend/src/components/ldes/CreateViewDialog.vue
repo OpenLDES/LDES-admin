@@ -3,112 +3,96 @@ import { computed, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import InputNumber from 'primevue/inputnumber'
 import Message from 'primevue/message'
-import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { errorMessage } from '@/composables/useAsync'
+import { useTurtleDraft } from '@/composables/useTurtleDraft'
 import type { EventStream, View } from '@/domain/ldes'
-import { compact } from '@/domain/rdf'
+import { PREFIXES } from '@/domain/rdf'
+import {
+  fragmentationKinds,
+  retentionPolicyKinds,
+  type StreamContext,
+  VIEW_DOCS,
+  viewDescriptionProperties,
+} from '@/ldes/catalog'
+import { hasErrors, kindOf } from '@/ldes/definition'
+import { setObjects } from '@/ldes/turtle'
+import {
+  addFragmentation,
+  addViewRetentionPolicy,
+  descriptionOf,
+  fragmentationsOf,
+  moveFragmentation,
+  removeFragmentation,
+  removeViewRetentionPolicy,
+  renameView,
+  viewNameOf,
+  viewOf,
+  type ViewPreset,
+  viewPresets,
+  viewProblems,
+  viewRetentionPolicies,
+  viewTemplate,
+  writeDescriptionValue,
+} from '@/ldes/view'
+import DefinitionEditor from './DefinitionEditor.vue'
+import DefinitionFields from './DefinitionFields.vue'
+import ResourceCard from './ResourceCard.vue'
 
+/**
+ * Creates a view on an event stream: its definition as a form and as Turtle, both editable and
+ * kept in step, and validated as the LDES server would. Presets give a head start.
+ */
 const props = defineProps<{ serverId: string; serverUrl: string; stream: EventStream }>()
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ created: [view: View] }>()
 
-type Template = 'pagination' | 'time' | 'geo' | 'reference' | 'retention'
-
-const templates: { id: Template; title: string; description: string; icon: string; name: string }[] = [
-  { id: 'pagination', title: 'Pagination', description: 'Pages of a fixed size, in ingest order', icon: 'pi pi-book', name: 'by-page' },
-  { id: 'time', title: 'Time-based', description: 'Buckets per year, month and day', icon: 'pi pi-calendar', name: 'by-time' },
-  { id: 'geo', title: 'Geospatial', description: 'Map tiles at zoom level 15', icon: 'pi pi-map', name: 'by-location' },
-  { id: 'reference', title: 'Reference', description: 'A bucket per value of a property', icon: 'pi pi-tag', name: 'by-reference' },
-  { id: 'retention', title: 'Recent members', description: 'Only members of the last 30 days', icon: 'pi pi-clock', name: 'recent' },
-]
-
-const template = ref<Template>('pagination')
-const name = ref('by-page')
-const pageSize = ref(250)
-const definition = ref('')
-const edited = ref(false)
+const { graph, draft, parseError, change, edit, apply } = useTurtleDraft()
 const busy = ref(false)
 const error = ref<string>()
+const preset = ref<ViewPreset>(viewPresets[0])
 
-const fragmentation = computed(() => {
-  const timestamp = props.stream.timestampPath ? compact(props.stream.timestampPath) : 'ldes:timestampPath'
-  switch (template.value) {
-    case 'time':
-      return `[
-        a tree:HierarchicalTimeBasedFragmentation ;
-        tree:maxGranularity "day" ;
-        tree:fragmentationPath ${timestamp}
-    ]`
-    case 'geo':
-      return `[
-        a tree:GeospatialFragmentation ;
-        tree:maxZoom 15 ;
-        tree:fragmentationPath geo:asWKT
-    ]`
-    case 'reference':
-      return `[
-        a tree:ReferenceFragmentation ;
-        tree:fragmentationPath dcterms:isVersionOf ;
-        tree:fragmentationKey "version"
-    ]`
-    default:
-      return ''
-  }
-})
+const context = computed<StreamContext>(() => ({
+  timestampPath: props.stream.timestampPath,
+  versionOfPath: props.stream.versionOfPath,
+}))
+const view = computed(() => viewOf(graph.value))
+const description = computed(() => descriptionOf(graph.value))
+const fragmentations = computed(() => fragmentationsOf(graph.value))
+const policies = computed(() => viewRetentionPolicies(graph.value))
+const problems = computed(() => viewProblems(graph.value))
+const nameProblem = computed(() => problems.value.find((problem) => problem.key === 'name'))
+const blocked = computed(() => !!parseError.value || hasErrors(problems.value))
 
-const generated = computed(() => `@prefix ldes:    <https://w3id.org/ldes#> .
-@prefix tree:    <https://w3id.org/tree#> .
-@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
-@prefix dcterms: <http://purl.org/dc/terms/> .
-@prefix prov:    <http://www.w3.org/ns/prov#> .
-@prefix sosa:    <http://www.w3.org/ns/sosa/> .
-@prefix geo:     <http://www.opengis.net/ont/geosparql#> .
-@prefix server:  <${props.serverUrl}/${props.stream.collection}/> .
+/** Predicates of the view description that have a section of their own */
+const sections = [`${PREFIXES.tree}fragmentationStrategy`, `${PREFIXES.ldes}retentionPolicy`]
 
-server:${name.value} tree:viewDescription [
-    tree:fragmentationStrategy (${fragmentation.value ? ` ${fragmentation.value} ` : ''}) ;${template.value === 'retention' ? `
-    ldes:retentionPolicy [
-        a ldes:DurationAgoPolicy ;
-        tree:value "P30D"^^xsd:duration
-    ] ;` : ''}
-    tree:pageSize "${pageSize.value}"^^xsd:int
-] .
-`)
-
-watch(generated, (value) => {
-  if (!edited.value) definition.value = value
-}, { immediate: true })
-
-watch(template, (value) => {
-  name.value = templates.find((t) => t.id === value)!.name
-})
+function start(from: ViewPreset) {
+  preset.value = from
+  change(viewTemplate(from, `${props.serverUrl}/${props.stream.collection}`, context.value))
+}
 
 watch(visible, (open) => {
   if (open) {
-    template.value = 'pagination'
-    name.value = 'by-page'
-    pageSize.value = 250
-    edited.value = false
-    definition.value = generated.value
+    start(viewPresets[0])
     error.value = undefined
   }
-})
+}, { immediate: true })
 
-function onEdit(value: string) {
-  definition.value = value
-  edited.value = value !== generated.value
+function hasPolicy(type: string) {
+  return policies.value.some((policy) => kindOf(graph.value, policy, retentionPolicyKinds)?.type === type)
 }
 
 async function submit() {
+  apply()
+  if (blocked.value) return
   busy.value = true
   error.value = undefined
   try {
-    const view = await api.createView(props.serverId, props.stream.collection, definition.value)
+    const created = await api.createView(props.serverId, props.stream.collection, draft.value)
     visible.value = false
-    emit('created', view)
+    emit('created', created)
   } catch (e) {
     error.value = errorMessage(e)
   } finally {
@@ -118,57 +102,117 @@ async function submit() {
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :header="`New view on ${stream.collection}`" :style="{ width: '820px' }"
-    data-cy="create-view-dialog">
-    <div class="form">
-      <div class="templates">
-        <button v-for="option in templates" :key="option.id" type="button" class="template"
-          :class="{ selected: template === option.id }" :disabled="edited" @click="template = option.id">
+  <Dialog v-model:visible="visible" modal :header="`New view on ${stream.collection}`"
+    :style="{ width: '1100px', maxWidth: '96vw' }" data-cy="create-view-dialog">
+    <div class="presets">
+      <span class="label">Start from</span>
+      <div class="preset-list">
+        <button v-for="option in viewPresets" :key="option.id" type="button" class="preset"
+          :class="{ selected: preset.id === option.id }" :data-cy="`preset-${option.id}`" @click="start(option)">
           <i :class="option.icon" />
-          <span class="template-title">{{ option.title }}</span>
+          <span class="preset-title">{{ option.title }}</span>
           <span class="muted small">{{ option.description }}</span>
         </button>
       </div>
-      <div class="fields">
-        <div class="field">
-          <label for="view-name">View name</label>
-          <InputText id="view-name" v-model="name" :disabled="edited" />
-        </div>
-        <div class="field">
-          <label for="view-page-size">Page size</label>
-          <InputNumber v-model="pageSize" input-id="view-page-size" :min="1" :max="10000" :disabled="edited" />
-        </div>
-      </div>
-      <div class="row">
-        <span class="label">Definition</span>
-        <span class="spacer" />
-        <Button v-if="edited" label="Reset to template" text size="small" @click="onEdit(generated); edited = false" />
-      </div>
-      <CodeEditor :model-value="definition" language="turtle" min-height="240px" max-height="360px"
-        @update:model-value="onEdit" />
-      <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
     </div>
+
+    <div class="layout">
+      <div class="form">
+        <Message v-if="!view || !description" severity="warn" :closable="false">
+          The definition has no view: an IRI with a <code>tree:viewDescription</code> that holds its
+          configuration.
+        </Message>
+        <template v-else>
+          <div class="name-field">
+            <label for="view-name">View name</label>
+            <InputText id="view-name" :model-value="viewNameOf(graph)" :invalid="!!nameProblem" fluid
+              spellcheck="false" data-cy="view-name" @update:model-value="change(renameView(graph, $event ?? ''))" />
+            <small v-if="nameProblem" class="problem"><i class="pi pi-times-circle" /> {{ nameProblem.message }}</small>
+            <small v-else class="muted">Part of every URL of the view: {{ view.value }}</small>
+          </div>
+
+          <DefinitionFields :graph="graph" :node="description" :properties="viewDescriptionProperties"
+            owner="a view description" :others="sections" :problems="problems"
+            @change="(property, value) => change(writeDescriptionValue(graph, property, value))"
+            @remove="(predicate) => change(setObjects(graph, description!, predicate, []))" />
+
+          <section class="section" data-cy="fragmentations">
+            <div class="section-head">
+              <span class="section-title">Fragmentations</span>
+              <span class="muted small">The first one makes the top-level buckets, each next one divides those
+                further. Every bucket is paginated; without fragmentations, the view is just pages.</span>
+            </div>
+            <template v-if="fragmentations">
+              <ResourceCard v-for="(fragmentation, index) in fragmentations" :key="fragmentation.value" :graph="graph"
+                :node="fragmentation" :kinds="fragmentationKinds" noun="fragmentation" :problems="problems"
+                :stream="context" :position="{ index, count: fragmentations.length }"
+                @change="change" @move="change(moveFragmentation(graph, index, $event))"
+                @remove="change(removeFragmentation(graph, index))" />
+              <div class="add-row">
+                <Button v-for="kind in fragmentationKinds" :key="kind.type" :label="`Add ${kind.label.toLowerCase()}`"
+                  icon="pi pi-plus" text size="small" :data-cy="`add-fragmentation-${kind.label.toLowerCase()}`"
+                  @click="change(addFragmentation(graph, kind, context))" />
+              </div>
+            </template>
+          </section>
+
+          <section class="section" data-cy="view-retention">
+            <div class="section-head">
+              <span class="section-title">Retention</span>
+              <span class="muted small">Members leave the view once a policy no longer keeps them. Without a
+                policy, the view keeps every member.</span>
+            </div>
+            <ResourceCard v-for="policy in policies" :key="policy.value" :graph="graph" :node="policy"
+              :kinds="retentionPolicyKinds" noun="retention policy" :problems="problems"
+              @change="change" @remove="change(removeViewRetentionPolicy(graph, policy))" />
+            <div class="add-row">
+              <Button v-for="kind in retentionPolicyKinds" :key="kind.type" :label="`Add ${kind.label.toLowerCase()} retention`"
+                icon="pi pi-plus" text size="small" :disabled="hasPolicy(kind.type)"
+                :data-cy="`add-retention-${kind.label.toLowerCase()}`"
+                @click="change(addViewRetentionPolicy(graph, kind))" />
+            </div>
+          </section>
+
+          <a :href="VIEW_DOCS" target="_blank" rel="noopener" class="small docs">
+            Configuring a view <i class="pi pi-external-link" />
+          </a>
+        </template>
+      </div>
+
+      <DefinitionEditor class="definition" :draft="draft" :parse-error="parseError"
+        :problems="problems.filter((problem) => !problem.node)" @edit="edit" @reset="start(preset)" />
+    </div>
+    <Message v-if="error" severity="error" :closable="false" class="error">{{ error }}</Message>
     <template #footer>
+      <span v-if="blocked" class="muted small blocked">Fix the errors to create the view</span>
       <Button label="Cancel" severity="secondary" text @click="visible = false" />
-      <Button label="Create view" icon="pi pi-plus" :loading="busy" data-cy="create-view-submit" @click="submit" />
+      <Button label="Create view" icon="pi pi-plus" :loading="busy" :disabled="blocked" data-cy="create-view-submit"
+        @click="submit" />
     </template>
   </Dialog>
 </template>
 
 <style scoped>
-.form {
+.presets {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
-.templates {
+.preset-list {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
-.template {
+@media (max-width: 900px) {
+  .preset-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.preset {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -183,38 +227,110 @@ async function submit() {
   cursor: pointer;
 }
 
-.template .pi {
+.preset .pi {
   color: var(--p-primary-color);
   margin-bottom: 4px;
 }
 
-.template.selected {
+.preset.selected {
   border-color: var(--p-primary-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-500) 15%, transparent);
 }
 
-.template:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.template-title {
+.preset-title {
   font-weight: 600;
 }
 
-.fields {
+.layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
 }
 
-.field {
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.definition {
+  position: sticky;
+  top: 0;
+}
+
+.name-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.field label {
+.name-field label {
   font-weight: 500;
+}
+
+.name-field .muted {
+  overflow-wrap: anywhere;
+}
+
+.problem {
+  color: var(--p-red-600);
+}
+
+.app-dark .problem {
+  color: var(--p-red-300);
+}
+
+.problem .pi {
+  font-size: 11px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.add-row :deep(.p-button) {
+  padding-left: 4px;
+}
+
+.docs {
+  align-self: flex-start;
+}
+
+.docs .pi {
+  font-size: 9px;
+}
+
+.error {
+  margin-top: 14px;
+}
+
+.blocked {
+  margin-right: auto;
 }
 </style>

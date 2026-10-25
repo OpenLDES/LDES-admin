@@ -159,6 +159,28 @@ goes down or comes back, and samples the members every healthy LDES server inges
 kept 48 hours. On startup it removes the local instances whose container stopped with a previous
 run of LDES-admin.
 
+### Event streams and views
+
+Creating an event stream or a view shows its definition as a form and as Turtle, next to each
+other; both edit the same RDF graph. A change in the form writes the Turtle anew, a change in the
+Turtle is parsed (N3.js) into the graph once typing pauses. The Turtle that is shown is what gets
+sent, so hand-written comments survive until the form is used again.
+
+`ldes/catalog.ts` describes what can be configured, after the documentation of the LDES server
+and the SHACL shapes of its admin API: the predicates of an event stream (paths, version creation,
+skolemisation, retention of the event source, a Kafka source) and of a view description (page
+size, fragmentations in order, retention policies), and the kinds of fragmentation (time-based,
+geospatial, reference) and retention policy (time-based, version-based) with their properties.
+Each property has its predicate, its datatype (or holds an IRI), whether the server only accepts
+that datatype, and what the form needs: the input (text, IRI, number, ISO duration, a choice such
+as the granularities year…second), required, default, limits. `ldes/turtle.ts` reads and changes
+the graph and writes it like hand-written Turtle: blank nodes used once are nested, lists written
+as `( … )`, prefixed names where a prefix fits (a well-known prefix is declared when the form uses
+it). `ldes/definition.ts`, `ldes/eventStream.ts` and `ldes/view.ts` read, write and validate
+the definition the way the server does: required predicates, datatypes, ranges, names the server
+keeps, one retention policy per kind, known fragmentation and retention policy types, and
+predicates the server ignores. Problems show at their fields; errors block creating.
+
 ### Sandbox
 
 `SandboxService` starts the missing sandbox instances side by side (virtual threads), through the
@@ -216,7 +238,7 @@ Assumptions worth knowing:
 | Integration (`*IT`)      | `adapter`                      | JPA + Flyway against Postgres; the LDES server and LDIO clients against real `openldes/ldes-server` and `openldes/ldi-orchestrator` containers, started by the local runtime adapter |
 | Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client |
 | Architecture             | `bootstrap`                    | `DependencyRuleTest` (ArchUnit)                                       |
-| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, stores, mock and HTTP API, domain helpers, components (Jest) |
+| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, event stream and view definitions, stores, mock and HTTP API, domain helpers, components (Jest) |
 | Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, sandbox, demo and production mode with a stubbed backend (Cypress) |
 
 `./mvnw test` runs the unit, slice and architecture tests, and the frontend unit tests;
@@ -233,6 +255,7 @@ frontend/src
 ├── domain       TypeScript types mirroring the web models of the REST API, and helpers to present them
 ├── api          LdesAdminApi (the port: one method per endpoint), http/ (the backend) and mock/ (sample data)
 ├── pipeline     catalog of LDIO components, graph ⇄ pipeline conversion and validation, YAML, simulator, templates
+├── ldes         event stream and view definitions (catalog, Turtle ⇄ form, validation), member templates
 ├── stores       Pinia: mode, instances, sandbox (the pipeline being designed), sandboxEnvironment, ui
 ├── components   layout, common, dashboard, instances, ldes, ldio, sandbox
 └── views        one per route
@@ -268,6 +291,28 @@ The switch in the top bar picks the implementation of `LdesAdminApi` behind `api
 The choice is remembered in the browser. Without one, the frontend starts in production mode when
 `/actuator/health` of the backend answers, and in demo mode otherwise. Switching rebuilds the views
 and reloads the shared stores, so nothing of the other mode lingers.
+
+### Event streams and views
+
+Creating an event stream or a view shows its definition as a form and as Turtle, next to each
+other; both edit the same RDF graph. A change in the form writes the Turtle anew, a change in the
+Turtle is parsed (N3.js) into the graph once typing pauses. The Turtle that is shown is what gets
+sent, so hand-written comments survive until the form is used again.
+
+`ldes/catalog.ts` describes what can be configured, after the documentation of the LDES server
+and the SHACL shapes of its admin API: the predicates of an event stream (paths, version creation,
+skolemisation, retention of the event source, a Kafka source) and of a view description (page
+size, fragmentations in order, retention policies), and the kinds of fragmentation (time-based,
+geospatial, reference) and retention policy (time-based, version-based) with their properties.
+Each property has its predicate, its datatype (or holds an IRI), whether the server only accepts
+that datatype, and what the form needs: the input (text, IRI, number, ISO duration, a choice such
+as the granularities year…second), required, default, limits. `ldes/turtle.ts` reads and changes
+the graph and writes it like hand-written Turtle: blank nodes used once are nested, lists written
+as `( … )`, prefixed names where a prefix fits (a well-known prefix is declared when the form uses
+it). `ldes/definition.ts`, `ldes/eventStream.ts` and `ldes/view.ts` read, write and validate
+the definition the way the server does: required predicates, datatypes, ranges, names the server
+keeps, one retention policy per kind, known fragmentation and retention policy types, and
+predicates the server ignores. Problems show at their fields; errors block creating.
 
 ### Sandbox
 
