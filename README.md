@@ -131,3 +131,9 @@ together out of the box:
 
 The first start pulls the Docker images, which takes a few minutes. The sandbox stops with *Stop*,
 and with the backend.
+
+## Usage of AI
+
+This project was developed with the help of AI tools. These tools were used to assist in code
+generation, documentation, and problem-solving. The developers reviewed and edited the AI-generated
+content to ensure accuracy and quality.
