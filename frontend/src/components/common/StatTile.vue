@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { type RouteLocationRaw, RouterLink } from 'vue-router'
 
 /**
  * A headline number: label, value, context line and an optional 24-point sparkline in the
- * de-emphasis colour with the latest point in the accent.
+ * de-emphasis colour with the latest point in the accent. With a route, it links to the details.
  */
 const props = defineProps<{
   label: string
@@ -12,6 +13,7 @@ const props = defineProps<{
   caption?: string
   tone?: 'default' | 'good' | 'warning' | 'critical'
   trend?: number[]
+  to?: RouteLocationRaw
 }>()
 
 const WIDTH = 120
@@ -33,7 +35,8 @@ const sparkline = computed(() => {
 </script>
 
 <template>
-  <div class="card stat" :class="tone ?? 'default'" data-cy="stat-tile">
+  <component :is="to ? RouterLink : 'div'" :to="to" class="card stat" :class="[tone ?? 'default', { clickable: to }]"
+    data-cy="stat-tile">
     <div class="top">
       <span class="stat-label">{{ label }}</span>
       <span class="stat-icon"><i :class="icon" /></span>
@@ -51,7 +54,7 @@ const sparkline = computed(() => {
         <circle :cx="sparkline.last[0]" :cy="sparkline.last[1]" r="3.5" />
       </svg>
     </div>
-  </div>
+  </component>
 </template>
 
 <style scoped>
@@ -60,6 +63,11 @@ const sparkline = computed(() => {
   flex-direction: column;
   gap: 14px;
   padding: 18px 20px;
+  color: inherit;
+}
+
+a.stat:hover {
+  text-decoration: none;
 }
 
 .top {

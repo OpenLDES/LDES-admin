@@ -1,0 +1,31 @@
+name: 4. Prepare New Version for Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      type_of_bump:
+        type: choice
+        description: Type of version bump
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Runs in an Alpine image with JDK 25: the build of the frontend downloads a Node.js that does not
+      # run there, so it is skipped (the release builds nothing to publish)
+      - name: Release
+        uses: qcastel/github-actions-maven-release@70725f21eb1049fbf049470e72efbcd5d1528f35 # v1.12.44
+        with:
+          git-release-bot-name: "Maven Release"
+          git-release-bot-email: "maven@release.io"
+          version-patch: ${{ github.event.inputs.type_of_bump == 'patch' }}
+          version-minor: ${{ github.event.inputs.type_of_bump == 'minor' }}
+          version-major: ${{ github.event.inputs.type_of_bump == 'major' }}
+          maven-args: "-DskipTests -DskipITs -Dfrontend.skip -Dmaven.deploy.skip=true -Dskipdeploy=true"
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          release-branch-name: 'develop'

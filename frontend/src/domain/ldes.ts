@@ -121,7 +121,7 @@ const processInfos: Record<string, { name: string; description: string; icon: st
   compactionStep: {
     name: 'Compaction',
     description: 'Merges small immutable pages into larger ones',
-    icon: 'pi pi-compress',
+    icon: 'pi pi-clone',
   },
   deletionStep: {
     name: 'Deletion',

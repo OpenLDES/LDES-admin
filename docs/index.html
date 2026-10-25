@@ -1,0 +1,119 @@
+---
+layout: default
+title: Home
+description: >-
+  LDES-admin administers, monitors and sandboxes OpenLDES servers and Linked Data Interaction
+  Orchestrator (LDIO) pipelines, from one web application.
+---
+<section class="hero">
+  <div class="hero-text">
+    <p class="eyebrow">For OpenLDES servers and LDIO pipelines</p>
+    <h1>Administer, monitor and try out your <span class="accent-text">Linked Data Event Streams</span></h1>
+    <p class="lead">
+      LDES-admin brings your LDES servers and Linked Data Interaction Orchestrators together in one web
+      application: see how they are doing, configure event streams, views and pipelines, and design
+      new pipelines in a sandbox before you deploy them.
+    </p>
+    <div class="hero-actions">
+      <a class="button primary" href="{{ '/installation/' | relative_url }}">
+        {% include icon.html name="download" %} Install LDES-admin
+      </a>
+      <a class="button" href="{{ '/sandbox/' | relative_url }}">
+        {% include icon.html name="sandbox" %} Explore the sandbox
+      </a>
+    </div>
+  </div>
+  <figure class="hero-shot">
+    <a href="{{ '/screenshots/dashboard.png' | relative_url }}">
+      <img src="{{ '/screenshots/dashboard.png' | relative_url }}" width="1440" height="900"
+        alt="The dashboard: health, throughput and recent activity of all LDES servers and LDIOs">
+    </a>
+  </figure>
+</section>
+
+<section class="highlights" aria-label="What LDES-admin does">
+  <a class="highlight-card" href="#monitor">
+    {% include icon.html name="activity" %}
+    <strong>Monitor</strong>
+    <span>Health, throughput, backlog and background jobs</span>
+  </a>
+  <a class="highlight-card" href="#ldes-servers">
+    {% include icon.html name="server" %}
+    <strong>Manage LDES servers</strong>
+    <span>Event streams, views, shapes, DCAT and members</span>
+  </a>
+  <a class="highlight-card" href="#ldio">
+    {% include icon.html name="pipeline" %}
+    <strong>Manage LDIOs</strong>
+    <span>Pipelines, their status and their components</span>
+  </a>
+  <a class="highlight-card" href="#sandbox">
+    {% include icon.html name="sandbox" %}
+    <strong>Experiment</strong>
+    <span>Design, simulate and deploy pipelines</span>
+  </a>
+</section>
+
+{%- for feature in site.data.features %}
+<section class="feature{% cycle '', ' reverse' %}" id="{{ feature.id }}">
+  <div class="feature-text">
+    <p class="eyebrow">{{ feature.eyebrow }}</p>
+    <h2>{{ feature.title }}</h2>
+    <p class="feature-lead">{{ feature.lead }}</p>
+    <ul class="feature-list">
+      {%- for item in feature.items %}
+      <li>{{ item | markdownify | remove: '<p>' | remove: '</p>' | strip }}</li>
+      {%- endfor %}
+    </ul>
+    <a class="more" href="{{ feature.link | relative_url }}">{{ feature.link_text }} {% include icon.html name="arrow-right" %}</a>
+  </div>
+  <div class="feature-media">
+    {%- for screenshot in feature.screenshots %}
+    {% include figure.html src=screenshot.src alt=screenshot.alt caption=screenshot.caption %}
+    {%- endfor %}
+  </div>
+</section>
+{%- endfor %}
+
+<section class="cards two" aria-label="More">
+  <div class="card">
+    <h2>Start from a demo</h2>
+    <p>
+      Two complete examples, each an event stream with the views <code>by-page</code> and
+      <code>by-time</code> and the LDIO pipeline that feeds it:
+    </p>
+    <ul>
+      <li><strong>Sensor observations</strong>, modelled with SOSA/SSN, with sample data sent through the pipeline;</li>
+      <li><strong>Parking occupancy</strong> of the car parks of Ghent, polled live from the open data of the city
+        and mapped to Mobivoc, after the
+        <a href="https://github.com/OpenLDES/Onboarding-Example/tree/main/advanced-conversion">OpenLDES onboarding example</a>.</li>
+    </ul>
+    <p>Pick them when you start a local LDES server or LDIO, or start a new event stream from one.</p>
+  </div>
+  <div class="card">
+    <h2>Try it without servers</h2>
+    <p>
+      <strong>Demo mode</strong> runs on sample data in the browser, to explore LDES-admin without any
+      server; <strong>production mode</strong> manages real LDES servers and LDIOs. The switch sits in the
+      top bar. Light and dark themes included.
+    </p>
+    <p>
+      Without a backend, the frontend starts in demo mode by itself: everything, including the sandbox,
+      works on sample data that behaves like the real thing.
+    </p>
+  </div>
+</section>
+
+<section class="doc-cards" aria-labelledby="documentation">
+  <h2 id="documentation">Documentation</h2>
+  <div class="doc-card-grid">
+    {%- for item in site.data.navigation offset: 1 %}
+    {%- assign doc = site.pages | where: "url", item.url | first %}
+    <a class="doc-card" href="{{ item.url | relative_url }}">
+      <span class="doc-card-icon">{% include icon.html name=doc.icon %}</span>
+      <strong>{{ item.title }}</strong>
+      <span>{{ doc.summary }}</span>
+    </a>
+    {%- endfor %}
+  </div>
+</section>

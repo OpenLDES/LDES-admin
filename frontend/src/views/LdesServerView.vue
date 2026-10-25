@@ -7,6 +7,7 @@ import DataTable from 'primevue/datatable'
 import Listbox from 'primevue/listbox'
 import Message from 'primevue/message'
 import ProgressBar from 'primevue/progressbar'
+import Select from 'primevue/select'
 import Skeleton from 'primevue/skeleton'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
@@ -25,9 +26,10 @@ import IngestPanel from '@/components/ldes/IngestPanel.vue'
 import RdfDocumentEditor from '@/components/ldes/RdfDocumentEditor.vue'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
-import { useAction, useAsync } from '@/composables/useAsync'
+import { useAction, useAsync, usePolling } from '@/composables/useAsync'
 import { type EventStream, paginatedShare, type StreamStatistics } from '@/domain/ldes'
 import { useInstancesStore } from '@/stores/instances'
+import { useUiStore } from '@/stores/ui'
 import { formatCompact, formatNumber, formatPercent, shortIri } from '@/utils/format'
 
 const props = defineProps<{ id: string }>()
@@ -37,6 +39,7 @@ const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
 const instances = useInstancesStore()
+const ui = useUiStore()
 const { run } = useAction()
 
 const { data: server, error: serverError } = useAsync(() => api.getInstance('LDES_SERVER', props.id),
@@ -64,6 +67,20 @@ watch(() => streams.data.value, (list) => {
 })
 
 const up = computed(() => health.value?.status === 'UP')
+
+// The runs of the background processes change by the second: they refresh while they show
+usePolling(processes.reload, () => ui.processRefreshSeconds, () => tab.value === 'processes' && up.value)
+const processesUpdatedAt = ref<Date>()
+watch(() => processes.data.value, () => (processesUpdatedAt.value = new Date()))
+const refreshOptions = computed(() => {
+  const options = [1, 2, 5, 10, 30].map((seconds) =>
+    ({ value: seconds, label: seconds === 1 ? 'Every second' : `Every ${seconds} seconds` }))
+  const current = ui.processRefreshSeconds
+  if (current > 0 && !options.some((option) => option.value === current)) {
+    options.push({ value: current, label: `Every ${current} seconds` })
+  }
+  return [...options.sort((a, b) => a.value - b.value), { value: 0, label: 'Never' }]
+})
 const runningProcesses = computed(() =>
   (processes.data.value ?? []).filter((p) => p.running).length)
 const failedProcesses = computed(() =>
@@ -273,6 +290,15 @@ async function saveCatalog(document: string) {
           </TabPanel>
 
           <TabPanel value="processes">
+            <div class="processes-bar">
+              <span v-if="processesUpdatedAt" class="muted small" data-cy="processes-updated">
+                Updated at {{ processesUpdatedAt.toLocaleTimeString('en-GB') }}
+              </span>
+              <span class="spacer" />
+              <label class="muted small" for="process-refresh">Refresh</label>
+              <Select v-model="ui.processRefreshSeconds" input-id="process-refresh" :options="refreshOptions"
+                option-label="label" option-value="value" size="small" data-cy="process-refresh" />
+            </div>
             <BackgroundProcesses v-if="processes.data.value" :processes="processes.data.value" />
             <Skeleton v-else height="200px" border-radius="12px" />
             <p class="muted small note">
@@ -383,6 +409,13 @@ async function saveCatalog(document: string) {
 
 .note {
   margin-top: 16px;
+}
+
+.processes-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .internal-url {

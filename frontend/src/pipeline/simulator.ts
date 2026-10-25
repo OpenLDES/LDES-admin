@@ -190,7 +190,7 @@ function adapt(adapter: ComponentDefinition, input: SimulationInput): {
   switch (adapter.name) {
     case 'Ldio:JsonToLdAdapter': {
       const context = configValue(config, 'context')
-      const model = jsonToModel(JSON.parse(input.content), vocabularyOf(context))
+      const model = jsonToModel(JSON.parse(input.content), contextOf(context))
       return {
         model,
         summary: `Applied JSON-LD context ${typeof context === 'string' && !context.trim().startsWith('{') ? context : '(inline)'}: ${model.quads.length} triples`,
@@ -199,7 +199,7 @@ function adapt(adapter: ComponentDefinition, input: SimulationInput): {
     case 'Ldio:RmlAdapter': {
       const model = input.contentType.includes('csv')
         ? csvToModel(input.content)
-        : jsonToModel(JSON.parse(input.content), 'http://example.org/ns#')
+        : jsonToModel(JSON.parse(input.content), plainContext('http://example.org/ns#'))
       return {
         model,
         summary: `Mapped with ${configValue(config, 'mapping') ?? 'the RML mapping'} (approximated): ${model.quads.length} triples`,
@@ -219,7 +219,7 @@ function adapt(adapter: ComponentDefinition, input: SimulationInput): {
 
 function parseRdf(content: string, contentType: string): Model {
   if (contentType.includes('json')) {
-    return jsonToModel(JSON.parse(content), BASE_IRI)
+    return jsonToModel(JSON.parse(content), plainContext(BASE_IRI))
   }
   const format = contentType.includes('n-quads') ? 'N-Quads'
     : contentType.includes('n-triples') ? 'N-Triples' : 'Turtle'
@@ -232,47 +232,52 @@ function parseRdf(content: string, contentType: string): Model {
 }
 
 /**
- * Plain JSON or simple JSON-LD to triples: every object becomes a node, every key a property in the
- * vocabulary of the context.
+ * Plain JSON or simple JSON-LD to triples: every object becomes a node, every key a property, as
+ * the terms of the context define it or else in its vocabulary.
  */
-function jsonToModel(json: unknown, defaultVocabulary: string): Model {
+function jsonToModel(json: unknown, defaultContext: JsonLdContext): Model {
   const quads: Quad[] = []
   const roots = Array.isArray(json) ? json : [json]
+  let prefixes = defaultContext.prefixes
   roots.forEach((root) => {
-    const context = isObject(root) ? root['@context'] : undefined
-    const vocabulary = context === undefined ? defaultVocabulary : vocabularyOf(context)
-    toNode(root, vocabulary, quads)
+    const context = isObject(root) && root['@context'] !== undefined ? contextOf(root['@context']) : defaultContext
+    prefixes = { ...prefixes, ...context.prefixes }
+    toNode(root, context, quads)
   })
-  return { quads, prefixes: {} }
+  return { quads, prefixes }
 }
 
-function toNode(value: unknown, vocabulary: string, quads: Quad[]): Quad_Subject {
+function toNode(value: unknown, context: JsonLdContext, quads: Quad[]): Quad_Subject {
   const object = isObject(value) ? value : {}
   const id = object['@id'] ?? object.id
-  const subject = typeof id === 'string' && isIri(id) ? namedNode(id) : blankNode()
+  const subject = typeof id === 'string' && isIri(id) ? namedNode(expandIri(id, context)) : blankNode()
   const type = object['@type'] ?? object.type
   for (const value of [type].flat()) {
     if (typeof value === 'string') {
-      quads.push(quad(subject, namedNode(RDF_TYPE), namedNode(expand(value, vocabulary))))
+      quads.push(quad(subject, namedNode(RDF_TYPE), namedNode(expandTerm(value, context))))
     }
   }
   for (const [key, raw] of Object.entries(object)) {
     if (['@id', '@type', '@context', 'id', 'type'].includes(key)) continue
-    const predicate = namedNode(expand(key, vocabulary))
+    const predicate = namedNode(expandTerm(key, context))
+    const coercion = context.terms[key]?.type
     for (const item of [raw].flat()) {
-      const term = toObject(item, vocabulary, quads)
+      const term = toObject(item, context, quads, coercion)
       if (term) quads.push(quad(subject, predicate, term))
     }
   }
   return subject
 }
 
-function toObject(value: unknown, vocabulary: string, quads: Quad[]): Quad_Object | undefined {
+function toObject(value: unknown, context: JsonLdContext, quads: Quad[], coercion?: string):
+  Quad_Object | undefined {
   if (value === null || value === undefined) return undefined
   if (isGeometry(value)) {
     return literal(JSON.stringify(value), namedNode(`${NS.geojson}geometry`))
   }
-  if (isObject(value)) return toNode(value, vocabulary, quads) as BlankNode | NamedNode
+  if (isObject(value)) return toNode(value, context, quads) as BlankNode | NamedNode
+  if (coercion === '@id') return namedNode(expandIri(String(value), context))
+  if (coercion) return literal(String(value), namedNode(coercion))
   if (typeof value === 'number') {
     return literal(String(value), namedNode(`${NS.xsd}${Number.isInteger(value) ? 'integer' : 'decimal'}`))
   }
@@ -312,7 +317,7 @@ function ngsiToModel(json: unknown, dataIdentifier: string): Model {
       .filter(([key]) => key !== 'id' && key !== 'type')
       .forEach(([key, attribute]) => {
         const value = isObject(attribute) ? attribute.value : attribute
-        const term = toObject(value, vocabulary, quads)
+        const term = toObject(value, plainContext(vocabulary), quads)
         if (term) quads.push(quad(subject, namedNode(vocabulary + key), term))
       })
   })
@@ -344,8 +349,11 @@ function createVersion(model: Model, config: ComponentConfig, now: Date): Transf
     ?? `${NS.prov}generatedAtTime`)
   const quads = model.quads.map((q) => q.subject.equals(member)
     ? quad(version, q.predicate, q.object, q.graph) : q)
-  quads.push(quad(version, namedNode(versionOf), member))
-  quads.push(quad(version, namedNode(generatedAt), literal(timestamp, namedNode(`${NS.xsd}dateTime`))))
+  // A model is a set: a statement the state object holds already is not added again
+  for (const added of [quad(version, namedNode(versionOf), member),
+    quad(version, namedNode(generatedAt), literal(timestamp, namedNode(`${NS.xsd}dateTime`)))]) {
+    if (!quads.some((q) => q.equals(added))) quads.push(added)
+  }
   return {
     status: 'ok',
     model: { ...model, quads },
@@ -594,25 +602,64 @@ function follow(quads: Quad[], subject: Quad_Subject, path: string): string | un
   return current.termType === 'Literal' ? current.value : undefined
 }
 
-function vocabularyOf(context: unknown): string {
+/**
+ * What the simulator understands of a JSON-LD context: its vocabulary, prefixes, and terms with
+ * their IRI and the type of their values (an IRI with @id, or a datatype).
+ */
+interface JsonLdContext {
+  vocabulary: string
+  prefixes: Record<string, string>
+  terms: Record<string, { iri: string; type?: string }>
+}
+
+function plainContext(vocabulary: string): JsonLdContext {
+  return { vocabulary, prefixes: {}, terms: {} }
+}
+
+function contextOf(context: unknown): JsonLdContext {
   if (typeof context === 'string' && context.trim().startsWith('{')) {
     try {
-      return vocabularyOf(JSON.parse(context))
+      return contextOf(JSON.parse(context))
     } catch {
-      return BASE_IRI
+      return plainContext(BASE_IRI)
     }
   }
   // A context document, as LDIO expects it: {"@context": {...}}
-  if (isObject(context) && '@context' in context) return vocabularyOf(context['@context'])
-  if (isObject(context) && typeof context['@vocab'] === 'string') return context['@vocab']
+  if (isObject(context) && '@context' in context) return contextOf(context['@context'])
   if (typeof context === 'string' && isIri(context)) {
-    return `${context.replace(/\.jsonld?$/, '').replace(/[#/]+$/, '')}#`
+    return plainContext(`${context.replace(/\.jsonld?$/, '').replace(/[#/]+$/, '')}#`)
   }
-  return BASE_IRI
+  if (!isObject(context)) return plainContext(BASE_IRI)
+  const result = plainContext(typeof context['@vocab'] === 'string' ? context['@vocab'] : BASE_IRI)
+  const entries = Object.entries(context).filter(([key]) => !key.startsWith('@'))
+  // Prefixes first: the terms may use them
+  for (const [key, value] of entries) {
+    if (typeof value === 'string' && /[#/]$/.test(value) && isIri(value)) result.prefixes[key] = value
+  }
+  for (const [key, value] of entries) {
+    const definition = typeof value === 'string' ? { '@id': value } : isObject(value) ? value : {}
+    const iri = definition['@id']
+    if (typeof iri !== 'string' || iri.startsWith('@')) continue
+    const type = definition['@type']
+    result.terms[key] = {
+      iri: expandIri(iri, result),
+      type: type === '@id' ? '@id' : typeof type === 'string' ? expandIri(type, result) : undefined,
+    }
+  }
+  return result
 }
 
-function expand(term: string, vocabulary: string): string {
-  return isIri(term) ? term : vocabulary + term
+/** A key or a type: a term of the context, a compact or absolute IRI, or else in the vocabulary */
+function expandTerm(term: string, context: JsonLdContext): string {
+  if (context.terms[term]) return context.terms[term].iri
+  return isIri(term) ? expandIri(term, context) : context.vocabulary + term
+}
+
+/** A compact IRI with a prefix of the context, e.g. sosa:Observation, else the IRI as it is */
+function expandIri(iri: string, context: JsonLdContext): string {
+  const [prefix, ...rest] = iri.split(':')
+  return context.prefixes[prefix] !== undefined && !rest.join(':').startsWith('//')
+    ? context.prefixes[prefix] + rest.join(':') : iri
 }
 
 function isIri(value: string): boolean {

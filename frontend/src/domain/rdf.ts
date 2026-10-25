@@ -3,6 +3,7 @@
  */
 export const PREFIXES: Record<string, string> = {
   rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
   ldes: 'https://w3id.org/ldes#',
   tree: 'https://w3id.org/tree#',
   dcterms: 'http://purl.org/dc/terms/',
@@ -12,6 +13,11 @@ export const PREFIXES: Record<string, string> = {
   dcat: 'http://www.w3.org/ns/dcat#',
   geo: 'http://www.opengis.net/ont/geosparql#',
   sosa: 'http://www.w3.org/ns/sosa/',
+  qudt: 'http://qudt.org/schema/qudt/',
+  unit: 'http://qudt.org/vocab/unit/',
+  mv: 'http://schema.mobivoc.org/#',
+  schema: 'http://schema.org/',
+  wgs84: 'http://www.w3.org/2003/01/geo/wgs84_pos#',
   perceel: 'https://data.vlaanderen.be/ns/perceel#',
   adres: 'https://data.vlaanderen.be/ns/adres#',
   mobiliteit: 'https://data.vlaanderen.be/ns/mobiliteit#',

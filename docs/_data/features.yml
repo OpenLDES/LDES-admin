@@ -1,0 +1,87 @@
+# The features on the home page, each with the documentation page that explains it
+- id: monitor
+  eyebrow: Monitor
+  title: See what runs, and what needs attention
+  lead: The health, throughput and background work of all your LDES servers and LDIOs, in one place.
+  items:
+    - "**Dashboard**: which LDES servers and LDIOs are up, how many pipelines run, the members
+      ingested per hour over the last 24 hours, what needs attention, and a feed of recent activity."
+    - "**Health checks**: every instance is checked every minute; LDES-admin records when one goes
+      down and when it comes back."
+    - "**Event stream statistics**: members ingested, bucketised and paginated per view, and the
+      backlog still waiting to be paginated."
+    - "**Background processes**: the fragmentation and maintenance jobs of a server (bucketisation,
+      pagination, retention, compaction, deletion) with their runs, failures and durations,
+      refreshed every 2 seconds."
+  link: /monitoring/
+  link_text: Monitoring LDES servers and LDIOs
+  screenshots:
+    - src: /screenshots/event-stream.png
+      alt: The views of an event stream and how far they are paginated
+      caption: Views of an event stream, and how far they are paginated
+    - src: /screenshots/background-processes.png
+      alt: The background processes of an LDES server
+      caption: Background processes, with a failed retention run
+
+- id: ldes-servers
+  eyebrow: Manage LDES servers
+  title: Event streams and views, without writing Turtle by hand
+  lead: Add the servers you run, or start one in Docker, and configure them the way the server
+    validates them.
+  items:
+    - "**Add** a server that runs elsewhere by its URL, or **start a local one** in Docker with one
+      click."
+    - "**Event streams and views**: create them in a form and as Turtle side by side, validated the
+      way the server validates them. Templates for pagination, time-based, geospatial and reference
+      fragmentation, and retention policies."
+    - "**Shapes and DCAT**: edit the SHACL shape of an event stream and the DCAT catalog of the
+      server, and see the catalog it publishes."
+    - "**Browse** a view page by page: follow its relations and read its members."
+    - "**Ingest** members directly on an event stream, in Turtle, JSON-LD, N-Quads or N-Triples."
+  link: /ldes-servers/
+  link_text: Setting up LDES servers
+  screenshots:
+    - src: /screenshots/ldes-server.png
+      alt: The event streams of an LDES server with their statistics
+      caption: Event streams with their statistics
+    - src: /screenshots/create-view.png
+      alt: Creating a view, with a form and Turtle that stay in step
+      caption: "Creating a view: form and Turtle stay in step"
+
+- id: ldio
+  eyebrow: Manage LDIOs
+  title: Every pipeline, its status and its throughput
+  lead: Keep the Linked Data Interaction Orchestrators that feed and consume your event streams in
+    hand.
+  items:
+    - "**Add** an LDIO that runs elsewhere, or **start a local one** in Docker."
+    - "**Pipelines**: their status, members in and out and the progress of LDES clients. Halt,
+      resume, edit and delete them."
+    - "**Component catalog**: the inputs, adapters, transformers and outputs an LDIO has installed."
+  link: /ldio/
+  link_text: Configuring LDIO pipelines
+  screenshots:
+    - src: /screenshots/ldio.png
+      alt: The pipelines of an LDIO, with their status and members in and out
+      caption: The pipelines of an LDIO
+
+- id: sandbox
+  eyebrow: Experiment
+  title: Design a pipeline, watch a member flow through it
+  lead: The sandbox is the place to try things out before they go anywhere near production.
+  items:
+    - "**Design** a pipeline by dragging components onto a canvas, or start from a template.
+      Configure every LDIO component in a form or as YAML, validated as you type."
+    - "**Simulate**: run a member through the pipeline in the browser and see what each step makes
+      of it."
+    - "**Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server
+      and LDIO in Docker that work together out of the box."
+  link: /sandbox/
+  link_text: Using the sandbox
+  screenshots:
+    - src: /screenshots/sandbox.png
+      alt: Designing a pipeline in the sandbox, with a form for every component
+      caption: Designing a pipeline, with a form for every component
+    - src: /screenshots/simulation.png
+      alt: Simulating a pipeline step by step
+      caption: Running a member through the pipeline

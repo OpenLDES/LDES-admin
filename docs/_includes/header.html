@@ -1,0 +1,25 @@
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="{{ '/' | relative_url }}">
+      <img src="{{ '/assets/images/logo.svg' | relative_url }}" alt="" width="30" height="30">
+      <span>{{ site.title }}</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="Pages">
+      {%- for item in site.data.navigation %}
+      <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+      {%- endfor %}
+    </nav>
+    <div class="header-actions">
+      <a class="icon-button" href="{{ site.github_url }}" aria-label="LDES-admin on GitHub" title="LDES-admin on GitHub">
+        {% include icon.html name="github" %}
+      </a>
+      <button class="icon-button" type="button" data-theme-toggle aria-label="Switch to the white theme" title="Switch to the white theme">
+        <span class="when-dark">{% include icon.html name="sun" %}</span>
+        <span class="when-light">{% include icon.html name="moon" %}</span>
+      </button>
+      <button class="icon-button nav-toggle" type="button" data-nav-toggle aria-controls="site-nav" aria-expanded="false" aria-label="Menu">
+        {% include icon.html name="menu" %}
+      </button>
+    </div>
+  </div>
+</header>
