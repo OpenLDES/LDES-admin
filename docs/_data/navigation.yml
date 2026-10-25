@@ -1,0 +1,13 @@
+# The pages in the header, in this order; the documentation pages link to their neighbours
+- title: Home
+  url: /
+- title: Installation
+  url: /installation/
+- title: Monitoring
+  url: /monitoring/
+- title: LDES servers
+  url: /ldes-servers/
+- title: LDIO
+  url: /ldio/
+- title: Sandbox
+  url: /sandbox/

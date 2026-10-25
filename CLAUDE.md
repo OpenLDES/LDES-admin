@@ -77,6 +77,11 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   profile `coverage` (JaCoCo, for SonarCloud).
 * The image needs the Docker socket (`--group-add`) for local instances; on Docker Desktop also
   `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` (else Testcontainers cannot reach Ryuk).
+* Documentation site: Jekyll 4.4 in `docs/` (own black/white theme, no plugins; pages
+  `index.html`, `installation.md`, `monitoring.md`, `ldes-servers.md`, `ldio.md`, `sandbox.md`;
+  `_data/features.yml`, `_data/navigation.yml`). Workflow 5 builds it (PRs) and deploys it to
+  GitHub Pages (`main`). Keep it in step with features; links between pages are relative
+  (`../sandbox/`), assets go through `relative_url` (base URL `/LDES-admin` on Pages).
 
 ## Frontend
 
@@ -124,6 +129,7 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
 ./mvnw verify                              # all tests, needs Docker
 cd frontend && pnpm dev                    # :5173, proxies /api and /actuator to :8080 (LDES_ADMIN_BACKEND)
 pnpm build | pnpm test | pnpm test:e2e     # type-check+build | Jest | Cypress on vite preview :4173
+cd docs && bundle exec jekyll serve        # documentation site on :4000 (gems in docs/vendor/bundle)
 ```
 
 After running the app, stop it and `docker compose stop` (compose Postgres was not running before).

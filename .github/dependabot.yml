@@ -15,3 +15,8 @@ updates:
     target-branch: "develop"
     schedule:
       interval: "weekly"
+  - package-ecosystem: "bundler"
+    directory: "/docs"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"

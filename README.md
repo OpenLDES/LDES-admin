@@ -82,8 +82,20 @@ Ingesting in their event streams starts from a member that fits, in the format o
 
 ## Documentation
 
+* [The documentation site](https://openldes.github.io/LDES-admin/) – installing LDES-admin,
+  monitoring, LDES servers, LDIO and the sandbox
 * [analysis/README.md](analysis/README.md) – what LDES-admin does
 * [analysis/architecture.md](analysis/architecture.md) – how it is built
+
+The documentation site is a [Jekyll](https://jekyllrb.com/) 4 site in `docs/`, published to GitHub
+Pages by workflow 5 (see [below](#continuous-integration-and-releases)). It reuses the screenshots
+in `docs/screenshots/`. To preview it, with Ruby installed:
+
+```shell
+cd docs
+bundle install
+bundle exec jekyll serve   # http://localhost:4000
+```
 
 ## Project layout
 
@@ -240,6 +252,7 @@ The GitHub workflows in `.github/workflows` follow the release flow of the
 | 2.a. Build & Deploy Project        | pushes to `develop` and `main`, or manually   | Builds and pushes the image: from `develop` to `ghcr.io/<owner>/<repository>:<version>-<timestamp>` and `latest`; from `main` to Docker Hub, `<namespace>/ldes-admin:<version>`, and `latest` for a release |
 | 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main` | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                  |
 | 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                          |
+| 5. Build & Deploy Documentation    | pushes to `main` and pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll; on `main`, publishes it to GitHub Pages                                                                                                  |
 
 To release a version:
 
@@ -260,6 +273,7 @@ Configure the repository under *Settings › Secrets and variables › Actions*:
 | `GIT_CONFIG_EMAIL`    | 3                                | E-mail address of that author                                      |
 | `JAVA_DISTRIBUTION`   | all, optional                    | The JDK distribution for `actions/setup-java`; default `temurin`   |
 | `JAVA_VERSION`        | all, optional                    | The JDK version; default `25`                                      |
+| `RUBY_VERSION`        | 5, optional                      | The Ruby version that builds the documentation; default `4.0`      |
 | `ANALYSE_PACKAGE`     | 1.a, 2.a, optional               | `true` to analyse the code with SonarCloud                         |
 | `SONAR_ORGANIZATION`  | with `ANALYSE_PACKAGE`           | The SonarCloud organisation                                        |
 | `SONAR_PROJECT_KEY`   | with `ANALYSE_PACKAGE`           | The SonarCloud project key                                         |
@@ -274,7 +288,9 @@ Configure the repository under *Settings › Secrets and variables › Actions*:
 The workflows publish to the GitHub Container Registry with the token GitHub gives them. For
 workflow 3, allow *GitHub Actions to create and approve pull requests* (*Settings › Actions ›
 General › Workflow permissions*). When `develop` is protected, let the deploy key of workflow 4
-push to it.
+push to it. For workflow 5, pick *GitHub Actions* as the source of GitHub Pages (*Settings › Pages*)
+and, when the deployment is refused, allow `main` to deploy to the `github-pages` environment
+(*Settings › Environments*).
 
 ## Usage of AI
 

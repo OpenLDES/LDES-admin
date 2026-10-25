@@ -1,0 +1,38 @@
+title: LDES-admin
+description: >-
+  Administration, monitoring and sandboxing for OpenLDES servers and Linked Data Interaction
+  Orchestrator (LDIO) pipelines.
+url: https://openldes.github.io
+# The deploy workflow passes the base URL of the GitHub Pages site (/LDES-admin) to the build
+baseurl: ""
+github_url: https://github.com/OpenLDES/LDES-admin
+lang: en
+
+# The Docker images of LDES-admin: releases (Docker Hub) and snapshots of develop (GitHub)
+docker_image: openldes/ldes-admin
+snapshot_image: ghcr.io/openldes/ldes-admin
+
+# The versions LDES-admin starts locally, and their documentation
+ldes_server_image: openldes/ldes-server:4.2.1
+ldio_image: openldes/ldi-orchestrator:3.1.1
+ldes_server_docs: https://openldes.github.io/LDESServer/4.2.1
+ldio_docs: https://openldes.github.io/Linked-Data-Interactions/3.2.0-SNAPSHOT/ldio
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: highlight
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: page
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

@@ -233,6 +233,12 @@ snapshot version, and the Maven release plugin moves `develop` on to the next on
 (`.github/Dockerfile`) runs the bootstrap jar, which holds the frontend. The README lists the
 steps of a release and the variables and secrets the workflows need.
 
+The documentation site (`docs/`) is a Jekyll 4 site with a theme of its own (black, or white with
+the switch in its header; `assets/css/style.css`, `assets/js/site.js`) and no plugins. GitHub Pages
+only builds Jekyll 3 itself, so workflow 5 builds it with Jekyll 4 and publishes it to GitHub Pages
+on pushes to `main`. Its pages reuse the screenshots in `docs/screenshots/`; the features on its
+home page are in `_data/features.yml`, the pages in its header in `_data/navigation.yml`.
+
 ## Frontend
 
 Vue 3 with TypeScript, PrimeVue (Aura theme), Vue Flow, CodeMirror 6 and Chart.js, built with Vite
