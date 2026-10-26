@@ -148,7 +148,8 @@ The simulation has three columns:
   passed on, filtered out, or stopped with an error. Components it did not reach are listed as such.
 * **After …**: what the step you select made, in Turtle; for an output, what it sends. A step can
   make several models: an adapter makes one per object of a JSON array, or per named graph of an
-  RML mapping. Page through them with the arrows (*Model 2 of 14*).
+  RML mapping. Page through them with the arrows (*Model 2 of 14*). Linked data can be shown in
+  another RDF format: Turtle, JSON-LD, N-Quads or N-Triples.
 
 The bar above sums it up: *Delivered to 2 outputs*, *Filtered out by Change Detection Filter*, or
 *Stopped at Version Object Creator*. *Reset* clears the result. Click the bar to fold the simulation

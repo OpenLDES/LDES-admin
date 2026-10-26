@@ -443,7 +443,8 @@ In production mode, *Run* sends the pipeline and the input member to the backend
 (`POST /sandbox/runs`), which runs them on the real LDI components and answers every step. The
 store sends a session id, renewed for every pipeline loaded, and whether to execute the outputs
 (the *Execute outputs* switch; a dry run by default). A step can hold several models; the output
-column pages through them, and *Ingest* ingests every delivered member.
+column pages through them, shows linked data in the RDF format chosen for it (every step
+has the content type of what it made), and *Ingest* ingests every delivered member.
 
 In demo mode the mock API runs the simulator in the browser instead (one per session).
 *Executed*, an HTTP output to the event stream of a demo LDES server counts the member there. RDF

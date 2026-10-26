@@ -93,6 +93,8 @@ class RunPipelineServiceTest {
                 "Printed (3 models)"));
     assertThat(run.steps().getFirst().outputs()).containsExactly(INPUT.content());
     assertThat(run.steps().getFirst().format()).isEqualTo(Format.JSON);
+    assertThat(run.steps().getFirst().contentType()).isEqualTo("application/json");
+    assertThat(run.steps().get(2).contentType()).isEqualTo("text/turtle");
     assertThat(run.steps().getLast().outputs()).containsExactly("a1", "a2", "b1");
     assertThat(run.delivered()).isTrue();
     assertThat(run.members()).containsExactly("a1", "a2", "b1");

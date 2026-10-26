@@ -131,7 +131,7 @@ describe('demo and production mode', () => {
   it('runs the pipeline of the sandbox on the backend, step by step', () => {
     stubBackend()
     const step = (kind: string, component: string, status: string, summary: string, outputs: string[] = []) =>
-      ({ kind, index: 0, component, status, summary, outputs, format: 'turtle', durationMs: 4 })
+      ({ kind, index: 0, component, status, summary, outputs, contentType: 'text/turtle', format: 'turtle', durationMs: 4 })
     cy.intercept('POST', '/api/v1/sandbox/runs', {
       body: {
         steps: [

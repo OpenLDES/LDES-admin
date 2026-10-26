@@ -15,19 +15,20 @@ public record PipelineRunWebModel(List<StepWebModel> steps, boolean delivered,
                                   List<String> members) {
 
   /**
-   * @param kind    input, adapter, transformer or output
-   * @param status  ok, filtered or error
-   * @param format  turtle, json or text: how the outputs are written
-   * @param outputs what the component made: a model each, or what an output sends
+   * @param kind        input, adapter, transformer or output
+   * @param status      ok, filtered or error
+   * @param format      turtle, json or text: how the outputs are written
+   * @param outputs     what the component made: a model each, or what an output sends
+   * @param contentType of the outputs, e.g. text/turtle
    */
   public record StepWebModel(String kind, int index, String component, String status,
-                             String summary, List<String> outputs, String format,
-                             long durationMs) {
+                             String summary, List<String> outputs, String contentType,
+                             String format, long durationMs) {
 
     static StepWebModel fromDomain(StepResult step) {
       return new StepWebModel(lower(step.kind()), step.index(), step.component(),
-          lower(step.status()), step.summary(), step.outputs(), lower(step.format()),
-          step.durationMs());
+          lower(step.status()), step.summary(), step.outputs(), step.contentType(),
+          lower(step.format()), step.durationMs());
     }
 
     private static String lower(Enum<?> value) {

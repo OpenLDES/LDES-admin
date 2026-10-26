@@ -148,9 +148,9 @@ class SandboxControllerTest {
   void runsAPipelineStepByStep() {
     when(runPipelineUseCase.run(any(), any(), any())).thenReturn(new PipelineRun(List.of(
         new StepResult(Kind.INPUT, 0, "Ldio:HttpIn", Status.OK, "Received POST /parcels",
-            List.of("<a> <b> <c> ."), Format.TURTLE, 0),
+            List.of("<a> <b> <c> ."), "text/turtle", Format.TURTLE, 0),
         new StepResult(Kind.OUTPUT, 0, "Ldio:HttpOut", Status.ERROR,
-            "POST http://ldes/parcels answered 400", List.of(), Format.TEXT, 12)),
+            "POST http://ldes/parcels answered 400", List.of(), "text/plain", Format.TEXT, 12)),
         false, List.of()));
 
     assertThat(mvc.post().uri("/api/v1/sandbox/runs")
@@ -169,7 +169,7 @@ class SandboxControllerTest {
              "steps": [
                {"kind": "input", "index": 0, "component": "Ldio:HttpIn", "status": "ok",
                 "summary": "Received POST /parcels", "outputs": ["<a> <b> <c> ."],
-                "format": "turtle", "durationMs": 0},
+                "contentType": "text/turtle", "format": "turtle", "durationMs": 0},
                {"kind": "output", "status": "error", "format": "text",
                 "summary": "POST http://ldes/parcels answered 400", "durationMs": 12}]}
             """);

@@ -78,6 +78,8 @@ export interface SimulationStep {
   summary: string
   /** What it made: a model each (adapters and transformers can make several), or what an output sends */
   outputs: string[]
+  /** Of the outputs, e.g. text/turtle, so they can be converted */
+  contentType: string
   format: PayloadFormat
   durationMs: number
 }

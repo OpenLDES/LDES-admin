@@ -36,6 +36,8 @@ public class RunPipelineService implements RunPipelineUseCase {
 
   /** A step shows this many models at most; it counts the rest */
   static final int MAX_SHOWN = 100;
+  /** Models travel between the steps as Turtle */
+  private static final String TURTLE = "text/turtle";
 
   private final InstanceRepository instanceRepository;
   private final ComponentRuntime runtime;
@@ -91,7 +93,7 @@ public class RunPipelineService implements RunPipelineUseCase {
         try {
           List<RdfDocument> models = runtime.read(input);
           steps.add(step(Kind.INPUT, 0, definition.name(), Status.OK,
-              "%s: %s".formatted(received, count(models)), contents(models), Format.TURTLE, start));
+              "%s: %s".formatted(received, count(models)), contents(models), TURTLE, start));
           return models;
         } catch (ComponentException e) {
           steps.add(error(Kind.INPUT, 0, definition.name(),
@@ -100,18 +102,18 @@ public class RunPipelineService implements RunPipelineUseCase {
         }
       }
       steps.add(step(Kind.INPUT, 0, definition.name(), Status.OK, received,
-          List.of(input.content()), formatOf(input.contentType()), start));
+          List.of(input.content()), input.contentType(), start));
       ComponentDefinition adapter = definition.adapter();
       start = System.nanoTime();
       try {
         List<RdfDocument> models = runtime.adapt(options.session(), adapter, input);
         if (models.isEmpty()) {
           steps.add(step(Kind.ADAPTER, 0, adapter.name(), Status.FILTERED,
-              "Made no models of the input", List.of(), Format.TURTLE, start));
+              "Made no models of the input", List.of(), TURTLE, start));
           return null;
         }
         steps.add(step(Kind.ADAPTER, 0, adapter.name(), Status.OK, "Made " + count(models),
-            contents(models), Format.TURTLE, start));
+            contents(models), TURTLE, start));
         return models;
       } catch (ComponentException e) {
         steps.add(error(Kind.ADAPTER, 0, adapter.name(), e.getMessage(), start));
@@ -137,14 +139,14 @@ public class RunPipelineService implements RunPipelineUseCase {
       if (result.isEmpty()) {
         steps.add(step(Kind.TRANSFORMER, index, transformer.name(), Status.FILTERED,
             models.size() == 1 ? "Filtered out" : "Filtered out all " + count(models), List.of(),
-            Format.TURTLE, start));
+            TURTLE, start));
         return null;
       }
       String summary = models.size() == 1 && result.size() == 1
           ? "Passed on the model"
           : "%s in, %s out".formatted(count(models), count(result));
       steps.add(step(Kind.TRANSFORMER, index, transformer.name(), Status.OK, summary,
-          contents(result), Format.TURTLE, start));
+          contents(result), TURTLE, start));
       return result;
     }
 
@@ -174,7 +176,7 @@ public class RunPipelineService implements RunPipelineUseCase {
           .filter(serialisation -> !serialisation.isEmpty())
           .toList();
       steps.add(step(Kind.OUTPUT, index, output.name(), Status.OK, summary, serialisations,
-          formatOf(first.contentType()), start));
+          first.contentType(), start));
       return true;
     }
 
@@ -197,17 +199,17 @@ public class RunPipelineService implements RunPipelineUseCase {
   }
 
   private static StepResult step(Kind kind, int index, String component, Status status,
-      String summary, List<String> outputs, Format format, long start) {
+      String summary, List<String> outputs, String contentType, long start) {
     String shownSummary = outputs.size() > MAX_SHOWN
         ? "%s; the first %d are shown".formatted(summary, MAX_SHOWN)
         : summary;
-    return new StepResult(kind, index, component, status, shownSummary, shown(outputs), format,
-        (System.nanoTime() - start) / 1_000_000);
+    return new StepResult(kind, index, component, status, shownSummary, shown(outputs),
+        contentType, formatOf(contentType), (System.nanoTime() - start) / 1_000_000);
   }
 
   private static StepResult error(Kind kind, int index, String component, String message,
       long start) {
-    return step(kind, index, component, Status.ERROR, message, List.of(), Format.TEXT, start);
+    return step(kind, index, component, Status.ERROR, message, List.of(), "text/plain", start);
   }
 
   private static List<String> shown(List<String> outputs) {

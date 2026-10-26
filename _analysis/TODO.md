@@ -63,7 +63,7 @@
 * [x] When you change the content type of the input member in the sandbox environment, the member
   should be converted to the selected content type. For example, when you have a member in turtle
   format, and you change the content type to json-ld, the member should be available in json-ld
-* [] You should be able to change the content type of the output member in the sandbox environment
+* [x] You should be able to change the content type of the output member in the sandbox environment
   after running a test and selecting a step.
 * [] When you run a test in the sandbox environment, and you select a component in the canvas, then
   the step of the selected component should be selected in the "steps" panel. You leave the steps as

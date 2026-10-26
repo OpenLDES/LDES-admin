@@ -102,6 +102,15 @@ describe('the sandbox', () => {
     cy.contains('[data-cy=simulation-step]', 'Version Object Creator').click()
     cy.get('[data-cy=step-output] .cm-content').should('contain', 'dcterms:isVersionOf')
 
+    // The model of a step in another format
+    cy.get('[data-cy=output-content-type]').should('contain', 'Turtle').click()
+    cy.contains('.p-select-option', 'N-Triples').click()
+    cy.get('[data-cy=step-output] .cm-content')
+      .should('contain', '<http://purl.org/dc/terms/isVersionOf> <https://data.vlaanderen.be/id/perceel/24062B0123-00A000> .')
+    cy.get('[data-cy=output-content-type]').click()
+    cy.contains('.p-select-option', 'JSON-LD').click()
+    cy.get('[data-cy=step-output] .cm-content').should('contain', '"dcterms:isVersionOf"')
+
     cy.get('[data-cy=open-ingest-result]').click()
     cy.get('[data-cy=ingest-result]').click()
     cy.contains('.p-toast', 'Ingested the result in sandbox-parcels')

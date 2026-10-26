@@ -9,9 +9,10 @@ import { useToast } from 'primevue/usetoast'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction } from '@/composables/useAsync'
-import type { EventStream } from '@/domain/ldes'
+import type { EventStream, RdfFormat } from '@/domain/ldes'
 import type { DeployedPipeline } from '@/domain/ldio'
 import { SANDBOX_INGEST_PIPELINE, type SimulationStep } from '@/domain/sandbox'
+import { convertRdf, isRdfFormat } from '@/ldes/formats'
 import { componentInfo, kinds } from '@/pipeline/catalog'
 import { describeSchedule } from '@/pipeline/poller'
 import { templateById } from '@/pipeline/templates'
@@ -51,9 +52,37 @@ const steps = computed(() => sandbox.result?.steps ?? [])
 const shown = computed<SimulationStep | undefined>(() => steps.value[selectedStep.value])
 /** Which of the models of the shown step is shown: adapters and transformers can make several */
 const shownModel = ref(0)
-const shownOutput = computed(() => shown.value?.outputs[shownModel.value])
 watch(shown, () => {
   shownModel.value = 0
+})
+
+const outputFormats: { label: string; value: RdfFormat }[] = [
+  { label: 'Turtle', value: 'text/turtle' },
+  { label: 'JSON-LD', value: 'application/ld+json' },
+  { label: 'N-Quads', value: 'application/n-quads' },
+  { label: 'N-Triples', value: 'application/n-triples' },
+]
+/** The RDF format chosen to show linked data in; as the step made it when none is chosen */
+const outputFormat = ref<RdfFormat>()
+/** The RDF format the shown step is shown in; none when it did not make linked data */
+const shownFormat = computed<RdfFormat | undefined>(() => {
+  const step = shown.value
+  if (!step?.outputs.length || !isRdfFormat(step.contentType)) return undefined
+  return outputFormat.value ?? mediaTypeOf(step.contentType) as RdfFormat
+})
+const shownOutput = computed<{ text?: string; error?: string }>(() => {
+  const step = shown.value
+  const made = step?.outputs[shownModel.value]
+  if (!step || made === undefined || !shownFormat.value) return { text: made }
+  try {
+    return { text: convertRdf(made, mediaTypeOf(step.contentType) as RdfFormat, shownFormat.value) }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+const outputLanguage = computed(() => {
+  if (shownFormat.value) return shownFormat.value === 'application/ld+json' ? 'json' : 'turtle'
+  return shown.value ? languageOf(shown.value.format) : 'text'
 })
 const pending = computed(() => sandbox.conversion.order.length - steps.value.length)
 // A configuration that LDIO would refuse can still be simulated
@@ -237,6 +266,10 @@ async function send() {
   if (sent) sendPopover.value?.hide()
 }
 
+function mediaTypeOf(contentType: string): string {
+  return contentType.split(';')[0].trim().toLowerCase()
+}
+
 function languageOf(format: SimulationStep['format']) {
   return format === 'json' ? 'json' : format === 'text' ? 'text' : 'turtle'
 }
@@ -369,12 +402,19 @@ const statusIcon: Record<SimulationStep['status'], string> = {
             <Button icon="pi pi-chevron-right" severity="secondary" text rounded size="small" aria-label="Next model"
               :disabled="shownModel === shown.outputs.length - 1" data-cy="next-model" @click="shownModel++" />
           </span>
+          <Select v-if="shownFormat" :model-value="shownFormat" :options="outputFormats" option-label="label"
+            option-value="value" size="small" aria-label="Show in format" data-cy="output-content-type"
+            @update:model-value="outputFormat = $event" />
           <Button v-if="sandbox.result?.delivered && !sandbox.running" icon="pi pi-upload" label="Ingest"
             v-tooltip.top="'Ingest the result in a sandbox LDES server'" size="small" text
             data-cy="open-ingest-result" @click="ingestPopover?.toggle($event)" />
         </header>
-        <CodeEditor v-if="shownOutput" :model-value="shownOutput" :language="languageOf(shown!.format)"
+        <CodeEditor v-if="shownOutput.text" :model-value="shownOutput.text" :language="outputLanguage"
           readonly min-height="100%" class="editor" data-cy="step-output" />
+        <div v-else-if="shownOutput.error" class="placeholder muted small" data-cy="output-error">
+          <i class="pi pi-exclamation-triangle" />
+          <p>Cannot show this in that format: {{ shownOutput.error }}</p>
+        </div>
         <div v-else-if="shown" class="placeholder muted small">
           <i :class="statusIcon[shown.status]" />
           <p>{{ shown.summary }}</p>

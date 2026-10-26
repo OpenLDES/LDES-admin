@@ -28,6 +28,12 @@ const NS = {
   geojson: 'https://purl.org/geojson/vocab#',
 }
 const RDF_TYPE = `${NS.rdf}type`
+/** The content type of what a step made, unless it says otherwise */
+const CONTENT_TYPES: Record<PayloadFormat, string> = {
+  turtle: 'text/turtle',
+  json: 'application/json',
+  text: 'text/plain',
+}
 const BASE_IRI = 'http://example.org/'
 
 interface Model {
@@ -51,7 +57,7 @@ export class PipelineSimulator {
     let model: Model
 
     steps.push(step('input', 0, pipeline.input, 'ok', receive(pipeline, input), input.content,
-      formatOf(input.contentType)))
+      formatOf(input.contentType), input.contentType))
     try {
       if (pipeline.input.adapter) {
         const adapted = adapt(pipeline.input.adapter, input)
@@ -63,7 +69,7 @@ export class PipelineSimulator {
         return { steps, delivered: false, members: [] }
       } else {
         model = parseRdf(input.content, input.contentType)
-        steps[0] = { ...steps[0], outputs: [toTurtle(model)], format: 'turtle' }
+        steps[0] = { ...steps[0], outputs: [toTurtle(model)], format: 'turtle', contentType: 'text/turtle' }
       }
     } catch (e) {
       const failing = pipeline.input.adapter ?? pipeline.input
@@ -91,7 +97,7 @@ export class PipelineSimulator {
       const contentType = String(configValue(output.config, 'rdf-writer.content-type')
         ?? 'text/turtle')
       steps.push(step('output', index, output, 'ok', deliver(output, contentType),
-        serialize(model, contentType), contentType.includes('json') ? 'json' : 'turtle'))
+        serialize(model, contentType), contentType.includes('json') ? 'json' : 'turtle', contentType))
     })
     return { steps, delivered: outputs.length > 0, members: outputs.length > 0 ? [toTurtle(model)] : [] }
   }
@@ -554,8 +560,8 @@ function usedPrefixes(model: Model): Record<string, string> {
 }
 
 function step(kind: ComponentKind, index: number, component: ComponentDefinition,
-  status: StepStatus, summary: string, output: string | undefined, format: PayloadFormat):
-  SimulationStep {
+  status: StepStatus, summary: string, output: string | undefined, format: PayloadFormat,
+  contentType = CONTENT_TYPES[format]): SimulationStep {
   return {
     kind,
     index,
@@ -563,6 +569,7 @@ function step(kind: ComponentKind, index: number, component: ComponentDefinition
     status,
     summary,
     outputs: output === undefined ? [] : [output],
+    contentType,
     format,
     durationMs: 2 + (hash(component.name + index) % 38),
   }
