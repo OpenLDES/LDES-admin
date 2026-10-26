@@ -1,6 +1,6 @@
 /**
  * Unit tests run in Jest (jsdom). TypeScript goes through ts-jest, single file components
- * through vue3-jest, and the ESM-only PrimeVue packages through Babel.
+ * through vue3-jest, and the ESM-only packages through Babel.
  */
 module.exports = {
   testEnvironment: 'jsdom',
@@ -19,8 +19,9 @@ module.exports = {
     '^.+\\.vue$': ['@vue/vue3-jest', { tsConfig: '<rootDir>/tsconfig.jest.json' }],
     '^.+\\.m?js$': 'babel-jest',
   },
-  // Transform PrimeVue, both in the pnpm store (.pnpm/@primevue+core@x) and when linked
+  // Transform PrimeVue and nostics (which vue-router 5 requires from its CommonJS build), both in
+  // the pnpm store (.pnpm/@primevue+core@x) and when linked
   transformIgnorePatterns: [
-    '/node_modules/(?!\\.pnpm/(primevue|@primevue\\+|@primeuix\\+))(?!primevue|@primevue|@primeuix)',
+    '/node_modules/(?!\\.pnpm/(primevue|@primevue\\+|@primeuix\\+|nostics@))(?!primevue|@primevue|@primeuix|nostics)',
   ],
 }

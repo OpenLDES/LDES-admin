@@ -112,7 +112,7 @@ bundle exec jekyll serve   # http://localhost:4000
 * JDK 25
 * Docker, for the database during development, the integration tests and local LDES servers/LDIOs
 * pnpm 9, only to run the frontend on its own (see [below](#2-backend-and-frontend-separately)).
-  The frontend needs Node.js 22.12 or later (Vite 7); pnpm downloads and uses Node.js 24.21.0 for
+  The frontend needs Node.js 22.12 or later (Vite 8); pnpm downloads and uses Node.js 24.21.0 for
   it automatically, whatever Node.js your shell runs (`use-node-version` in `frontend/.npmrc`).
 
 ## Running LDES-admin
