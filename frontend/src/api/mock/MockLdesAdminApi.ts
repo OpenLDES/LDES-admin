@@ -32,6 +32,9 @@ import type {
 import { canBeHalted, canBeResumed } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
 import {
+  type ClientCredentials,
+  type PolledContent,
+  type PollRequest,
   type Sandbox,
   SANDBOX_EVENT_STREAM,
   SANDBOX_INGEST_PIPELINE,
@@ -168,6 +171,31 @@ export class MockLdesAdminApi implements LdesAdminApi {
         if (instance) this.remove(instance)
       }
     })
+  }
+
+  /**
+   * Without a backend the browser fetches the URL itself. That only works for APIs that let other
+   * sites read their responses (CORS), such as the open data of Ghent.
+   */
+  async poll(request: PollRequest): Promise<PolledContent> {
+    requireHttpUrl(request.url, 'url')
+    const headers = { ...request.headers }
+    if (request.clientCredentials) {
+      headers.Authorization = `Bearer ${await accessToken(request.clientCredentials)}`
+    }
+    let response: Response
+    try {
+      response = await fetch(request.url, { headers })
+    } catch {
+      throw new ApiError(502, `Could not poll ${request.url}: it is unreachable, or does not let `
+        + 'browsers read it (CORS). In production mode LDES-admin polls it instead.')
+    }
+    if (!response.ok) throw new ApiError(502, `${request.url} answered ${await statusOf(response)}`)
+    const contentType = response.headers.get('Content-Type')
+    if (!contentType) {
+      throw new ApiError(502, `${request.url} answered without a Content-Type, which LDIO needs to pass it on`)
+    }
+    return { contentType, body: await response.text() }
   }
 
   // Instances ----------------------------------------------------------------------------------
@@ -990,4 +1018,54 @@ function normalizeUrl(value: string): string {
     throw new ApiError(400, `'url' must be an absolute http(s) URL, but was ${value}`)
   }
   return url.toString().replace(/\/+$/, '')
+}
+
+/** Like the backend: a URL to poll is used as it is */
+function requireHttpUrl(value: string | undefined, name: string): void {
+  let protocol: string | undefined
+  try {
+    protocol = new URL(value ?? '').protocol
+  } catch {
+    protocol = undefined
+  }
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new ApiError(400, `'${name}' must be an absolute http(s) URL, but was ${value}`)
+  }
+}
+
+/** The client credentials grant as LDIO requests it: the id and secret in the form */
+async function accessToken(credentials: ClientCredentials): Promise<string> {
+  requireHttpUrl(credentials.tokenEndpoint, 'tokenEndpoint')
+  const form = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: credentials.clientId,
+    client_secret: credentials.clientSecret,
+    ...(credentials.scope ? { scope: credentials.scope } : {}),
+  })
+  let response: Response
+  try {
+    response = await fetch(credentials.tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: form,
+    })
+  } catch {
+    throw new ApiError(502, `Could not get an access token from ${credentials.tokenEndpoint}: `
+      + 'it is unreachable, or does not let browsers read it (CORS)')
+  }
+  if (!response.ok) {
+    throw new ApiError(502, `Could not get an access token from ${credentials.tokenEndpoint}: ${response.status}`)
+  }
+  const token = await response.json().catch(() => undefined) as { access_token?: unknown } | undefined
+  if (typeof token?.access_token !== 'string' || !token.access_token) {
+    throw new ApiError(502, `${credentials.tokenEndpoint} answered without an access token`)
+  }
+  return token.access_token
+}
+
+/** The status of an error response, with the start of its body, as the backend reports it */
+async function statusOf(response: Response): Promise<string> {
+  const body = (await response.text().catch(() => '')).trim()
+  const excerpt = body.length > 500 ? `${body.slice(0, 500)}…` : body
+  return `${response.status}${response.statusText ? ` ${response.statusText}` : ''}${excerpt ? ` - ${excerpt}` : ''}`
 }

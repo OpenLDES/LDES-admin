@@ -26,6 +26,8 @@ const BASE_IRI = 'http://example.org/'
 export interface SimulationInput {
   content: string
   contentType: string
+  /** The URL it was polled from, if it was */
+  source?: string
 }
 
 export type StepStatus = 'ok' | 'filtered' | 'error'
@@ -168,7 +170,7 @@ function receive(pipeline: Pipeline, input: SimulationInput): string {
     case 'Ldio:HttpIn':
       return `Received POST /${pipeline.name} (${input.contentType})`
     case 'Ldio:HttpInPoller':
-      return `Polled ${configValue(config, 'url') ?? 'the API'}: 200 OK`
+      return `Polled ${input.source ?? firstOf(configValue(config, 'url')) ?? 'the API'}: 200 OK`
     case 'Ldio:LdesClient':
       return `Fetched a member from ${firstOf(configValue(config, 'urls')) ?? 'the LDES'}`
     case 'Ldio:LdesClientConnector':

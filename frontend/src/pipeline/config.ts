@@ -8,6 +8,7 @@ import {
   findConfigEntry,
   normalizeKey,
 } from './catalog'
+import { parseCron } from './cron'
 
 /**
  * Reading, changing and validating the configuration of a pipeline component, as described by its
@@ -149,8 +150,6 @@ export function isApplicable(info: ComponentInfo, config: ComponentConfig | unde
 // Validation -----------------------------------------------------------------------------------
 
 const DURATION = /^P(?!$)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$/
-const CRON_MACROS = ['@yearly', '@annually', '@monthly', '@weekly', '@daily', '@midnight', '@hourly']
-const CRON_FIELD = /^[\d*?/,LW#A-Za-z-]+$/
 const IRI = /^[A-Za-z][A-Za-z0-9+.-]*:[^\s<>"{}|\\^`]+$/
 const CONTENT_TYPE = /^[\w.+-]+\/[\w.+-]+(\s*;.*)?$/
 
@@ -198,10 +197,8 @@ export function valueProblems(property: ConfigProperty, value: unknown): ConfigP
     case 'duration':
       return DURATION.test(text.trim()) ? [] : [problem('Enter an ISO 8601 duration, e.g. PT1M or PT30S')]
     case 'cron': {
-      const fields = text.trim().split(/\s+/)
-      const valid = CRON_MACROS.includes(text.trim())
-        || (fields.length === 6 && fields.every((field) => CRON_FIELD.test(field)))
-      return valid ? [] : [problem('Enter 6 fields: second minute hour day month weekday, e.g. */10 * * * * *')]
+      const parsed = parseCron(text)
+      return parsed.ok ? [] : [problem(parsed.error)]
     }
     case 'select': {
       if (property.custom) {

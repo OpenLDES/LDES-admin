@@ -1,25 +1,30 @@
 package org.openldes.ldesadmin.adapter.in.rest.sandbox;
 
+import jakarta.validation.Valid;
+import org.openldes.ldesadmin.application.port.in.sandbox.PollUseCase;
 import org.openldes.ldesadmin.application.port.in.sandbox.SandboxUseCase;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The local LDES server and LDIO to experiment with.
+ * The local LDES server and LDIO to experiment with, and what the simulation of a pipeline needs.
  */
 @RestController
 @RequestMapping("/api/v1/sandbox")
 class SandboxController {
 
   private final SandboxUseCase sandboxUseCase;
+  private final PollUseCase pollUseCase;
 
-  SandboxController(SandboxUseCase sandboxUseCase) {
+  SandboxController(SandboxUseCase sandboxUseCase, PollUseCase pollUseCase) {
     this.sandboxUseCase = sandboxUseCase;
+    this.pollUseCase = pollUseCase;
   }
 
   @GetMapping
@@ -40,5 +45,15 @@ class SandboxController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void stop() {
     sandboxUseCase.stop();
+  }
+
+  /**
+   * Fetches what an HTTP In Poller would receive, for the simulation. LDES-admin fetches it, not
+   * the browser, which most APIs don't allow to read their responses (CORS). A POST, as the
+   * request carries credentials.
+   */
+  @PostMapping("/poll")
+  PolledContentWebModel poll(@Valid @RequestBody PollRequest request) {
+    return PolledContentWebModel.fromDomain(pollUseCase.poll(request.toDomain()));
   }
 }

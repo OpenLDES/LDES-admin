@@ -183,6 +183,9 @@ By default the API is open, for use on your own machine or a trusted network. Wi
 the issuer you configure. `/actuator/health` stays public, and so does the frontend, which holds no
 data.
 
+Secure it in any case when LDES-admin reaches systems its users should not: to simulate a pipeline
+with an HTTP poller, the backend fetches any URL the sandbox asks for and returns the response.
+
 > The frontend cannot sign in yet. With security enabled it loads, but its calls to the API are
 > refused: use the API with a token of your own until then.
 {: .warning }

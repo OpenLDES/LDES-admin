@@ -55,7 +55,8 @@ Data Interaction Orchestrator (LDIO) pipelines.
 * **Design** a pipeline by dragging components onto a canvas, or start from a template. Configure
   every LDIO component in a form or as YAML, validated as you type.
 * **Simulate**: run a member through the pipeline in the browser and see what each step makes of
-  it.
+  it. A pipeline with an HTTP poller can fetch its input from the URL it polls, once or on its
+  schedule.
 * **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
   LDIO in Docker that work together out of the box.
 
@@ -221,7 +222,8 @@ pnpm build        # type-check and build to dist/
 
 Configuration is in `bootstrap/src/main/resources/application.yaml`: the Docker images for local
 instances (`ldes-admin.local-runtime.*`), how often the instances are monitored
-(`ldes-admin.monitor.*`), and `ldes-admin.security.enabled` to require a JWT.
+(`ldes-admin.monitor.*`), and `ldes-admin.security.enabled` to require a JWT. Require one wherever
+LDES-admin reaches systems its users should not: the sandbox polls URLs through the backend.
 
 ## Sandbox
 

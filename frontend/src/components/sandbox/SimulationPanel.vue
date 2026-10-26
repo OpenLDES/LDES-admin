@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Button from 'primevue/button'
+import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import Select from 'primevue/select'
 import CodeEditor from '@/components/common/CodeEditor.vue'
@@ -10,10 +11,12 @@ import type { EventStream } from '@/domain/ldes'
 import type { DeployedPipeline } from '@/domain/ldio'
 import { SANDBOX_INGEST_PIPELINE } from '@/domain/sandbox'
 import { componentInfo, kinds } from '@/pipeline/catalog'
+import { describeSchedule } from '@/pipeline/poller'
 import type { SimulationStep } from '@/pipeline/simulator'
 import { templateById } from '@/pipeline/templates'
 import { useInstancesStore } from '@/stores/instances'
 import { useSandboxStore } from '@/stores/sandbox'
+import { shortUrl } from '@/utils/format'
 
 /**
  * Runs a member through the pipeline and shows what every component made of it. Collapses to a
@@ -33,6 +36,12 @@ const contentTypes = [
   { label: 'JSON-LD', value: 'application/ld+json' },
   { label: 'CSV', value: 'text/csv' },
 ]
+// A polled response can have another content type, which the adapter then receives
+const contentTypeOptions = computed(() => {
+  const current = sandbox.sample.contentType
+  return contentTypes.some((option) => option.value === current)
+    ? contentTypes : [...contentTypes, { label: current, value: current }]
+})
 
 const selectedStep = ref(0)
 const steps = computed(() => sandbox.result?.steps ?? [])
@@ -84,6 +93,75 @@ function useTemplateSample() {
   const origin = sandbox.origin
   const template = templateById(origin.kind === 'template' ? origin.id : 'parcels-to-ldes')
   if (template) sandbox.sample = { ...template.sample }
+}
+
+// Polling the URL of an HTTP In Poller, for the input ------------------------------------------
+
+const fetchMenu = ref<InstanceType<typeof Menu>>()
+const fetching = ref(false)
+const fetchItems = computed(() => (sandbox.poller?.urls ?? [])
+  .map((url) => ({ label: shortUrl(url), command: () => fetchFrom(url) })))
+const fetchTooltip = computed(() => {
+  const urls = sandbox.poller?.urls ?? []
+  if (urls.length === 0) return 'Configure the URL of the poller first'
+  return urls.length === 1 ? `Fetch ${shortUrl(urls[0])} into the input` : 'Fetch one of the URLs into the input'
+})
+const pollTooltip = computed(() => {
+  if (sandbox.polling) return 'Stop polling'
+  const schedule = sandbox.poller?.schedule
+  return schedule
+    ? `Poll ${describeSchedule(schedule)}, like the pipeline does, and run every response through it`
+    : sandbox.poller?.scheduleProblem
+})
+
+/** What the latest poll brought, and when the next one is */
+const pollStatus = computed(() => {
+  const last = sandbox.lastPoll
+  const tone = last?.error ? 'error' : 'idle'
+  if (sandbox.polling) {
+    const schedule = sandbox.poller?.schedule
+    const count = `${sandbox.polls} ${sandbox.polls === 1 ? 'poll' : 'polls'}`
+    const next = sandbox.nextPollAt ? `next at ${clock(sandbox.nextPollAt)}` : 'polling now'
+    return {
+      icon: sandbox.nextPollAt ? 'pi pi-sync' : 'pi pi-sync pi-spin',
+      text: [schedule ? `Polling ${describeSchedule(schedule)}` : 'Polling', count, next].join(' · '),
+      tone,
+      detail: last?.error && `The last poll failed: ${last.error}`,
+    }
+  }
+  if (!last) return undefined
+  return last.error
+    ? { icon: 'pi pi-exclamation-triangle', text: `Could not fetch ${shortUrl(last.url)}`, tone, detail: last.error }
+    : { icon: 'pi pi-cloud-download', text: `Fetched ${shortUrl(last.url)} at ${clock(last.at)}`, tone, detail: undefined }
+})
+
+function fetchInput(event: Event) {
+  const urls = sandbox.poller?.urls ?? []
+  if (urls.length > 1) fetchMenu.value?.toggle(event)
+  else if (urls.length === 1) fetchFrom(urls[0])
+}
+
+async function fetchFrom(url: string) {
+  fetching.value = true
+  try {
+    await sandbox.fetchInput(url)
+  } catch {
+    // The poll status tells what went wrong
+  } finally {
+    fetching.value = false
+  }
+}
+
+function togglePolling() {
+  if (sandbox.polling) sandbox.stopPolling()
+  else sandbox.startPolling()
+}
+
+// Polling is for the pipeline on the canvas, while it is in view
+onBeforeUnmount(() => sandbox.stopPolling())
+
+function clock(time: Date): string {
+  return time.toLocaleTimeString('en-GB')
 }
 
 async function ingest() {
@@ -158,6 +236,8 @@ const statusIcon: Record<SimulationStep['status'], string> = {
       </button>
       <span class="bar-status" :class="status.tone"><i :class="status.icon" />{{ status.text }}</span>
       <span class="spacer" />
+      <Button v-if="sandbox.polling" label="Stop polling" icon="pi pi-stop-circle" severity="secondary" text
+        size="small" data-cy="stop-polling" @click="sandbox.stopPolling()" />
       <Button v-if="sandbox.result && !sandbox.running" label="Reset" severity="secondary" text size="small"
         @click="sandbox.resetSimulation()" />
       <span v-tooltip.top="blocked">
@@ -171,10 +251,26 @@ const statusIcon: Record<SimulationStep['status'], string> = {
         <header class="column-header">
           <span class="column-title"><i class="pi pi-inbox" /> <span class="truncate">Input member</span></span>
           <span class="spacer" />
-          <Button icon="pi pi-refresh" severity="secondary" text rounded size="small"
+          <template v-if="sandbox.poller">
+            <span v-tooltip.top="fetchTooltip">
+              <Button icon="pi pi-cloud-download" severity="secondary" text rounded size="small" :loading="fetching"
+                :disabled="!sandbox.poller.urls.length" aria-label="Fetch from the URL of the poller"
+                aria-haspopup="true" data-cy="fetch-input" @click="fetchInput" />
+            </span>
+            <Menu ref="fetchMenu" :model="fetchItems" popup data-cy="fetch-menu" />
+            <span v-tooltip.top="pollTooltip">
+              <Button :icon="sandbox.polling ? 'pi pi-stop-circle' : 'pi pi-sync'"
+                :severity="sandbox.polling ? 'danger' : 'secondary'" text rounded size="small"
+                :disabled="!sandbox.polling && (!sandbox.poller.schedule || !sandbox.poller.urls.length)"
+                :aria-label="sandbox.polling ? 'Stop polling' : 'Poll on the schedule of the poller'"
+                :aria-pressed="sandbox.polling" data-cy="toggle-polling" @click="togglePolling" />
+            </span>
+          </template>
+          <!-- A poller brings its own input -->
+          <Button v-else icon="pi pi-refresh" severity="secondary" text rounded size="small"
             v-tooltip.top="'Use the sample member of the template'" aria-label="Sample member" @click="useTemplateSample" />
-          <Select v-model="sandbox.sample.contentType" :options="contentTypes" option-label="label" option-value="value"
-            size="small" aria-label="Content type" />
+          <Select v-model="sandbox.sample.contentType" :options="contentTypeOptions" option-label="label" option-value="value"
+            size="small" aria-label="Content type" data-cy="sample-content-type" />
           <Button icon="pi pi-send" severity="secondary" text rounded size="small"
             v-tooltip.top="'Send this member to a pipeline on an LDIO'" aria-label="Send to an LDIO"
             :disabled="!sandbox.sample.content.trim()" data-cy="open-send" @click="openSend" />
@@ -193,6 +289,13 @@ const statusIcon: Record<SimulationStep['status'], string> = {
               data-cy="send-member" @click="send" />
           </div>
         </Popover>
+        <div v-if="sandbox.poller && pollStatus" class="poll-status" :class="pollStatus.tone" data-cy="poll-status">
+          <i :class="pollStatus.icon" />
+          <span class="poll-text">
+            <span>{{ pollStatus.text }}</span>
+            <span v-if="pollStatus.detail" class="poll-detail">{{ pollStatus.detail }}</span>
+          </span>
+        </div>
         <CodeEditor v-model="sandbox.sample.content"
           :language="sandbox.sample.contentType.includes('json') ? 'json' : sandbox.sample.contentType.includes('csv') ? 'text' : 'turtle'"
           min-height="100%" class="editor" data-cy="sample-input" />
@@ -389,6 +492,42 @@ const statusIcon: Record<SimulationStep['status'], string> = {
   margin: 0;
   max-width: 260px;
   line-height: 1.45;
+}
+
+.poll-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: none;
+  margin-bottom: 6px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--hover-bg);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.poll-status .pi {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.poll-status.error {
+  color: var(--p-red-600);
+  background: color-mix(in srgb, var(--p-red-500) 8%, transparent);
+}
+
+.poll-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.poll-detail {
+  max-height: 3.6em;
+  overflow-y: auto;
 }
 
 .ingest {
