@@ -52,4 +52,33 @@ describe('mode', () => {
     await mode.switchTo('demo')
     expect((await api.listInstances('LDIO')).length).toBeGreaterThan(0)
   })
+
+  describe('in a demo-only build', () => {
+    const build = globalThis as { __DEMO_ONLY__?: boolean }
+
+    beforeEach(() => (build.__DEMO_ONLY__ = true))
+    afterEach(() => (build.__DEMO_ONLY__ = false))
+
+    it('starts in demo mode, without asking the backend', async () => {
+      backend(true)
+      localStorage.setItem('ldes-admin.mode', 'production')
+
+      expect(await initialMode()).toEqual({ mode: 'demo', backendUp: undefined })
+      expect(globalThis.fetch).not.toHaveBeenCalled()
+    })
+
+    it('stays in demo mode', async () => {
+      backend(true)
+      const mode = useModeStore()
+      mode.start('demo', undefined)
+
+      await mode.switchTo('production')
+
+      expect(mode.demoOnly).toBe(true)
+      expect(mode.mode).toBe('demo')
+      expect(apiMode()).toBe('demo')
+      expect(mode.generation).toBe(0)
+      expect(localStorage.getItem('ldes-admin.mode')).toBeNull()
+    })
+  })
 })

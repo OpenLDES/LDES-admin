@@ -182,6 +182,11 @@ The switch in the top bar picks the mode, whichever way LDES-admin runs:
 Without an earlier choice, the frontend starts in production mode when the backend answers, and in
 demo mode otherwise.
 
+To publish a demo of LDES-admin, build the frontend with `pnpm build-restrict-to-demo-mode` (in
+`frontend/`) instead of `pnpm build`. It builds to `dist/` as well, but that frontend only runs in
+demo mode: it never calls the backend, and choosing production mode shows an error that it is only
+for demo purposes.
+
 ## Tests and builds
 
 With Maven, for the whole project:
@@ -252,7 +257,7 @@ The GitHub workflows in `.github/workflows` follow the release flow of the
 | 2.a. Build & Deploy Project        | pushes to `develop` and `main`, or manually   | Builds and pushes the image: from `develop` to `ghcr.io/<owner>/<repository>:<version>-<timestamp>` (in lowercase) and `latest`; from `main` to Docker Hub, `<namespace>/ldes-admin:<version>`, and `latest` for a release |
 | 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main` | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                  |
 | 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                          |
-| 5. Build & Deploy Documentation    | pushes to `main` and pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll; on `main`, publishes it to GitHub Pages                                                                                                  |
+| 5. Build & Deploy Documentation    | pushes to `main` that change `docs/` or `frontend/`, pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll, and the frontend restricted to demo mode as a demo in `/demo/` of the site; on `main`, publishes it to GitHub Pages |
 
 To release a version:
 

@@ -25,13 +25,24 @@ const modes: { value: ApiMode; label: string; icon: string; tooltip: string }[] 
   {
     value: 'production',
     label: 'Production',
-    icon: 'pi pi-server',
-    tooltip: 'Manage real LDES servers and LDIOs through the LDES-admin backend',
+    icon: mode.demoOnly ? 'pi pi-lock' : 'pi pi-server',
+    tooltip: mode.demoOnly
+      ? 'Not available: this LDES-admin is only for demo purposes'
+      : 'Manage real LDES servers and LDIOs through the LDES-admin backend',
   },
 ]
 
 async function switchMode(next: ApiMode) {
   if (next === mode.mode) return
+  if (next === 'production' && mode.demoOnly) {
+    toast.add({
+      severity: 'error',
+      summary: 'Only for demo purposes',
+      detail: 'This LDES-admin is only for demo purposes: it uses sample data and cannot interact with LDES servers and LDIOs. You cannot use it in production mode.',
+      life: 10000,
+    })
+    return
+  }
   await mode.switchTo(next)
   if (next === 'demo') {
     toast.add({ severity: 'info', summary: 'Demo mode', detail: 'You are looking at sample data.', life: 3500 })

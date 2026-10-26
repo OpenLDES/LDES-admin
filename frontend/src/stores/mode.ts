@@ -6,11 +6,11 @@ const STORAGE_KEY = 'ldes-admin.mode'
 
 /**
  * Picks the mode to start in: the one the user chose before, else production when the backend
- * answers, else demo.
+ * answers, else demo. A demo-only build always starts in demo mode, without asking the backend.
  */
 export async function initialMode(): Promise<{ mode: ApiMode; backendUp: boolean | undefined }> {
   const stored = storedMode()
-  if (stored === 'demo') return { mode: 'demo', backendUp: undefined }
+  if (__DEMO_ONLY__ || stored === 'demo') return { mode: 'demo', backendUp: undefined }
   const backendUp = await backendAvailable()
   return { mode: stored ?? (backendUp ? 'production' : 'demo'), backendUp }
 }
@@ -30,6 +30,8 @@ export const useModeStore = defineStore('mode', () => {
   const backendUp = ref<boolean>()
   /** Changes on every switch, so views that depend on the API can be rebuilt */
   const generation = ref(0)
+  /** Whether this build only runs in demo mode (pnpm build-restrict-to-demo-mode) */
+  const demoOnly = __DEMO_ONLY__
 
   const production = computed(() => mode.value === 'production')
   const backendUnreachable = computed(() => production.value && backendUp.value === false)
@@ -40,8 +42,9 @@ export const useModeStore = defineStore('mode', () => {
     backendUp.value = up
   }
 
+  /** Switches to the given mode; a demo-only build stays in demo mode */
   async function switchTo(next: ApiMode) {
-    if (next === mode.value) return
+    if (next === mode.value || (demoOnly && next === 'production')) return
     localStorage.setItem(STORAGE_KEY, next)
     setApiMode(next)
     mode.value = next
@@ -54,5 +57,7 @@ export const useModeStore = defineStore('mode', () => {
     return backendUp.value
   }
 
-  return { mode, backendUp, generation, production, backendUnreachable, start, switchTo, checkBackend }
+  return {
+    mode, backendUp, generation, demoOnly, production, backendUnreachable, start, switchTo, checkBackend,
+  }
 })
