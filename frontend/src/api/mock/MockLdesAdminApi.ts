@@ -23,6 +23,7 @@ import type {
 import { backlogOf } from '@/domain/ldes'
 import type {
   ComponentCatalog,
+  ComponentDefinition,
   DeployedPipeline,
   LdesClientStatus,
   Pipeline,
@@ -33,14 +34,18 @@ import { canBeHalted, canBeResumed } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
 import {
   type ClientCredentials,
+  type PipelineRunRequest,
   type PolledContent,
   type PollRequest,
   type Sandbox,
+  type SimulationResult,
+  type SimulationStep,
   SANDBOX_EVENT_STREAM,
   SANDBOX_INGEST_PIPELINE,
 } from '@/domain/sandbox'
 import { componentsOfKind } from '@/pipeline/catalog'
 import { PIPELINE_NAME } from '@/pipeline/graph'
+import { PipelineSimulator } from '@/pipeline/simulator'
 import { PREFIXES, prefixLines as prefixLinesFor } from '@/domain/rdf'
 import { localName } from '@/ldes/definition'
 import { streamOf } from '@/ldes/eventStream'
@@ -75,6 +80,8 @@ export interface MockOptions {
  */
 export class MockLdesAdminApi implements LdesAdminApi {
   private state: SampleState
+  /** The simulation of every session of the sandbox, which remembers what its change detection filters saw */
+  private readonly simulators = new Map<string, PipelineSimulator>()
   private localPorts = 32772
   private readonly startedAt: number
 
@@ -196,6 +203,28 @@ export class MockLdesAdminApi implements LdesAdminApi {
       throw new ApiError(502, `${request.url} answered without a Content-Type, which LDIO needs to pass it on`)
     }
     return { contentType, body: await response.text() }
+  }
+
+  /**
+   * The browser approximates the components (pipeline/simulator.ts). Executed, an HTTP output
+   * ingests in the event stream of a demo LDES server it points to; other outputs run dry.
+   */
+  runPipeline(request: PipelineRunRequest): Promise<SimulationResult> {
+    return this.respond(() => {
+      let simulator = this.simulators.get(request.session)
+      if (!simulator) {
+        simulator = new PipelineSimulator(() => this.now())
+        this.simulators.set(request.session, simulator)
+      }
+      const result = simulator.run(request.pipeline, request.input)
+      if (!request.executeOutputs || !result.delivered) return result
+      const steps = result.steps.map((step) => step.kind === 'output'
+        ? this.execute(step, request.pipeline.outputs?.[step.index], result.members.length)
+        : step)
+      // Like the backend: delivered when one of the outputs wrote the models
+      const delivered = steps.some((step) => step.kind === 'output' && step.status === 'ok')
+      return { steps, delivered, members: delivered ? result.members : [] }
+    })
   }
 
   // Instances ----------------------------------------------------------------------------------
@@ -716,6 +745,25 @@ export class MockLdesAdminApi implements LdesAdminApi {
       view.bucketisedMembers += members
       view.paginatedMembers += members
     })
+  }
+
+  /** An output executed in a run: only an HTTP output to the event stream of a demo LDES server reaches anything */
+  private execute(step: SimulationStep, output: ComponentDefinition | undefined, members: number):
+    SimulationStep {
+    if (output?.name !== 'Ldio:HttpOut') return step
+    const endpoint = String(output.config?.endpoint ?? '')
+    const base = (server: Instance) => [server.internalUrl, server.url]
+      .find((url) => url && endpoint.startsWith(`${url}/`))
+    const server = this.instancesOf('LDES_SERVER').find((candidate) => base(candidate))
+    if (!server || !this.isUp(server)) {
+      return { ...step, status: 'error', summary: `Could not POST to ${endpoint}: in demo mode only the demo LDES servers can be reached` }
+    }
+    const collection = endpoint.slice(base(server)!.length + 1)
+    if (!this.state.eventStreams[server.id]?.some((stream) => stream.collection === collection)) {
+      return { ...step, status: 'error', summary: `POST ${endpoint} answered 404 - No event stream ${collection}` }
+    }
+    this.countIngested(server.id, collection, members)
+    return { ...step, summary: `POST ${endpoint}: 201` }
   }
 
   /** Members go through a pipeline: an HTTP output to the event stream of a local LDES server ingests there */

@@ -54,9 +54,9 @@ Data Interaction Orchestrator (LDIO) pipelines.
 
 * **Design** a pipeline by dragging components onto a canvas, or start from a template. Configure
   every LDIO component in a form or as YAML, validated as you type.
-* **Simulate**: run a member through the pipeline in the browser and see what each step makes of
-  it. A pipeline with an HTTP poller can fetch its input from the URL it polls, once or on its
-  schedule.
+* **Run**: LDES-admin runs a member through the pipeline on the components LDIO is built on, and
+  shows what each step makes of it. Outputs run dry, or really send when you want. A pipeline with
+  an HTTP poller can fetch its input from the URL it polls, once or on its schedule.
 * **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
   LDIO in Docker that work together out of the box.
 
@@ -86,8 +86,8 @@ Ingesting in their event streams starts from a member that fits, in the format o
 
 * [The documentation site](https://openldes.github.io/LDES-admin/) – installing LDES-admin,
   monitoring, LDES servers, LDIO and the sandbox
-* [analysis/README.md](analysis/README.md) – what LDES-admin does
-* [analysis/architecture.md](analysis/architecture.md) – how it is built
+* [_analysis/README.md](_analysis/README.md) – what LDES-admin does
+* [_analysis/architecture.md](_analysis/architecture.md) – how it is built
 
 The documentation site is a [Jekyll](https://jekyllrb.com/) 4 site in `docs/`, published to GitHub
 Pages by workflow 5 (see [below](#continuous-integration-and-releases)). It reuses the screenshots
@@ -105,13 +105,16 @@ bundle exec jekyll serve   # http://localhost:4000
 |---------------|-----------------------------------------------------------------------------------------------------------------------------|
 | `model`       | Domain model (plain Java)                                                                                                   |
 | `application` | Use cases, ports and services (plain Java)                                                                                  |
-| `adapter`     | REST API, monitor, Postgres (JPA + Flyway), LDES server and LDIO clients, local Docker runtime                              |
+| `adapter`     | REST API, monitor, Postgres (JPA + Flyway), LDES server and LDIO clients, local Docker runtime, sandbox runtime (LDI)       |
 | `frontend`    | Vue 3 + TypeScript + PrimeVue + Vue Flow frontend, in demo or production mode; Maven packages the build as static resources |
 | `bootstrap`   | Spring Boot application, serving the API and the frontend                                                                   |
 
 ## Requirements
 
 * JDK 25
+* The [LDI](https://github.com/OpenLDES/Linked-Data-Interactions) 3.1.1 libraries
+  (`org.openldes.ldi`), which the sandbox runs pipelines on. Until they are on Maven Central,
+  install them from their sources: `mvn install -DskipTests` in a clone of the 3.1.1 tag.
 * Docker, for the database during development, the integration tests and local LDES servers/LDIOs
 * pnpm 9, only to run the frontend on its own (see [below](#2-backend-and-frontend-separately)).
   The frontend needs Node.js 22.12 or later (Vite 8); pnpm downloads and uses Node.js 24.21.0 for

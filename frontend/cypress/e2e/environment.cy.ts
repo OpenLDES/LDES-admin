@@ -128,6 +128,47 @@ describe('demo and production mode', () => {
     cy.get('[data-cy=sample-content-type]').should('contain', 'JSON')
   })
 
+  it('runs the pipeline of the sandbox on the backend, step by step', () => {
+    stubBackend()
+    const step = (kind: string, component: string, status: string, summary: string, outputs: string[] = []) =>
+      ({ kind, index: 0, component, status, summary, outputs, format: 'turtle', durationMs: 4 })
+    cy.intercept('POST', '/api/v1/sandbox/runs', {
+      body: {
+        steps: [
+          step('input', 'Ldio:HttpIn', 'ok', 'Received POST /parcels-to-ldes (application/json)', ['{}']),
+          step('adapter', 'Ldio:JsonToLdAdapter', 'ok', 'Made 2 models', [
+            '<http://example.org/a> <http://example.org/name> "first" .',
+            '<http://example.org/b> <http://example.org/name> "second" .']),
+          step('transformer', 'Ldio:GeoJsonToWktTransformer', 'error', 'No geometry in the GeoJSON-LD vocabulary'),
+        ],
+        delivered: false,
+        members: [],
+      },
+    }).as('run')
+    cy.get('[data-cy=mode-production]').click()
+    cy.get('[data-cy=mode-notice]').should('contain', 'Production mode')
+    cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
+
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.get('[data-cy=run-simulation]').click()
+    cy.wait('@run').its('request.body').should((body) => {
+      expect(body.pipeline.name).to.equal('parcels-to-ldes')
+      expect(body.input.contentType).to.equal('application/json')
+      expect(body.executeOutputs).to.equal(true)
+      expect(body.session).to.be.a('string').and.not.be.empty
+    })
+
+    cy.get('[data-cy=simulation-step]', { timeout: 8000 }).should('have.length', 3)
+    cy.get('[data-cy=simulation]').should('contain', 'Stopped at GeoJSON to WKT')
+      .and('contain', 'No geometry in the GeoJSON-LD vocabulary')
+    cy.contains('[data-cy=simulation-step]', 'JSON to JSON-LD').click()
+    cy.get('[data-cy=model-pager]').should('contain', 'Model 1 of 2')
+    cy.get('[data-cy=step-output] .cm-content').should('contain', '"first"')
+    cy.get('[data-cy=next-model]').click()
+    cy.get('[data-cy=model-pager]').should('contain', 'Model 2 of 2')
+    cy.get('[data-cy=step-output] .cm-content').should('contain', '"second"')
+  })
+
   it('tells when the backend does not answer', () => {
     cy.intercept('GET', '/actuator/health', { statusCode: 502 })
     cy.intercept('GET', '/api/v1/**', { statusCode: 502, body: { detail: 'Bad gateway' } })

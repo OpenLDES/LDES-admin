@@ -24,7 +24,13 @@ import type {
   PipelineStatus,
 } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
-import type { PolledContent, PollRequest, Sandbox } from '@/domain/sandbox'
+import type {
+  PipelineRunRequest,
+  PolledContent,
+  PollRequest,
+  Sandbox,
+  SimulationResult,
+} from '@/domain/sandbox'
 
 /**
  * Everything the frontend needs from the backend. Each method corresponds to an endpoint of the
@@ -50,6 +56,11 @@ export interface LdesAdminApi {
    * received, for the simulation
    */
   poll(request: PollRequest): Promise<PolledContent>
+  /**
+   * POST /api/v1/sandbox/runs: runs a pipeline on the LDI components LDIO runs, and answers what
+   * every component did
+   */
+  runPipeline(request: PipelineRunRequest): Promise<SimulationResult>
 
   /** GET /api/v1/ldes-servers | /api/v1/ldios */
   listInstances(type: InstanceType): Promise<Instance[]>

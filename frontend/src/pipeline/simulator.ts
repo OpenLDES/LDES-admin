@@ -1,6 +1,13 @@
 import { DataFactory, Parser, Writer } from 'n3'
 import type { BlankNode, Literal, NamedNode, Quad, Quad_Object, Quad_Subject } from 'n3'
 import type { ComponentConfig, ComponentDefinition, Pipeline } from '@/domain/ldio'
+import type {
+  PayloadFormat,
+  SimulationInput,
+  SimulationResult,
+  SimulationStep,
+  StepStatus,
+} from '@/domain/sandbox'
 import { componentInfo, type ComponentKind, configValue } from './catalog'
 
 /**
@@ -22,36 +29,6 @@ const NS = {
 }
 const RDF_TYPE = `${NS.rdf}type`
 const BASE_IRI = 'http://example.org/'
-
-export interface SimulationInput {
-  content: string
-  contentType: string
-  /** The URL it was polled from, if it was */
-  source?: string
-}
-
-export type StepStatus = 'ok' | 'filtered' | 'error'
-export type PayloadFormat = 'turtle' | 'json' | 'text'
-
-export interface SimulationStep {
-  kind: ComponentKind
-  /** Position among the components of the same kind */
-  index: number
-  component: string
-  status: StepStatus
-  summary: string
-  output?: string
-  format: PayloadFormat
-  durationMs: number
-}
-
-export interface SimulationResult {
-  steps: SimulationStep[]
-  /** Whether the member reached the outputs */
-  delivered: boolean
-  /** The model that reached the outputs, in Turtle */
-  member?: string
-}
 
 interface Model {
   quads: Quad[]
@@ -83,10 +60,10 @@ export class PipelineSimulator {
           toTurtle(model), 'turtle'))
       } else if (inputInfo?.requiresAdapter) {
         steps[0] = { ...steps[0], status: 'error', summary: `${inputInfo.label} needs an adapter to turn raw data into linked data` }
-        return { steps, delivered: false }
+        return { steps, delivered: false, members: [] }
       } else {
         model = parseRdf(input.content, input.contentType)
-        steps[0] = { ...steps[0], output: toTurtle(model), format: 'turtle' }
+        steps[0] = { ...steps[0], outputs: [toTurtle(model)], format: 'turtle' }
       }
     } catch (e) {
       const failing = pipeline.input.adapter ?? pipeline.input
@@ -94,7 +71,7 @@ export class PipelineSimulator {
       if (kind === 'input') steps.pop()
       steps.push(step(kind, 0, failing, 'error', `Could not read the member: ${message(e)}`,
         undefined, 'text'))
-      return { steps, delivered: false }
+      return { steps, delivered: false, members: [] }
     }
 
     for (const [index, transformer] of (pipeline.transformers ?? []).entries()) {
@@ -102,7 +79,7 @@ export class PipelineSimulator {
       if (result.status !== 'ok') {
         steps.push(step('transformer', index, transformer, result.status, result.summary,
           undefined, 'text'))
-        return { steps, delivered: false }
+        return { steps, delivered: false, members: [] }
       }
       model = result.model
       steps.push(step('transformer', index, transformer, 'ok', result.summary, toTurtle(model),
@@ -116,7 +93,7 @@ export class PipelineSimulator {
       steps.push(step('output', index, output, 'ok', deliver(output, contentType),
         serialize(model, contentType), contentType.includes('json') ? 'json' : 'turtle'))
     })
-    return { steps, delivered: outputs.length > 0, member: toTurtle(model) }
+    return { steps, delivered: outputs.length > 0, members: outputs.length > 0 ? [toTurtle(model)] : [] }
   }
 
   /** Forgets what change detection filters have seen */
@@ -439,27 +416,28 @@ function enrich(model: Model, config: ComponentConfig): TransformResult {
 
 // Outputs -------------------------------------------------------------------------------------
 
+/** What the output would do, as the backend says it in a dry run */
 function deliver(output: ComponentDefinition, contentType: string): string {
   const config = output.config ?? {}
   switch (output.name) {
     case 'Ldio:ConsoleOut':
-      return `Wrote ${contentType} to the LDIO log`
+      return 'Printed to the console of the LDIO'
     case 'Ldio:HttpOut':
-      return `POST ${configValue(config, 'endpoint')}: 200 OK (simulated)`
+      return `Would POST ${contentType} to ${configValue(config, 'endpoint')}`
     case 'Ldio:HttpSparqlOut':
-      return `INSERT DATA into ${configValue(config, 'graph') ?? 'the default graph'} at ${configValue(config, 'endpoint')} (simulated)`
+      return `Would POST an update to ${configValue(config, 'endpoint')}`
     case 'Ldio:RepositorySink':
-      return `Committed to repository ${configValue(config, 'repository-id')} (simulated)`
+      return `Would add the model to repository ${configValue(config, 'repository-id')} of ${configValue(config, 'sparql-host')}`
     case 'Ldio:KafkaOut':
-      return `Produced to topic ${configValue(config, 'topic')} (simulated)`
+      return `Would send it to topic ${configValue(config, 'topic')}`
     case 'Ldio:AmqpOut':
-      return `Sent to queue ${configValue(config, 'queue')} (simulated)`
+      return `Would send it to queue ${configValue(config, 'queue')}`
     case 'Ldio:LdioRdbOut':
-      return `Inserted rows into ${configValue(config, 'table-name')} (simulated)`
+      return `Would insert rows into table ${configValue(config, 'table-name')}`
     case 'Ldio:NoopOut':
-      return 'Discarded'
+      return 'Did nothing'
     default:
-      return 'Delivered (simulated)'
+      return 'Would deliver it'
   }
 }
 
@@ -584,7 +562,7 @@ function step(kind: ComponentKind, index: number, component: ComponentDefinition
     component: component.name,
     status,
     summary,
-    output,
+    outputs: output === undefined ? [] : [output],
     format,
     durationMs: 2 + (hash(component.name + index) % 38),
   }

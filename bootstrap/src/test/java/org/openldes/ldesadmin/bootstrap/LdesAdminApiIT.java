@@ -2,6 +2,7 @@ package org.openldes.ldesadmin.bootstrap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,5 +115,33 @@ class LdesAdminApiIT {
         .expectStatus().isEqualTo(502)
         .expectBody().jsonPath("$.detail").value(String.class, detail -> assertThat(detail)
             .startsWith("http://localhost:%d/actuator/nothing answered 404".formatted(port)));
+  }
+
+  /**
+   * The LDI components run in LDES-admin: JSON-LD in, a SPARQL construct, and Turtle out.
+   */
+  @Test
+  void runsAPipelineInTheSandbox() {
+    Map<String, Object> pipeline = Map.of("name", "parcels",
+        "input", Map.of("name", "Ldio:HttpIn", "adapter", Map.of("name", "Ldio:JsonToLdAdapter",
+            "config", Map.of("context", "{\"@context\": {\"@vocab\": \"http://example.org/\"}}"))),
+        "transformers", List.of(Map.of("name", "Ldio:SparqlConstructTransformer",
+            "config", Map.of("query",
+                "CONSTRUCT { ?s <http://example.org/size> ?a } WHERE { ?s <http://example.org/area> ?a }"))),
+        "outputs", List.of(Map.of("name", "Ldio:ConsoleOut")));
+
+    client.post().uri("/api/v1/sandbox/runs")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of("pipeline", pipeline, "session", "it",
+            "input", Map.of("content", "{\"@id\": \"http://example.org/p1\", \"area\": 512}",
+                "contentType", "application/json")))
+        .exchange()
+        .expectStatus().isOk()
+        .expectBody()
+        .jsonPath("$.delivered").isEqualTo(true)
+        .jsonPath("$.steps[*].status").isEqualTo(List.of("ok", "ok", "ok", "ok"))
+        .jsonPath("$.steps[2].outputs[0]").value(String.class, turtle -> assertThat(turtle)
+            .contains(":size", "512").doesNotContain("area"))
+        .jsonPath("$.steps[3].summary").isEqualTo("Printed to the console of the LDIO");
   }
 }

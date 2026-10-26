@@ -1,6 +1,6 @@
 import type { Pipeline } from '@/domain/ldio'
 import { SANDBOX_EVENT_STREAM_URL } from '@/domain/sandbox'
-import type { SimulationInput } from './simulator'
+import type { SimulationInput } from '@/domain/sandbox'
 
 /**
  * Example pipelines to start from in the sandbox, each with a member to run through it. Deployed

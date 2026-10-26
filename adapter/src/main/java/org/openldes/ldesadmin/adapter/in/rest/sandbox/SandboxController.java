@@ -2,6 +2,7 @@ package org.openldes.ldesadmin.adapter.in.rest.sandbox;
 
 import jakarta.validation.Valid;
 import org.openldes.ldesadmin.application.port.in.sandbox.PollUseCase;
+import org.openldes.ldesadmin.application.port.in.sandbox.RunPipelineUseCase;
 import org.openldes.ldesadmin.application.port.in.sandbox.SandboxUseCase;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,10 +22,13 @@ class SandboxController {
 
   private final SandboxUseCase sandboxUseCase;
   private final PollUseCase pollUseCase;
+  private final RunPipelineUseCase runPipelineUseCase;
 
-  SandboxController(SandboxUseCase sandboxUseCase, PollUseCase pollUseCase) {
+  SandboxController(SandboxUseCase sandboxUseCase, PollUseCase pollUseCase,
+      RunPipelineUseCase runPipelineUseCase) {
     this.sandboxUseCase = sandboxUseCase;
     this.pollUseCase = pollUseCase;
+    this.runPipelineUseCase = runPipelineUseCase;
   }
 
   @GetMapping
@@ -55,5 +59,15 @@ class SandboxController {
   @PostMapping("/poll")
   PolledContentWebModel poll(@Valid @RequestBody PollRequest request) {
     return PolledContentWebModel.fromDomain(pollUseCase.poll(request.toDomain()));
+  }
+
+  /**
+   * Runs a pipeline on the LDI components LDIO runs, and answers what every component did. A
+   * component that fails is a step with status {@code error}, not an error response.
+   */
+  @PostMapping("/runs")
+  PipelineRunWebModel run(@Valid @RequestBody RunRequest request) {
+    return PipelineRunWebModel.fromDomain(runPipelineUseCase.run(request.pipeline().toDomain(),
+        request.toInput(), request.toOptions()));
   }
 }

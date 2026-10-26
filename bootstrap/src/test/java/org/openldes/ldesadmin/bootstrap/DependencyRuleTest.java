@@ -47,6 +47,7 @@ class DependencyRuleTest {
       .adapter("remote instances", "..adapter.out.ldes..", "..adapter.out.ldio..",
           "..adapter.out.health..", "..adapter.out.http..")
       .adapter("local runtime", "..adapter.out.runtime..")
+      .adapter("sandbox runtime", "..adapter.out.sandbox..")
       .withOptionalLayers(true)
       .ignoreDependency(resideInAPackage("..bootstrap.."), alwaysTrue());
 
@@ -55,7 +56,8 @@ class DependencyRuleTest {
       .that().resideInAnyPackage("..model..", "..application..")
       .should().dependOnClassesThat().resideInAnyPackage(
           "org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml..",
-          "org.apache.jena..", "org.testcontainers..", "lombok..");
+          "org.apache.jena..", "org.openldes.ldi..", "org.eclipse.rdf4j..", "io.carml..",
+          "org.testcontainers..", "lombok..");
 
   @ArchTest
   static final ArchRule inboundAdaptersUseUseCasesNotServices = noClasses()

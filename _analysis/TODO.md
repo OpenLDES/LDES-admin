@@ -55,6 +55,8 @@
   "input member" text area. The user can then choose to change the data, and then run the
   simulation with the changed data. The user should also have the possibility to fetch the data
   constantly, and use the cron expression that was configured for the component.
+* [x] Make an output adapter, `sandbox`, where you can run LDIO input, adapter, transformer and
+  output components. So, this will be a local runtime engine to run separate LDIO components. 
 * [] The sparql construct component in the sandbox should do a sparql construct transformation, so
   the output of this component should be the transformation of the input with the
   `Ldio:SparqlConstructTransformer` transformer. Make use of this component to do the transformation

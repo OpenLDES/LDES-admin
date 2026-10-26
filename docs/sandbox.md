@@ -132,7 +132,8 @@ simulated; only errors in its structure (e.g. no input) stop that.
 ## Simulate
 
 **Run** opens the simulation at the bottom of the canvas and runs the input member through the
-pipeline.
+pipeline. LDES-admin runs it on the components LDIO itself is built on, so every step shows what
+LDIO would make of the member.
 
 {% include figure.html src="/screenshots/simulation.png" alt="The simulation: the input member, the steps it went through, and the model after the selected step" caption="Running a member through the pipeline, step by step" %}
 
@@ -143,11 +144,28 @@ The simulation has three columns:
   HTTP In Poller has buttons to [fetch and poll its URL](#input-from-an-http-poller) instead.
 * **Steps**: every component the member went through, with how long it took and what it did:
   passed on, filtered out, or stopped with an error. Components it did not reach are listed as such.
-* **After …**: the model after the step you select, in Turtle (or JSON).
+* **After …**: what the step you select made, in Turtle; for an output, what it sends. A step can
+  make several models: an adapter makes one per object of a JSON array, or per named graph of an
+  RML mapping. Page through them with the arrows (*Model 2 of 14*).
 
 The bar above sums it up: *Delivered to 2 outputs*, *Filtered out by Change Detection Filter*, or
 *Stopped at Version Object Creator*. *Reset* clears the result. Click the bar to fold the simulation
 away while you design.
+
+### Dry run or execute
+
+Outputs run dry: they show what they would send (*Would POST text/turtle to …*) without sending
+it. Switch on **Execute outputs** in the bar to have them really send it: HTTP Out posts the
+member, HTTP SPARQL Out updates its triple store, the repository sink adds it to its repository.
+Kafka Out, AMQP Out and the database output always run dry: LDES-admin has no clients for them.
+
+An output pointing to the sandbox LDES server on its host name
+(`http://sandbox-ldes-server:8080/…`) reaches it when executed: the member is ingested.
+
+> Running a pipeline makes LDES-admin fetch what its components fetch (JSON-LD contexts, SPARQL
+> `SERVICE` calls, the HTTP enricher), and executed outputs send wherever they point. [Secure the
+> API](../installation/#securing-the-api) wherever LDES-admin reaches what its users should not.
+{: .tip }
 
 ### Input from an HTTP poller
 
@@ -174,24 +192,25 @@ header, as LDIO hands it to the adapter. URLs on the host names of the sandbox
 > API](../installation/#securing-the-api) wherever LDES-admin reaches what its users should not.
 {: .tip }
 
-### What the simulation does, and doesn't
+### What runs
 
-The simulation runs in your browser, without an LDIO. RDF is parsed and written for real, and every
-component approximates what LDIO does:
+Every component runs as in LDIO, with the same configuration:
 
-* adapters turn JSON into RDF with the JSON-LD context: its vocabulary, prefixes and terms, with
-  IRIs and datatypes for their values;
-* the Version Object Creator and Version Materialiser rewrite subjects; GeoJSON becomes WKT;
-  blank nodes are skolemised; the Change Detection Filter remembers the members it saw.
+* adapters: RDF, JSON to JSON-LD, RML and NGSI-v2;
+* transformers: SPARQL construct (with LDI's geospatial functions), version object creator,
+  version materialiser, GeoJSON to WKT, skolemisation, change detection filter and HTTP enricher;
+* outputs: see [dry run or execute](#dry-run-or-execute).
 
-SPARQL queries are not evaluated (the model passes on unchanged), and RML mappings are approximated.
-To see what LDIO really makes of a member, deploy the pipeline on the sandbox LDIO and
-[send the member to it](#send-the-member-to-a-real-pipeline).
+The input member is what the input receives; for an LDES client, it is a member in RDF. The change
+detection filter remembers the members it saw while you design the pipeline, as a running pipeline
+does; it forgets them when you load another pipeline or change its configuration. A component gets
+30 seconds at most. To see what LDIO itself makes of a member, deploy the pipeline on the sandbox
+LDIO and [send the member to it](#send-the-member-to-a-real-pipeline).
 
 ### Ingest the result
 
 Once the member is delivered, **Ingest** (above the output) ingests the result in an event stream of
-a sandbox LDES server, as Turtle. Then [browse](../ldes-servers/#browse-a-view) the event stream to
+a sandbox LDES server, as Turtle: every member, when the pipeline made several. Then [browse](../ldes-servers/#browse-a-view) the event stream to
 see the member on its pages.
 
 ### Send the member to a real pipeline
@@ -218,8 +237,10 @@ replaces it there. *New pipeline* on the page of an LDIO opens an empty canvas.
 
 In [demo mode](../installation/#check-that-it-runs) the sandbox works the same, on sample data in
 your browser: the sandbox environment starts without Docker, and its pipelines pass members on to
-the event streams of the demo LDES servers. Nothing reaches a real LDIO. Without a backend, your
-browser fetches the URL of an HTTP poller itself, which only works for APIs that allow it (CORS),
+the event streams of the demo LDES servers. Nothing reaches a real LDIO. The simulation runs in your
+browser and approximates the components: SPARQL queries are not evaluated and RML mappings are
+approximated. Executed, an HTTP output to a demo LDES server counts the member there. Without a
+backend, your browser fetches the URL of an HTTP poller itself, which only works for APIs that allow it (CORS),
 such as the open data of the city of Ghent.
 
 ## Tips

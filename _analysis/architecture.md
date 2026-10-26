@@ -72,7 +72,7 @@ org.openldes.ldesadmin
 │   ├── ldes         EventStream, View, Fragment, Fragmentation, RetentionPolicy, DcatTarget, CatalogDescription,
 │   │                StreamStatistics, BackgroundProcess
 │   ├── ldio         Pipeline, InputDefinition, ComponentDefinition, DeployedPipeline, PipelineStatus, LdesClientStatus, …
-│   ├── sandbox      Sandbox, Poll, PolledContent
+│   ├── sandbox      Sandbox, Poll, PolledContent, RunInput, RunOptions, PipelineRun, StepResult, OutputResult
 │   ├── monitoring   ActivityEvent, IngestSample, ThroughputSeries
 │   └── dashboard    DashboardOverview, LdesServerSummary, LdioSummary
 ├── application
@@ -82,7 +82,8 @@ org.openldes.ldesadmin
 ├── adapter
 │   ├── in.rest      instance | ldes | ldio | sandbox | monitoring | dashboard, RestExceptionHandler (RFC 9457)
 │   ├── in.scheduling InstanceMonitorScheduler
-│   └── out          persistence.jpa | ldes | ldio | health | runtime | http (shared HTTP helpers, RestHttpPoller)
+│   └── out          persistence.jpa | ldes | ldio | health | runtime | sandbox (the LDI components)
+│                    | http (shared HTTP helpers, RestHttpPoller)
 └── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SchedulingConfig, SecurityConfig, FrontendConfig
 ```
 
@@ -133,6 +134,7 @@ URL cannot be reached or answers with an error, `503` when a local instance cann
 | Check health                      | `GET /{ldes-servers,ldios}/{id}/health`                                          |
 | Sandbox                           | `GET, POST, DELETE /sandbox` (state, start and prepare, stop)                    |
 | Poll a URL for the simulation     | `POST /sandbox/poll` (`{url, headers, clientCredentials}` → `{contentType, body}`) |
+| Run a pipeline in the sandbox     | `POST /sandbox/runs` (`{pipeline, input, session, executeOutputs}` → `{steps, delivered, members}`) |
 | Event streams                     | `GET, POST /ldes-servers/{id}/eventstreams`, `GET, DELETE …/eventstreams/{collection}` |
 | Views                             | `GET, POST …/eventstreams/{collection}/views`, `GET, DELETE …/views/{view}`      |
 | Fragments                         | `GET …/views/{view}/fragment?url=` (the root of the view without `url`)          |
@@ -179,6 +181,15 @@ event stream on the internal URL of the server. Starting again is harmless; it a
 pipeline when it points to another server than the current one. Stopping unregisters both, which
 stops their containers.
 
+`RunPipelineService` runs a pipeline the way LDIO does, one component after the other, on the
+`ComponentRuntime` port: every model the adapter makes goes through the chain of transformers on
+its own (a transformer can pass on none, filtering it out, or several), and every output writes
+every model that reaches the end. Each component becomes a step with what it made (one entry per
+model, at most 100). A failing component stops the run with an error step, except an output: the
+others still write. Like `PollService`, it first translates configuration values on the internal
+URL of a local instance (`http://sandbox-ldes-server:8080/…`), so an executed output reaches the
+sandbox LDES server. Outputs run dry unless the run says otherwise.
+
 ## Outbound adapters
 
 | Port                     | Adapter                       | Talks to                                                         |
@@ -188,11 +199,37 @@ stops their containers.
 | `LdioClient`             | `RestLdioClient`              | `/admin/api/v1/pipeline…`, `/admin/api/v1/pipeline/ldes-client`, `/admin/api/v1/catalog`, `POST /{pipeline}`, `/actuator/prometheus` (`ldio_data_in_total`, `ldio_data_out_total`) |
 | `InstanceHealthProbe`    | `ActuatorHealthProbe`         | `/actuator/health`, falling back to the admin API                 |
 | `HttpPoller`             | `RestHttpPoller`              | Any http(s) URL the simulation polls, and the token endpoint of its OAuth2 client credentials |
+| `ComponentRuntime`       | `LdiComponentRuntime`         | Nothing itself: it runs the LDI components of LDIO in LDES-admin; what they fetch (JSON-LD contexts, SPARQL `SERVICE`, the HTTP enricher) and what executed outputs send |
 | `LocalInstanceRuntime`   | `DockerLocalInstanceRuntime`  | Docker, through the Testcontainers API: `openldes/ldes-server` with its own Postgres, or `openldes/ldi-orchestrator` |
 
 HTTP errors are translated into a `RemoteInstanceException` with a reason (`NOT_FOUND`, `REJECTED`,
 `UNAVAILABLE`), so no Spring type leaks into the application ring; those of a polled URL into a
-`PollException`.
+`PollException`, and every failure of a sandbox component into a `ComponentException`.
+
+### The sandbox runtime
+
+`adapter.out.sandbox` runs separate components of LDIO pipelines on the LDI 3.1.1 libraries LDIO
+is built on (`org.openldes.ldi:*`, the core components, not the LDIO connectors, which need Spring
+Boot 3). Every component is configured the way its LDIO configurator does it: `LdioConfig` flattens
+the configuration as LDIO does (nested maps to dotted keys, lists to `key.0`) and matches keys
+ignoring case, `-` and `_`. Unlike LDIO it never reads a query or mapping from a file whose path is
+the value. Models travel between the steps as Turtle.
+
+| Kind        | Components | Notes |
+|-------------|------------|-------|
+| Input       | all | The input member is what the input receives; an input without adapter (LDES client) reads it as RDF in its content type |
+| Adapter     | RDF, JSON to JSON-LD, RML, NGSI-v2 | RML: LDI's adapter, but JSON goes to carml as a parsed record (carml's streaming JSONPath parser needs ANTLR 4.7; Hibernate and Spring Data need 4.13) and carml's triples are converted to Jena here (its converter calls a method Jena 6 dropped) |
+| Transformer | SPARQL construct, version object creator, version materialiser, GeoJSON to WKT, skolemisation, change detection filter (in memory), HTTP enricher | SPARQL construct: LDI's transformation, with LDI's geospatial functions registered through the Jena 6 API (LDI's own class uses a removed method); HTTP enricher: ported from LDIO |
+| Output      | console, HTTP, HTTP SPARQL, repository sink, Kafka, AMQP, RDB, no-op | A dry run shows what an output would send (its serialisation with the `rdf-writer`, the SPARQL update, the rows); executed, HTTP Out posts, SPARQL Out updates, the repository sink adds. Kafka, AMQP and RDB always run dry: LDES-admin has no such clients |
+
+Components are kept per session and position: the change detection filter remembers what it saw
+across the runs of a session, and a mapping or query is parsed once. A changed definition makes a
+new component, as a redeployed pipeline would. Sessions are forgotten after 30 minutes without a
+run, or beyond 100. Every call runs on a virtual thread, at most
+`ldes-admin.sandbox.component-timeout` (30 s).
+
+LDI is built on Jena 5; LDES-admin aligns the Jena artifacts to its own version (one by one: the
+Jena BOM also manages Spring 5 through its parent). The rest of LDI runs on Jena 6 as it is.
 
 ### Local instances
 
@@ -225,9 +262,9 @@ Assumptions worth knowing:
 | Level                    | Where                          | What                                                                  |
 |--------------------------|--------------------------------|-----------------------------------------------------------------------|
 | Unit                     | `model`, `application`         | Domain invariants; services against mocked ports (JUnit 6, AssertJ, Mockito) |
-| Slice                    | `adapter`                      | Controllers with `@WebMvcTest` and `MockMvcTester`; HTTP clients against `MockRestServiceServer`, with responses recorded from real servers |
+| Slice                    | `adapter`                      | Controllers with `@WebMvcTest` and `MockMvcTester`; HTTP clients against `MockRestServiceServer`, with responses recorded from real servers; the sandbox runtime on the real LDI components |
 | Integration (`*IT`)      | `adapter`                      | JPA + Flyway against Postgres; the LDES server and LDIO clients against real `openldes/ldes-server` and `openldes/ldi-orchestrator` containers, started by the local runtime adapter |
-| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres (including polling a URL); the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client, and that the simulation polls the event stream on its internal host name |
+| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres (including polling a URL and running a pipeline); the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client, that the simulation polls the event stream on its internal host name, and that an executed HTTP output of a sandbox run ingests in it |
 | Architecture             | `bootstrap`                    | `DependencyRuleTest` (ArchUnit)                                       |
 | Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML, simulator, poller and cron expressions, event stream and view definitions, examples and creating them, RDF formats, stores, mock and HTTP API, domain helpers, components (Jest) |
 | Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, examples, sandbox, demo and production mode with a stubbed backend (Cypress) |
@@ -400,8 +437,15 @@ event stream of the sandbox on its host name in the Docker network
 (`http://sandbox-ldes-server:8080/sandbox-parcels`), so a pipeline deployed on the sandbox LDIO
 works out of the box.
 
-The simulator runs a member through the pipeline in the browser. RDF is parsed and serialised
-for real (N3.js); each component approximates what LDIO does (adapters map JSON with a JSON-LD
+In production mode, *Run* sends the pipeline and the input member to the backend
+(`POST /sandbox/runs`), which runs them on the real LDI components and answers every step. The
+store sends a session id, renewed for every pipeline loaded, and whether to execute the outputs
+(the *Execute outputs* switch; a dry run by default). A step can hold several models; the output
+column pages through them, and *Ingest* ingests every delivered member.
+
+In demo mode the mock API runs the simulator in the browser instead (one per session).
+*Executed*, an HTTP output to the event stream of a demo LDES server counts the member there. RDF
+is parsed and serialised for real (N3.js); each component approximates what LDIO does (adapters map JSON with a JSON-LD
 context: its vocabulary, prefixes and terms, with IRIs and datatypes for their values; the Version Object Creator and Materialiser rewrite subjects, GeoJSON becomes WKT, blank
 nodes are skolemised, the change detection filter remembers members). SPARQL queries and RML
 mappings are not evaluated. The result can be ingested in a sandbox LDES server, and the input
@@ -422,7 +466,5 @@ Ghent.
 ## Next steps
 
 * Authentication in the frontend (OIDC) for when the API is secured.
-* Showing what a deployed sandbox pipeline did to a member step by step: deploy the pipeline with
-  its outputs replaced by an `Ldio:HttpOut` to a capture endpoint of LDES-admin, post the member to
-  the `Ldio:HttpIn` input, and return what arrives. Intermediate steps would need one deployment
-  per prefix of the pipeline.
+* The sandbox runtime could also run inputs for real: follow the LDES of an LDES client and take
+  its first members.

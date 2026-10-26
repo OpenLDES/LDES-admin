@@ -65,6 +65,69 @@
       <artifactId>testcontainers-postgresql</artifactId>
     </dependency>
 
+    <!-- Outbound: the sandbox runtime, which runs the LDI components of LDIO pipelines -->
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>ldi-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>rdf-adapter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>json-to-ld-adapter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>rml-adapter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>ngsiv2-to-ld-adapter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>sparql-construct</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>version-object-creator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>version-materialiser</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>geojson-to-wkt</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>skolemisation-transformer</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>change-detection-filter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>request-executor</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>http-sparql-out</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldi</groupId>
+      <artifactId>repository-sink</artifactId>
+    </dependency>
+    <!-- Unescapes the body of HTTP enricher requests, as LDIO does -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-text</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>

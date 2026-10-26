@@ -1,4 +1,5 @@
 import type { Instance } from './instance'
+import type { Pipeline } from './ldio'
 
 /**
  * The local LDES server and LDIO to experiment with. Mirrors the sandbox web model of the backend
@@ -49,4 +50,51 @@ export interface PolledContent {
   /** The Content-Type header as received, e.g. application/json; charset=utf-8 */
   contentType: string
   body: string
+}
+
+/**
+ * What the input of a pipeline receives in a run in the sandbox. A run and its steps mirror the
+ * pipeline run of the backend, which runs the LDI components LDIO runs; demo mode approximates
+ * them in the browser (pipeline/simulator.ts).
+ */
+export interface SimulationInput {
+  content: string
+  contentType: string
+  /** The URL it was polled from, if it was */
+  source?: string
+}
+
+export type StepKind = 'input' | 'adapter' | 'transformer' | 'output'
+export type StepStatus = 'ok' | 'filtered' | 'error'
+export type PayloadFormat = 'turtle' | 'json' | 'text'
+
+/** What one component did in a run */
+export interface SimulationStep {
+  kind: StepKind
+  /** Position among the components of the same kind */
+  index: number
+  component: string
+  status: StepStatus
+  summary: string
+  /** What it made: a model each (adapters and transformers can make several), or what an output sends */
+  outputs: string[]
+  format: PayloadFormat
+  durationMs: number
+}
+
+export interface SimulationResult {
+  steps: SimulationStep[]
+  /** Whether models reached the outputs */
+  delivered: boolean
+  /** The models that reached the outputs, in Turtle */
+  members: string[]
+}
+
+export interface PipelineRunRequest {
+  pipeline: Pipeline
+  input: SimulationInput
+  /** Identifies the runs of the pipeline being designed: the change detection filter remembers across them */
+  session: string
+  /** Whether outputs really send what they make; otherwise a dry run shows what they would send */
+  executeOutputs: boolean
 }

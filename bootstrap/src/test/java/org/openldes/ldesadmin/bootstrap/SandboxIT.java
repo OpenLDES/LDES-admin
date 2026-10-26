@@ -146,6 +146,32 @@ class SandboxIT {
             .expectStatus().isOk()
             .expectBody().jsonPath("$[0].label").isEqualTo("Sandbox LDES server"));
 
+    // The sandbox runs a pipeline itself, and its HTTP output really ingests in the event stream
+    // when executed, on the host name the pipeline uses
+    Map<String, Object> run = client.post().uri("/api/v1/sandbox/runs")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of(
+            "pipeline", Map.of("name", "parcels-from-sandbox",
+                "input", Map.of("name", "Ldio:HttpIn", "adapter", Map.of("name", "Ldio:RdfAdapter")),
+                "outputs", List.of(Map.of("name", "Ldio:HttpOut",
+                    "config", Map.of("endpoint", "http://sandbox-ldes-server:8080/sandbox-parcels")))),
+            "input", Map.of("content", MEMBER.replace("v1", "v2").replace("10:15", "11:15"),
+                "contentType", "text/turtle"),
+            "session", "sandbox-it",
+            "executeOutputs", true))
+        .exchange()
+        .expectStatus().isOk()
+        .expectBody(JSON_OBJECT).returnResult().getResponseBody();
+    assertThat(run).containsEntry("delivered", true);
+    assertThat(objects(run, "steps").getLast())
+        .containsEntry("status", "ok")
+        .hasEntrySatisfying("summary", summary -> assertThat((String) summary)
+            .matches("POST http://localhost:\\d+/sandbox-parcels: 201"));
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+        client.get().uri("/api/v1/ldes-servers/{id}/statistics", serverId).exchange()
+            .expectStatus().isOk()
+            .expectBody().jsonPath("$[0].ingestedMembers").isEqualTo(2));
+
     // Starting again changes nothing
     assertThat(object(startSandbox(), "ldesServer")).containsEntry("id", serverId);
     client.get().uri("/api/v1/ldes-servers").exchange()

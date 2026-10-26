@@ -1,13 +1,19 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { ApiError } from '@/api/LdesAdminApi'
+import { MockLdesAdminApi } from '@/api/mock/MockLdesAdminApi'
 import type { Pipeline } from '@/domain/ldio'
+import type { PipelineRunRequest } from '@/domain/sandbox'
 import { useSandboxStore } from '@/stores/sandbox'
 
 const mockPoll = jest.fn()
+const mockRunPipeline = jest.fn()
 jest.mock('@/api', () => ({
   ...jest.requireActual('@/api'),
-  api: { poll: (...args: unknown[]) => mockPoll(...args) },
+  api: {
+    poll: (...args: unknown[]) => mockPoll(...args),
+    runPipeline: (...args: unknown[]) => mockRunPipeline(...args),
+  },
 }))
 
 const CHANGES = 'https://api.example.org/changes'
@@ -24,6 +30,10 @@ function polledPipeline(config: Record<string, unknown>): Pipeline {
 describe('sandbox store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    // Runs as in demo mode, unless a test says otherwise
+    const demo = new MockLdesAdminApi({ latency: 0, startupDelay: 0 })
+    mockRunPipeline.mockReset()
+    mockRunPipeline.mockImplementation((request: PipelineRunRequest) => demo.runPipeline(request))
   })
 
   it('starts with the default template', () => {
@@ -102,6 +112,46 @@ outputs:
       .toEqual(['Ldio:HttpIn', 'Ldio:RdfAdapter', 'Ldio:ConsoleOut'])
     expect(sandbox.nodes.every((node) => node.data.runStatus === 'done')).toBe(true)
     jest.useRealTimers()
+  })
+
+  it('runs on the API, in a session per loaded pipeline, dry unless asked otherwise', async () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+
+    jest.useFakeTimers()
+    const first = sandbox.run()
+    await jest.runAllTimersAsync()
+    await first
+    sandbox.executeOutputs = true
+    const second = sandbox.run()
+    await jest.runAllTimersAsync()
+    await second
+    sandbox.loadTemplate('http-to-console')
+    const third = sandbox.run()
+    await jest.runAllTimersAsync()
+    await third
+    jest.useRealTimers()
+
+    const requests = mockRunPipeline.mock.calls.map(([request]) => request as PipelineRunRequest)
+    expect(requests.map((request) => request.executeOutputs)).toEqual([false, true, true])
+    expect(requests[0].pipeline.input.name).toBe('Ldio:HttpIn')
+    expect(requests[0].input.contentType).toBe('text/turtle')
+    expect(requests[1].session).toBe(requests[0].session)
+    expect(requests[2].session).not.toBe(requests[0].session)
+  })
+
+  it('tells why a run could not run', async () => {
+    mockRunPipeline.mockRejectedValue(new ApiError(0, 'LDES-admin is unreachable. Check that the backend runs.'))
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+
+    await sandbox.run()
+
+    expect(sandbox.running).toBe(false)
+    expect(sandbox.result).toBeUndefined()
+    expect(sandbox.runError).toBe('LDES-admin is unreachable. Check that the backend runs.')
+    sandbox.resetSimulation()
+    expect(sandbox.runError).toBeUndefined()
   })
 
   describe('with an HTTP In Poller', () => {

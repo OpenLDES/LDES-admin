@@ -35,7 +35,7 @@
     Hexagonal architecture: every ring is a separate Maven module, so the dependency rule
     (adapter -> application -> model) is enforced by the compiler. The frontend is built into a
     jar of static resources that the bootstrap module serves.
-    See analysis/architecture.md.
+    See _analysis/architecture.md.
   -->
   <modules>
     <module>model</module>
@@ -48,6 +48,13 @@
   <properties>
     <java.version>25</java.version>
     <jena.version>6.2.0</jena.version>
+    <!--
+      The LDI components the sandbox runs (adapter.out.sandbox): the same code as the LDIO image
+      of local instances. LDI is built on Jena 5; Jena is aligned to the version of LDES-admin.
+      (BOMs of Jena and rdf4j are not imported: they manage Spring 5.)
+    -->
+    <ldi.version>3.1.1</ldi.version>
+    <commons-text.version>1.15.0</commons-text.version>
     <archunit.version>1.5.1</archunit.version>
     <!-- Only the bootstrap module contains a runnable application -->
     <spring-boot.run.skip>true</spring-boot.run.skip>
@@ -82,10 +89,111 @@
         <artifactId>ldes-admin-frontend</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!--
+        One by one: jena-bom imports what its parent manages for Fuseki too (Shiro, Spring 5,
+        Hibernate 5)
+      -->
       <dependency>
         <groupId>org.apache.jena</groupId>
         <artifactId>jena-arq</artifactId>
         <version>${jena.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.jena</groupId>
+        <artifactId>jena-core</artifactId>
+        <version>${jena.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.jena</groupId>
+        <artifactId>jena-base</artifactId>
+        <version>${jena.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.jena</groupId>
+        <artifactId>jena-geosparql</artifactId>
+        <version>${jena.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-text</artifactId>
+        <version>${commons-text.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>ldi-common</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>rdf-adapter</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>json-to-ld-adapter</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>rml-adapter</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>ngsiv2-to-ld-adapter</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>sparql-construct</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>version-object-creator</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>version-materialiser</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>geojson-to-wkt</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>skolemisation-transformer</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>change-detection-filter</artifactId>
+        <version>${ldi.version}</version>
+        <exclusions>
+          <!-- Hibernate 5 for its SQL state; the sandbox keeps the state in memory -->
+          <exclusion>
+            <groupId>org.openldes.ldi</groupId>
+            <artifactId>ldi-infra-sql</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>request-executor</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>http-sparql-out</artifactId>
+        <version>${ldi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes.ldi</groupId>
+        <artifactId>repository-sink</artifactId>
+        <version>${ldi.version}</version>
       </dependency>
       <dependency>
         <groupId>com.tngtech.archunit</groupId>

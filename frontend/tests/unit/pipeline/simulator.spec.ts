@@ -22,14 +22,14 @@ describe('pipeline simulator', () => {
       ['output', 'Ldio:ConsoleOut', 'ok'],
     ])
     expect(result.steps[2].summary).toBe('Converted 1 GeoJSON geometry to WKT')
-    expect(result.member).toContain(
+    expect(result.members[0]).toContain(
       '<https://data.vlaanderen.be/id/perceel/24062B0123-00A000/2026-10-23T08:12:00Z>',
     )
-    expect(result.member).toContain(
+    expect(result.members[0]).toContain(
       'dcterms:isVersionOf <https://data.vlaanderen.be/id/perceel/24062B0123-00A000>',
     )
-    expect(result.member).toContain('prov:generatedAtTime "2026-10-23T08:12:00Z"^^xsd:dateTime')
-    expect(result.member).toContain(
+    expect(result.members[0]).toContain('prov:generatedAtTime "2026-10-23T08:12:00Z"^^xsd:dateTime')
+    expect(result.members[0]).toContain(
       'geo:asWKT "POLYGON ((4.7005 50.8798, 4.7012 50.8798, 4.7012 50.8803, 4.7005 50.8803, 4.7005 50.8798))"^^geo:wktLiteral',
     )
   })
@@ -46,7 +46,7 @@ describe('pipeline simulator', () => {
 
     const result = simulator().run(pipeline, templateById('http-to-console')!.sample)
 
-    expect(result.member).toContain('<http://www.janedoe.com/#me/2026-10-23T10:15:30.000Z>')
+    expect(result.members[0]).toContain('<http://www.janedoe.com/#me/2026-10-23T10:15:30.000Z>')
   })
 
   it('drops a member without subject of the member type', () => {
@@ -77,8 +77,8 @@ describe('pipeline simulator', () => {
     const second = sim.run(template.pipeline, template.sample)
 
     expect(first.delivered).toBe(true)
-    expect(first.member).toContain('<https://data.vlaanderen.be/id/perceel/24062B0123-00A000>')
-    expect(first.member).not.toContain('isVersionOf')
+    expect(first.members[0]).toContain('<https://data.vlaanderen.be/id/perceel/24062B0123-00A000>')
+    expect(first.members[0]).not.toContain('isVersionOf')
     expect(second.delivered).toBe(false)
     expect(second.steps.at(-1)).toMatchObject({
       component: 'Ldio:ChangeDetectionFilter',
@@ -93,10 +93,10 @@ describe('pipeline simulator', () => {
 
     const skolemisation = result.steps.find((step) => step.component === 'Ldio:SkolemisationTransformer')
     expect(skolemisation?.summary).toBe('Replaced 1 blank node')
-    expect(result.member).toContain('https://data.vlaanderen.be/.well-known/genid/')
+    expect(result.members[0]).toContain('https://data.vlaanderen.be/.well-known/genid/')
     const console = result.steps.find((step) => step.component === 'Ldio:ConsoleOut')!
-    expect(console.output).toMatch(/^<https:\/\/data\.vlaanderen\.be\/id\/hinder\/GIPOD-1287345> /)
-    expect(console.output).toContain('"POINT (4.7253 50.8681)"^^<http://www.opengis.net/ont/geosparql#wktLiteral>')
+    expect(console.outputs[0]).toMatch(/^<https:\/\/data\.vlaanderen\.be\/id\/hinder\/GIPOD-1287345> /)
+    expect(console.outputs[0]).toContain('"POINT (4.7253 50.8681)"^^<http://www.opengis.net/ont/geosparql#wktLiteral>')
   })
 
   it('stops when an input that needs an adapter has none', () => {
@@ -128,7 +128,7 @@ describe('pipeline simulator', () => {
     const output = simulator().run(pipeline, templateById('http-to-console')!.sample).steps.at(-1)!
 
     expect(output.format).toBe('json')
-    expect(JSON.parse(output.output!)).toMatchObject({
+    expect(JSON.parse(output.outputs[0])).toMatchObject({
       '@context': { rdf: expect.any(String), schema: 'http://schema.org/' },
       '@graph': [{ '@id': 'http://www.janedoe.com/#me', '@type': ['schema:Person'], 'schema:name': 'Jane Doe' }],
     })

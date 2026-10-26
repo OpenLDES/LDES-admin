@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api'
 import { errorMessage } from '@/composables/useAsync'
 import type { ComponentConfig, Pipeline } from '@/domain/ldio'
+import type { SimulationInput, SimulationResult } from '@/domain/sandbox'
 import {
   autoLayout,
   connectionProblem,
@@ -16,7 +17,6 @@ import {
   pipelineToGraph,
 } from '@/pipeline/graph'
 import { describeSchedule, nextPoll, type Poller, pollerOf } from '@/pipeline/poller'
-import { PipelineSimulator, type SimulationInput, type SimulationResult } from '@/pipeline/simulator'
 import { defaultTemplate, templateById } from '@/pipeline/templates'
 import { parsePipelineYaml, pipelineToYaml } from '@/pipeline/yaml'
 
@@ -53,8 +53,13 @@ export const useSandboxStore = defineStore('sandbox', () => {
 
   const running = ref(false)
   const result = ref<SimulationResult>()
+  /** Why the last run could not run at all, e.g. the backend does not answer */
+  const runError = ref<string>()
   const activeStep = ref(-1)
-  const simulator = new PipelineSimulator()
+  /** Whether outputs really send what they make; a dry run by default */
+  const executeOutputs = ref(false)
+  /** Renewed with every pipeline loaded: the change detection filter forgets what it saw then */
+  const session = ref(newSession())
   let currentRun: Promise<void> = Promise.resolve()
 
   const polling = ref(false)
@@ -94,7 +99,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
     origin.value = from
     selectedId.value = undefined
     resetSimulation()
-    simulator.reset()
+    session.value = newSession()
   }
 
   function loadTemplate(id: string) {
@@ -112,6 +117,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
     origin.value = { kind: 'scratch' }
     selectedId.value = undefined
     resetSimulation()
+    session.value = newSession()
   }
 
   function ensureInitialised() {
@@ -189,7 +195,19 @@ export const useSandboxStore = defineStore('sandbox', () => {
     if (!pipeline || !conversion.value.runnable || running.value) return
     resetSimulation()
     running.value = true
-    const outcome = simulator.run(pipeline, sample.value)
+    let outcome: SimulationResult
+    try {
+      outcome = await api.runPipeline({
+        pipeline,
+        input: { ...sample.value },
+        session: session.value,
+        executeOutputs: executeOutputs.value,
+      })
+    } catch (e) {
+      runError.value = errorMessage(e)
+      running.value = false
+      return
+    }
     const ids = nodeIdsInOrder()
     for (const [index, step] of outcome.steps.entries()) {
       activeStep.value = index
@@ -300,6 +318,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
   function resetSimulation() {
     if (running.value) return
     result.value = undefined
+    runError.value = undefined
     activeStep.value = -1
     if (nodes.value.some((node) => node.data.runStatus)) {
       nodes.value = nodes.value.map((node) => ({ ...node, data: { ...node.data, runStatus: undefined } }))
@@ -349,7 +368,9 @@ export const useSandboxStore = defineStore('sandbox', () => {
     origin,
     running,
     result,
+    runError,
     activeStep,
+    executeOutputs,
     conversion,
     yaml,
     selected,
@@ -380,6 +401,12 @@ export const useSandboxStore = defineStore('sandbox', () => {
     stopPolling,
   }
 })
+
+/** Random enough to tell the pipelines of one browser apart; randomUUID needs a secure context */
+function newSession(): string {
+  return globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
 
 /** Changes when what the poller requests, or when, changes */
 function pollerKey(poller: Poller | undefined): string {

@@ -24,7 +24,13 @@ import type {
   PipelineStatus,
 } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
-import type { PolledContent, PollRequest, Sandbox } from '@/domain/sandbox'
+import type {
+  PipelineRunRequest,
+  PolledContent,
+  PollRequest,
+  Sandbox,
+  SimulationResult,
+} from '@/domain/sandbox'
 import { ApiError, type LdesAdminApi } from '../LdesAdminApi'
 
 const TURTLE = 'text/turtle'
@@ -75,6 +81,10 @@ export class HttpLdesAdminApi implements LdesAdminApi {
 
   poll(request: PollRequest): Promise<PolledContent> {
     return this.json('/sandbox/poll', { method: 'POST', body: request })
+  }
+
+  runPipeline(request: PipelineRunRequest): Promise<SimulationResult> {
+    return this.json('/sandbox/runs', { method: 'POST', body: request })
   }
 
   // Instances ----------------------------------------------------------------------------------

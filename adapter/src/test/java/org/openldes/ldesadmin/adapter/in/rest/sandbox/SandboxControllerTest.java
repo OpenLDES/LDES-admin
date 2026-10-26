@@ -6,19 +6,31 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.openldes.ldesadmin.adapter.AdapterFixtures;
 import org.openldes.ldesadmin.application.port.in.sandbox.PollUseCase;
+import org.openldes.ldesadmin.application.port.in.sandbox.RunPipelineUseCase;
 import org.openldes.ldesadmin.application.port.in.sandbox.SandboxUseCase;
 import org.openldes.ldesadmin.application.port.out.runtime.LocalRuntimeException;
 import org.openldes.ldesadmin.application.port.out.sandbox.PollException;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceType;
+import org.openldes.ldesadmin.model.ldio.ComponentDefinition;
+import org.openldes.ldesadmin.model.ldio.InputDefinition;
+import org.openldes.ldesadmin.model.ldio.Pipeline;
+import org.openldes.ldesadmin.model.sandbox.PipelineRun;
 import org.openldes.ldesadmin.model.sandbox.Poll;
 import org.openldes.ldesadmin.model.sandbox.Poll.ClientCredentials;
 import org.openldes.ldesadmin.model.sandbox.PolledContent;
+import org.openldes.ldesadmin.model.sandbox.RunInput;
+import org.openldes.ldesadmin.model.sandbox.RunOptions;
 import org.openldes.ldesadmin.model.sandbox.Sandbox;
+import org.openldes.ldesadmin.model.sandbox.StepResult;
+import org.openldes.ldesadmin.model.sandbox.StepResult.Format;
+import org.openldes.ldesadmin.model.sandbox.StepResult.Kind;
+import org.openldes.ldesadmin.model.sandbox.StepResult.Status;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpStatus;
@@ -44,6 +56,9 @@ class SandboxControllerTest {
 
   @MockitoBean
   private PollUseCase pollUseCase;
+
+  @MockitoBean
+  private RunPipelineUseCase runPipelineUseCase;
 
   @Test
   void reportsAStoppedSandbox() {
@@ -127,6 +142,54 @@ class SandboxControllerTest {
         .hasStatus(HttpStatus.BAD_REQUEST)
         .bodyJson().extractingPath("$.detail")
         .isEqualTo("'url' must be an absolute http(s) URL, but was file:///etc/passwd");
+  }
+
+  @Test
+  void runsAPipelineStepByStep() {
+    when(runPipelineUseCase.run(any(), any(), any())).thenReturn(new PipelineRun(List.of(
+        new StepResult(Kind.INPUT, 0, "Ldio:HttpIn", Status.OK, "Received POST /parcels",
+            List.of("<a> <b> <c> ."), Format.TURTLE, 0),
+        new StepResult(Kind.OUTPUT, 0, "Ldio:HttpOut", Status.ERROR,
+            "POST http://ldes/parcels answered 400", List.of(), Format.TEXT, 12)),
+        false, List.of()));
+
+    assertThat(mvc.post().uri("/api/v1/sandbox/runs")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {"pipeline": {"name": "parcels",
+               "input": {"name": "Ldio:HttpIn", "adapter": {"name": "Ldio:RdfAdapter"}},
+               "outputs": [{"name": "Ldio:HttpOut", "config": {"endpoint": "http://ldes/parcels"}}]},
+             "input": {"content": "<a> <b> <c> .", "contentType": "text/turtle"},
+             "session": "4b9e", "executeOutputs": true}
+            """))
+        .hasStatusOk()
+        .bodyJson()
+        .isLenientlyEqualTo("""
+            {"delivered": false, "members": [],
+             "steps": [
+               {"kind": "input", "index": 0, "component": "Ldio:HttpIn", "status": "ok",
+                "summary": "Received POST /parcels", "outputs": ["<a> <b> <c> ."],
+                "format": "turtle", "durationMs": 0},
+               {"kind": "output", "status": "error", "format": "text",
+                "summary": "POST http://ldes/parcels answered 400", "durationMs": 12}]}
+            """);
+
+    verify(runPipelineUseCase).run(
+        new Pipeline("parcels", null, new InputDefinition("Ldio:HttpIn", null,
+            ComponentDefinition.of("Ldio:RdfAdapter")), null,
+            List.of(new ComponentDefinition("Ldio:HttpOut", Map.of("endpoint", "http://ldes/parcels")))),
+        RunInput.of("<a> <b> <c> .", "text/turtle"), new RunOptions("4b9e", true));
+  }
+
+  @Test
+  void refusesARunWithoutSession() {
+    assertThat(mvc.post().uri("/api/v1/sandbox/runs")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("""
+            {"pipeline": {"name": "parcels", "input": {"name": "Ldio:HttpIn"}},
+             "input": {"content": "", "contentType": "text/turtle"}}
+            """))
+        .hasStatus(HttpStatus.BAD_REQUEST);
   }
 
   @Test

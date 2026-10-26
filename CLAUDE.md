@@ -1,8 +1,8 @@
 # LDES-admin – context for Claude
 
 Administration, monitoring and sandboxing for OpenLDES servers and LDIO (Linked Data Interaction
-Orchestrator) pipelines. What it does: `analysis/README.md` (the specification; **never modify
-it**). How it is built: `analysis/architecture.md` (keep it up to date when the architecture
+Orchestrator) pipelines. What it does: `_analysis/README.md` (the specification; **never modify
+it**). How it is built: `_analysis/architecture.md` (keep it up to date when the architecture
 changes). How to build and run: `README.md`.
 
 ## Ground rules
@@ -32,6 +32,15 @@ changes). How to build and run: `README.md`.
   history), Jest 29 (+ `@vue/vue3-jest`, ts-jest), Cypress 16.2, pnpm 9.15.3.
 * Local instances: `openldes/ldes-server:4.2.1` (+ `postgres:16-alpine`),
   `openldes/ldi-orchestrator:3.1.1`, started through the Testcontainers API.
+* Sandbox runtime: LDI 3.1.1 core libraries (`org.openldes.ldi:*`, `ldi.version`). Not on Maven
+  Central yet: they resolve from the local `~/.m2` (built from `/tmp/ldi-src`), so CI cannot build
+  until they are published. Jena artifacts are managed one by one (jena-bom and rdf4j-bom drag in
+  Spring 5 management; Maven 3.10 applies transitive dependency management).
+* LDI on Jena 6 (see `adapter.out.sandbox`): `SparqlConstructTransformer` and carml's
+  `JenaConverters` call removed Jena methods, and carml's streaming JSONPath parser (jsurfer, ANTLR
+  4.7) cannot run next to ANTLR 4.13 (Hibernate, Spring Data). The adapter has its own
+  `SparqlConstruct` (registers LDI's functions) and `RmlRecordAdapter` (JSON as a record, own
+  rdf4j→Jena conversion). The rest of LDI runs as it is.
 
 ## Architecture (hexagonal, one Maven module per ring)
 
@@ -71,6 +80,15 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   headers, OAuth2 client credentials in the form body; needs a Content-Type; max 5 MB;
   `PollException` → 502). The user chose this deliberate exception to "no open proxy" (CORS blocks
   the browser); docs tell to secure the API. Internal URLs of local instances are translated.
+* Sandbox runs (`POST /api/v1/sandbox/runs`, `RunPipelineUseCase` → `RunPipelineService` →
+  `ComponentRuntime` / `LdiComponentRuntime` in `adapter.out.sandbox`): the service fans models
+  out over the transformers and outputs as LDIO does; the runtime configures LDI components like
+  the LDIO configurators (`LdioConfig` flattens like LDIO's `FlattenDeserializer`; never reads files),
+  keeps them per session and position (change detection memory), and bounds every call
+  (`ldes-admin.sandbox.component-timeout`). Outputs run dry unless `executeOutputs`; Kafka, AMQP
+  and RDB always dry. LDIO behaviour reproduced: HTTP Out writes JSON-LD without the frame (it uses
+  `writeToOutputStream`), console/Kafka/AMQP with it; a failed HTTP enricher request passes the
+  model on.
 
 ### CI
 
@@ -102,11 +120,14 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   options, group, `when`, cross-property `check`), `pipeline/config.ts` (read/write/validate
   config; keys matched like LDIO does), `components/sandbox/ComponentConfigForm.vue` +
   `components/common/ConfigField.vue` (form kept in step with the component YAML),
-  `pipeline/simulator.ts` (in-browser approximation), `pipeline/poller.ts` (URLs, request and
+  `pipeline/simulator.ts` (in-browser approximation, the demo-mode engine behind
+  `MockLdesAdminApi.runPipeline`; production runs on the backend), `pipeline/poller.ts` (URLs, request and
   schedule of an `Ldio:HttpInPoller` input) + `pipeline/cron.ts` (Spring cron, also validates the
   `cron` type). The store fetches the input (`fetchInput`) and polls (`startPolling`: cron when it
   fires, interval right away; every URL in turn, then `run()`); `SimulationPanel` stops polling on
-  unmount. Demo mode polls with the browser's `fetch` (CORS).
+  unmount. Demo mode polls with the browser's `fetch` (CORS). Runs: `api.runPipeline({pipeline,
+  input, session, executeOutputs})`; `session` renewed in `load()`/`clear()`; steps carry
+  `outputs: string[]` (a model each; pager in the panel), results `members: string[]`.
 * Event stream and view dialogs (`components/ldes/Create*Dialog.vue`): a form and the Turtle edit one
   RDF graph. `ldes/turtle.ts` (parse with N3.js, graph changes, a writer that nests blank nodes and
   lists like hand-written Turtle), `ldes/catalog.ts` (configurable predicates, fragmentation and
@@ -228,4 +249,4 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
 
 * Authentication in the frontend (OIDC) for when `ldes-admin.security.enabled=true`; until then the
   served frontend loads but its API calls get 401.
-* Showing what a deployed sandbox pipeline does step by step (capture endpoint in LDES-admin).
+* The sandbox runtime could run inputs for real (follow the LDES of an LDES client).

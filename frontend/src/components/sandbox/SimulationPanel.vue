@@ -4,15 +4,15 @@ import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import Select from 'primevue/select'
+import ToggleSwitch from 'primevue/toggleswitch'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction } from '@/composables/useAsync'
 import type { EventStream } from '@/domain/ldes'
 import type { DeployedPipeline } from '@/domain/ldio'
-import { SANDBOX_INGEST_PIPELINE } from '@/domain/sandbox'
+import { SANDBOX_INGEST_PIPELINE, type SimulationStep } from '@/domain/sandbox'
 import { componentInfo, kinds } from '@/pipeline/catalog'
 import { describeSchedule } from '@/pipeline/poller'
-import type { SimulationStep } from '@/pipeline/simulator'
 import { templateById } from '@/pipeline/templates'
 import { useInstancesStore } from '@/stores/instances'
 import { useSandboxStore } from '@/stores/sandbox'
@@ -46,12 +46,19 @@ const contentTypeOptions = computed(() => {
 const selectedStep = ref(0)
 const steps = computed(() => sandbox.result?.steps ?? [])
 const shown = computed<SimulationStep | undefined>(() => steps.value[selectedStep.value])
+/** Which of the models of the shown step is shown: adapters and transformers can make several */
+const shownModel = ref(0)
+const shownOutput = computed(() => shown.value?.outputs[shownModel.value])
+watch(shown, () => {
+  shownModel.value = 0
+})
 const pending = computed(() => sandbox.conversion.order.length - steps.value.length)
 // A configuration that LDIO would refuse can still be simulated
 const blocked = computed(() => sandbox.errors.find((issue) => issue.property === undefined)?.message)
 
 const status = computed(() => {
   if (sandbox.running) return { icon: 'pi pi-spin pi-spinner', text: 'Running…', tone: 'busy' }
+  if (sandbox.runError) return { icon: 'pi pi-times-circle', text: `Could not run: ${sandbox.runError}`, tone: 'error' }
   const result = sandbox.result
   if (!result) return { icon: 'pi pi-play-circle', text: 'Run a member through the pipeline to see every step', tone: 'idle' }
   const last = result.steps[result.steps.length - 1]
@@ -165,13 +172,16 @@ function clock(time: Date): string {
 }
 
 async function ingest() {
-  const member = sandbox.result?.member
-  if (!member || !targetServer.value || !targetCollection.value) return
+  const members = sandbox.result?.members ?? []
+  if (!members.length || !targetServer.value || !targetCollection.value) return
   const collection = targetCollection.value
   const done = await act(async () => {
-    await api.ingestMember(targetServer.value!, collection, member, 'text/turtle')
+    // One by one: the LDES server takes one member per request
+    for (const member of members) {
+      await api.ingestMember(targetServer.value!, collection, member, 'text/turtle')
+    }
     return true
-  }, `Ingested the result in ${collection}`)
+  }, members.length === 1 ? `Ingested the result in ${collection}` : `Ingested ${members.length} members in ${collection}`)
   if (done) ingestPopover.value?.hide()
 }
 
@@ -216,6 +226,10 @@ async function send() {
   if (sent) sendPopover.value?.hide()
 }
 
+function languageOf(format: SimulationStep['format']) {
+  return format === 'json' ? 'json' : format === 'text' ? 'text' : 'turtle'
+}
+
 function stepLabel(step: SimulationStep) {
   return componentInfo(step.component)?.label ?? step.component
 }
@@ -236,6 +250,11 @@ const statusIcon: Record<SimulationStep['status'], string> = {
       </button>
       <span class="bar-status" :class="status.tone"><i :class="status.icon" />{{ status.text }}</span>
       <span class="spacer" />
+      <label class="execute" for="execute-outputs" data-cy="execute-outputs"
+        v-tooltip.top="'On: outputs really send what they make (HTTP Out posts, SPARQL Out updates its store, …). Off: a dry run shows what they would send.'">
+        <ToggleSwitch v-model="sandbox.executeOutputs" input-id="execute-outputs" />
+        <span>Execute outputs</span>
+      </label>
       <Button v-if="sandbox.polling" label="Stop polling" icon="pi pi-stop-circle" severity="secondary" text
         size="small" data-cy="stop-polling" @click="sandbox.stopPolling()" />
       <Button v-if="sandbox.result && !sandbox.running" label="Reset" severity="secondary" text size="small"
@@ -331,11 +350,18 @@ const statusIcon: Record<SimulationStep['status'], string> = {
           <span class="column-title"><i class="pi pi-file-export" />
             <span class="truncate">{{ shown ? `After ${stepLabel(shown)}` : 'Output' }}</span></span>
           <span class="spacer" />
+          <span v-if="shown && shown.outputs.length > 1" class="pager" data-cy="model-pager">
+            <Button icon="pi pi-chevron-left" severity="secondary" text rounded size="small" aria-label="Previous model"
+              :disabled="shownModel === 0" @click="shownModel--" />
+            <span class="muted small">Model {{ shownModel + 1 }} of {{ shown.outputs.length }}</span>
+            <Button icon="pi pi-chevron-right" severity="secondary" text rounded size="small" aria-label="Next model"
+              :disabled="shownModel === shown.outputs.length - 1" data-cy="next-model" @click="shownModel++" />
+          </span>
           <Button v-if="sandbox.result?.delivered && !sandbox.running" icon="pi pi-upload" label="Ingest"
             v-tooltip.top="'Ingest the result in a sandbox LDES server'" size="small" text
             data-cy="open-ingest-result" @click="ingestPopover?.toggle($event)" />
         </header>
-        <CodeEditor v-if="shown?.output" :model-value="shown.output" :language="shown.format === 'json' ? 'json' : 'turtle'"
+        <CodeEditor v-if="shownOutput" :model-value="shownOutput" :language="languageOf(shown!.format)"
           readonly min-height="100%" class="editor" data-cy="step-output" />
         <div v-else-if="shown" class="placeholder muted small">
           <i :class="statusIcon[shown.status]" />
@@ -486,6 +512,23 @@ const statusIcon: Record<SimulationStep['status'], string> = {
 
 .editor :deep(.cm-editor) {
   height: 100%;
+}
+
+.execute {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 .hint {

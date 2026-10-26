@@ -78,6 +78,20 @@ describe('HTTP LDES-admin API', () => {
     })
   })
 
+  it('asks the backend to run a pipeline', async () => {
+    next = answer(200, { steps: [], delivered: false, members: [] })
+    const request = {
+      pipeline: { name: 'p', input: { name: 'Ldio:HttpIn', adapter: { name: 'Ldio:RdfAdapter' } } },
+      input: { content: '<a> <b> <c> .', contentType: 'text/turtle' },
+      session: 's1',
+      executeOutputs: false,
+    }
+
+    expect(await api.runPipeline(request)).toEqual({ steps: [], delivered: false, members: [] })
+    expect(calls[0]).toMatchObject({ url: '/api/v1/sandbox/runs', method: 'POST' })
+    expect(JSON.parse(calls[0].body!)).toEqual(request)
+  })
+
   it('asks the backend to poll a URL', async () => {
     next = answer(200, { contentType: 'application/json', body: '[]' })
 

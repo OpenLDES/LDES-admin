@@ -2,6 +2,7 @@ import { ApiError } from '@/api/LdesAdminApi'
 import { MockLdesAdminApi } from '@/api/mock/MockLdesAdminApi'
 import { IDS } from '@/api/mock/sampleData'
 import { relationLabel } from '@/domain/ldes'
+import type { PipelineRunRequest } from '@/domain/sandbox'
 
 describe('mock LDES-admin API', () => {
   let api: MockLdesAdminApi
@@ -166,6 +167,52 @@ describe('mock LDES-admin API', () => {
   it('only sends to pipelines with an HTTP input', async () => {
     await expect(api.sendToPipeline(IDS.consumerLdio, 'water-quality-replication', '{}',
       'application/json')).rejects.toMatchObject({ status: 400 })
+  })
+
+  describe('runs pipelines in the browser, as there is no backend', () => {
+    const member = `@prefix ex: <http://example.org/> .
+ex:parcel1 a ex:Parcel ; ex:area "512.4" .`
+
+    function request(session: string, executeOutputs = false): PipelineRunRequest {
+      return {
+        pipeline: {
+          name: 'parcels',
+          input: { name: 'Ldio:HttpIn', adapter: { name: 'Ldio:RdfAdapter' } },
+          transformers: [{ name: 'Ldio:ChangeDetectionFilter' }],
+          outputs: [{
+            name: 'Ldio:HttpOut',
+            config: { endpoint: 'http://sandbox-ldes-server:8080/sandbox-parcels' },
+          }],
+        },
+        input: { content: member, contentType: 'text/turtle' },
+        session,
+        executeOutputs,
+      }
+    }
+
+    it('remembers what the change detection filter saw in a session', async () => {
+      expect((await api.runPipeline(request('s1'))).delivered).toBe(true)
+      const again = await api.runPipeline(request('s1'))
+      expect(again.delivered).toBe(false)
+      expect(again.steps.at(-1)?.status).toBe('filtered')
+      expect((await api.runPipeline(request('s2'))).delivered).toBe(true)
+    })
+
+    it('runs outputs dry, or ingests in a demo LDES server when executed', async () => {
+      await api.startSandbox()
+      const server = (await api.getSandbox()).ldesServer!
+      const ingested = async () => (await api.getStreamStatistics(server.id))
+        .find((stream) => stream.collection === 'sandbox-parcels')!.ingestedMembers
+      const before = await ingested()
+
+      const dry = await api.runPipeline(request('dry'))
+      expect(dry.steps.at(-1)?.summary).toBe('Would POST text/turtle to http://sandbox-ldes-server:8080/sandbox-parcels')
+      expect(await ingested()).toBe(before)
+
+      const executed = await api.runPipeline(request('executed', true))
+      expect(executed.steps.at(-1)?.summary).toBe('POST http://sandbox-ldes-server:8080/sandbox-parcels: 201')
+      expect(await ingested()).toBe(before + 1)
+    })
   })
 
   describe('polls from the browser, as there is no backend', () => {
