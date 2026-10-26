@@ -139,8 +139,10 @@ LDIO would make of the member.
 
 The simulation has three columns:
 
-* **Input member**: what the input receives, as JSON, Turtle, N-Quads, JSON-LD or CSV. The
-  refresh button brings back the sample member of the template. A pipeline that starts with an
+* **Input member**: what the input receives, as JSON, Turtle, N-Quads, N-Triples, JSON-LD or CSV.
+  Choosing another RDF format converts the member to it (JSON-LD with its context in the
+  document: a remote context cannot be fetched). The refresh button brings back the sample member
+  of the template. A pipeline that starts with an
   HTTP In Poller has buttons to [fetch and poll its URL](#input-from-an-http-poller) instead.
 * **Steps**: every component the member went through, with how long it took and what it did:
   passed on, filtered out, or stopped with an error. Components it did not reach are listed as such.

@@ -2,6 +2,16 @@ import { Parser, Writer } from 'n3'
 import type { Literal, Quad, Term } from 'n3'
 import type { RdfFormat } from '@/domain/ldes'
 import { PREFIXES } from '@/domain/rdf'
+import { readJsonLd } from './jsonld'
+import { writeTurtle } from './turtle'
+
+const RDF_FORMATS: RdfFormat[] = ['text/turtle', 'application/ld+json', 'application/n-quads',
+  'application/n-triples']
+
+/** Whether a content type is one of the RDF formats that can be converted, ignoring parameters */
+export function isRdfFormat(contentType: string): contentType is RdfFormat {
+  return RDF_FORMATS.includes(contentType.split(';')[0].trim().toLowerCase() as RdfFormat)
+}
 
 /**
  * Writes Turtle in another RDF format, e.g. to offer a member in the format chosen for ingesting.
@@ -9,13 +19,37 @@ import { PREFIXES } from '@/domain/rdf'
  * Turtle, blank nodes used once nested in their subject.
  */
 export function convertTurtle(turtle: string, format: RdfFormat): string {
-  if (format === 'text/turtle') return turtle
+  return convertRdf(turtle, 'text/turtle', format)
+}
+
+/**
+ * Linked data in another RDF format. Turtle is written as by hand, with the prefixes of the
+ * source; JSON-LD is read without fetching remote contexts (ldes/jsonld.ts).
+ *
+ * @throws Error when the content is not valid in its format, or cannot be written in the other
+ */
+export function convertRdf(content: string, from: RdfFormat, to: RdfFormat): string {
+  if (from === to) return content
+  const { quads, prefixes } = parseRdf(content, from)
+  if (to === 'application/ld+json') return JSON.stringify(toJsonLd(quads, prefixes), null, 2)
+  if (to === 'application/n-quads' || to === 'application/n-triples') {
+    if (to === 'application/n-triples' && quads.some((q) => q.graph.termType !== 'DefaultGraph')) {
+      throw new Error('N-Triples cannot hold named graphs: choose N-Quads')
+    }
+    return new Writer({ format: to === 'application/n-quads' ? 'N-Quads' : 'N-Triples' }).quadsToString(quads)
+  }
+  if (quads.some((q) => q.graph.termType !== 'DefaultGraph')) {
+    throw new Error('Turtle cannot hold named graphs: choose N-Quads or JSON-LD')
+  }
+  return writeTurtle({ prefixes, quads })
+}
+
+function parseRdf(content: string, format: RdfFormat): { quads: Quad[]; prefixes: Record<string, string> } {
+  if (format === 'application/ld+json') return readJsonLd(content)
   const prefixes: Record<string, string> = {}
-  const quads = new Parser({ format: 'Turtle' })
-    .parse(turtle, null, (prefix, namespace) => { prefixes[prefix] = namespace.value })
-  if (format === 'application/ld+json') return JSON.stringify(toJsonLd(quads, prefixes), null, 2)
-  return new Writer({ format: format === 'application/n-quads' ? 'N-Quads' : 'N-Triples' })
-    .quadsToString(quads)
+  const quads = new Parser({ format: format === 'text/turtle' ? 'Turtle' : format === 'application/n-quads' ? 'N-Quads' : 'N-Triples' })
+    .parse(content, null, (prefix, namespace) => { prefixes[prefix] = namespace.value })
+  return { quads, prefixes }
 }
 
 type JsonLdNode = Record<string, unknown>

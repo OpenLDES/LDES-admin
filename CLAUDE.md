@@ -142,7 +142,9 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   (`<collection>-ingest`) and data through `LdesAdminApi`, skipping what exists; used by
   `StartLocalInstanceDialog` (with a local instance of the other kind) and
   `CreateEventStreamDialog` (templates + "Also create"). `exampleFor(stream)` picks the members
-  `IngestPanel` offers; `ldes/formats.ts` converts them to the chosen RDF format.
+  `IngestPanel` offers; `ldes/formats.ts` converts them to the chosen RDF format. Its `convertRdf`
+  converts between Turtle, JSON-LD, N-Quads and N-Triples (JSON-LD read by `ldes/jsonld.ts`,
+  inline contexts only); the sandbox input follows its content type with it.
 * Patterns: `useAsync`/`useAction` composables; `data-cy` attributes for Cypress;
   `cy.dialogOpened(dataCy)` before typing in a PrimeVue dialog; Cypress pins demo mode in
   `cypress/support/e2e.ts`; e2e for production mode stubs the backend with `cy.intercept` (an

@@ -1,6 +1,6 @@
 import { Parser } from 'n3'
 import { sensors } from '@/examples/sensors'
-import { convertTurtle } from '@/ldes/formats'
+import { convertRdf, convertTurtle, isRdfFormat } from '@/ldes/formats'
 
 const NOW = new Date('2026-10-25T13:20:00Z')
 const member = sensors.member(0, NOW)
@@ -44,5 +44,45 @@ describe('converting a member to another format', () => {
         { '@id': 'ex:b', 'ex:p': { '@value': 'two', '@language': 'en' } },
       ],
     })
+  })
+})
+
+describe('converting linked data between formats', () => {
+  const sameStatements = (a: string, formatA: string, b: string, formatB: string) => {
+    const canonical = (text: string, format: string) => new Parser({ format }).parse(text)
+      .map((q) => [q.subject, q.predicate, q.object]
+        .map((term) => (term.termType === 'BlankNode' ? '_' : term.id)).join(' '))
+      .sort()
+    expect(canonical(a, formatA)).toEqual(canonical(b, formatB))
+  }
+
+  it('reads the JSON-LD it writes back into the same statements', () => {
+    const jsonLd = convertRdf(member.content, 'text/turtle', 'application/ld+json')
+
+    const turtle = convertRdf(jsonLd, 'application/ld+json', 'text/turtle')
+
+    sameStatements(turtle, 'Turtle', member.content, 'Turtle')
+    expect(turtle).toContain('@prefix sosa:')
+    expect(turtle).toContain('a sosa:Observation')
+  })
+
+  it('writes N-Quads as Turtle', () => {
+    const quads = convertRdf(member.content, 'text/turtle', 'application/n-quads')
+
+    sameStatements(convertRdf(quads, 'application/n-quads', 'text/turtle'), 'Turtle', member.content, 'Turtle')
+  })
+
+  it('explains what cannot be converted', () => {
+    expect(() => convertRdf('<http://example.org/a> <http://example.org/b> "c" <http://example.org/graph> .', 'application/n-quads', 'text/turtle'))
+      .toThrow('Turtle cannot hold named graphs: choose N-Quads or JSON-LD')
+    expect(() => convertRdf('{"@context": "https://schema.org/", "name": "x"}', 'application/ld+json', 'text/turtle'))
+      .toThrow('Cannot fetch the remote context https://schema.org/: put the context in the document')
+    expect(() => convertRdf('<a> <b> .', 'text/turtle', 'application/ld+json')).toThrow()
+  })
+
+  it('knows which content types are RDF formats', () => {
+    expect(isRdfFormat('application/ld+json; charset=utf-8')).toBe(true)
+    expect(isRdfFormat('application/json')).toBe(false)
+    expect(isRdfFormat('text/csv')).toBe(false)
   })
 })

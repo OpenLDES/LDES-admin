@@ -3,7 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api'
 import { errorMessage } from '@/composables/useAsync'
 import type { ComponentConfig, Pipeline } from '@/domain/ldio'
+import type { RdfFormat } from '@/domain/ldes'
 import type { SimulationInput, SimulationResult } from '@/domain/sandbox'
+import { convertRdf, isRdfFormat } from '@/ldes/formats'
 import {
   autoLayout,
   connectionProblem,
@@ -226,6 +228,28 @@ export const useSandboxStore = defineStore('sandbox', () => {
     running.value = false
   }
 
+  /**
+   * Gives the input another content type. Linked data is converted to it, from one RDF format to
+   * another; anything else (JSON, CSV) keeps its content.
+   *
+   * @returns why the content could not be converted, if it could not: it is kept as it is
+   */
+  function changeContentType(contentType: string): string | undefined {
+    const { content, contentType: current } = sample.value
+    if (contentType === current) return undefined
+    if (content.trim() && isRdfFormat(current) && isRdfFormat(contentType)) {
+      try {
+        sample.value = { ...sample.value, content: convertRdf(content, mediaType(current) as RdfFormat, contentType), contentType }
+        return undefined
+      } catch (e) {
+        sample.value = { ...sample.value, contentType }
+        return errorMessage(e)
+      }
+    }
+    sample.value = { ...sample.value, contentType }
+    return undefined
+  }
+
   // Polling: the input as the HTTP In Poller of the pipeline receives it -----------------------
 
   /** Puts what a URL answers in the input, as the poller would receive it */
@@ -396,6 +420,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
     polls,
     nextPollAt,
     lastPoll,
+    changeContentType,
     fetchInput,
     startPolling,
     stopPolling,

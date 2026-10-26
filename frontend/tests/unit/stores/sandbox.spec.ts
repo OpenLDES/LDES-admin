@@ -140,6 +140,24 @@ outputs:
     expect(requests[2].session).not.toBe(requests[0].session)
   })
 
+  it('converts linked data in the input to another content type', () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+
+    expect(sandbox.changeContentType('application/ld+json')).toBeUndefined()
+    expect(JSON.parse(sandbox.sample.content)).toMatchObject({ '@id': 'http://www.janedoe.com/#me', 'schema:name': 'Jane Doe' })
+    expect(sandbox.changeContentType('text/turtle')).toBeUndefined()
+    expect(sandbox.sample.content).toContain('schema:name "Jane Doe"')
+
+    // Not linked data: the content stays as it is
+    expect(sandbox.changeContentType('text/csv')).toBeUndefined()
+    expect(sandbox.sample).toMatchObject({ contentType: 'text/csv', content: expect.stringContaining('schema:name') })
+
+    sandbox.sample = { content: '<not turtle', contentType: 'text/turtle' }
+    expect(sandbox.changeContentType('application/n-quads')).toMatch(/Unexpected/)
+    expect(sandbox.sample).toEqual({ content: '<not turtle', contentType: 'application/n-quads' })
+  })
+
   it('tells why a run could not run', async () => {
     mockRunPipeline.mockRejectedValue(new ApiError(0, 'LDES-admin is unreachable. Check that the backend runs.'))
     const sandbox = useSandboxStore()

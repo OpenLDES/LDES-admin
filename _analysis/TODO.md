@@ -60,7 +60,7 @@
 * [x] The sparql construct component in the sandbox should do a sparql construct transformation, so
   the output of this component should be the transformation of the input with the
   `Ldio:SparqlConstructTransformer` transformer. Make use of this component to do the transformation
-* [] When you change the content type of the input member in the sandbox environment, the member
+* [x] When you change the content type of the input member in the sandbox environment, the member
   should be converted to the selected content type. For example, when you have a member in turtle
   format, and you change the content type to json-ld, the member should be available in json-ld
 * [] You should be able to change the content type of the output member in the sandbox environment

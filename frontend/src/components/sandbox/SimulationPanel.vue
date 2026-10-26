@@ -5,6 +5,7 @@ import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
+import { useToast } from 'primevue/usetoast'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction } from '@/composables/useAsync'
@@ -25,6 +26,7 @@ import { shortUrl } from '@/utils/format'
 const open = defineModel<boolean>('open', { required: true })
 
 const sandbox = useSandboxStore()
+const toast = useToast()
 const instances = useInstancesStore()
 const { run: act, busy: ingesting } = useAction()
 const { run: sendAction, busy: sending } = useAction()
@@ -33,6 +35,7 @@ const contentTypes = [
   { label: 'JSON', value: 'application/json' },
   { label: 'Turtle', value: 'text/turtle' },
   { label: 'N-Quads', value: 'application/n-quads' },
+  { label: 'N-Triples', value: 'application/n-triples' },
   { label: 'JSON-LD', value: 'application/ld+json' },
   { label: 'CSV', value: 'text/csv' },
 ]
@@ -94,6 +97,14 @@ watch(targetServer, async (id) => {
 function runPipeline() {
   open.value = true
   sandbox.run()
+}
+
+/** Linked data follows the new content type; a toast says when it cannot */
+function changeContentType(contentType: string) {
+  const problem = sandbox.changeContentType(contentType)
+  if (problem) {
+    toast.add({ severity: 'warn', summary: 'Kept the member as it was', detail: `It could not be converted: ${problem}`, life: 7000 })
+  }
 }
 
 function useTemplateSample() {
@@ -288,8 +299,9 @@ const statusIcon: Record<SimulationStep['status'], string> = {
           <!-- A poller brings its own input -->
           <Button v-else icon="pi pi-refresh" severity="secondary" text rounded size="small"
             v-tooltip.top="'Use the sample member of the template'" aria-label="Sample member" @click="useTemplateSample" />
-          <Select v-model="sandbox.sample.contentType" :options="contentTypeOptions" option-label="label" option-value="value"
-            size="small" aria-label="Content type" data-cy="sample-content-type" />
+          <Select :model-value="sandbox.sample.contentType" :options="contentTypeOptions" option-label="label"
+            option-value="value" size="small" aria-label="Content type" data-cy="sample-content-type"
+            @update:model-value="changeContentType" />
           <Button icon="pi pi-send" severity="secondary" text rounded size="small"
             v-tooltip.top="'Send this member to a pipeline on an LDIO'" aria-label="Send to an LDIO"
             :disabled="!sandbox.sample.content.trim()" data-cy="open-send" @click="openSend" />

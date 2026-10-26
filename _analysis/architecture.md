@@ -407,7 +407,9 @@ example, and then optionally create its views, pipeline and data.
 Ingesting on an event stream starts from a member that fits it: one of the example whose name it
 has or whose members its shape targets (`exampleFor`), else one after its name.
 `ldes/formats.ts` offers that member in the chosen format: N3.js writes N-Triples and N-Quads,
-and JSON-LD is written compacted with the prefixes of the Turtle.
+and JSON-LD is written compacted with the prefixes of the Turtle. `convertRdf` converts between
+all four RDF formats; `ldes/jsonld.ts` reads JSON-LD without a JSON-LD library (inline contexts
+only). The sandbox converts its input member with it when its content type changes.
 
 ### Sandbox
 

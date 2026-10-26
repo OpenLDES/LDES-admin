@@ -147,6 +147,23 @@ describe('the sandbox', () => {
     cy.get('[data-cy=stop-polling]').should('not.exist')
   })
 
+  it('converts the input member to the content type chosen for it', () => {
+    cy.get('[data-cy=templates]').click()
+    cy.contains('.p-menu-item', 'HTTP in → console').click()
+    cy.contains('.p-confirmdialog button', 'Replace').click()
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=sample-input] .cm-content').should('contain', 'schema:name "Jane Doe"')
+
+    cy.get('[data-cy=sample-content-type]').click()
+    cy.contains('.p-select-option', 'JSON-LD').click()
+    cy.get('[data-cy=sample-input] .cm-content').should('contain', '"@context"').and('contain', '"schema:name": "Jane Doe"')
+
+    cy.get('[data-cy=sample-content-type]').click()
+    cy.contains('.p-select-option', 'N-Triples').click()
+    cy.get('[data-cy=sample-input] .cm-content')
+      .should('contain', '<http://www.janedoe.com/#me> <http://schema.org/name> "Jane Doe" .')
+  })
+
   it('loads a template', () => {
     cy.get('[data-cy=templates]').click()
     cy.contains('.p-menu-item', 'Replicate an LDES into a triple store').click()
