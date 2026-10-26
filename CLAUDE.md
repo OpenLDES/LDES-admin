@@ -147,7 +147,8 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
 * jsdom (Jest) lacks `structuredClone` (use JSON copy / `cloneConfig`), `crypto.randomUUID` and
   `matchMedia` (polyfilled in `tests/unit/setup.cjs`).
 * Spring's test HTTP client decompresses transparently; check `Content-Encoding` with the JDK
-  `HttpClient`. Jest prints to stderr, so the Maven log shows its summary as `[ERROR]` (cosmetic).
+  `HttpClient`. frontend-maven-plugin logs stderr as `[ERROR]`: Jest reports on stderr, so the
+  `test` script redirects it (`jest 2>&1`).
 
 ## Verified behaviour of OpenLDES (LDES server 4.2.1, LDIO 3.1.1)
 

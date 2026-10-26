@@ -1,0 +1,13 @@
+diff --git a/lib/process.js b/lib/process.js
+index 6e4dbdb0b2ae8715be83d767a3df7cfd4cbdc4a1..bbd215caf002946ff3c5644161db7a7611374002 100644
+--- a/lib/process.js
++++ b/lib/process.js
+@@ -129,7 +129,7 @@ function processTemplate(descriptor, filename, config) {
+     const tsconfig = getTypeScriptConfig(vueJestConfig.tsConfig)
+     if (tsconfig) {
+       const { transpileModule } = require('typescript')
+-      const { outputText } = transpileModule(result.code, { tsconfig })
++      const { outputText } = transpileModule(result.code, tsconfig)
+       return { code: outputText }
+     }
+   }

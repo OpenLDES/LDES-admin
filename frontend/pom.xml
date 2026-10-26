@@ -85,6 +85,10 @@
               <goal>corepack</goal>
             </goals>
             <configuration>
+              <!--
+                Jest reports on stderr, which Maven logs as errors; the test script redirects it
+                to stdout
+              -->
               <arguments>pnpm test</arguments>
               <skip>${skipTests}</skip>
             </configuration>
