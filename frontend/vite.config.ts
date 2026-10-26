@@ -10,16 +10,21 @@ const proxy = {
   '/actuator': backend,
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  define: {
+    // pnpm build-restrict-to-demo-mode builds in mode demo-only: a frontend for demos, without a
+    // backend, that refuses production mode
+    __DEMO_ONLY__: JSON.stringify(mode === 'demo-only'),
+  },
   server: { proxy },
   preview: { proxy },
   build: {
     chunkSizeWarningLimit: 1500,
   },
-})
+}))

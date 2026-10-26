@@ -289,6 +289,10 @@ The choice is remembered in the browser. Without one, the frontend starts in pro
 `/actuator/health` of the backend answers, and in demo mode otherwise. Switching rebuilds the views
 and reloads the shared stores, so nothing of the other mode lingers.
 
+`pnpm build-restrict-to-demo-mode` builds in Vite mode `demo-only`, which defines `__DEMO_ONLY__`:
+such a frontend starts in demo mode without asking the backend, and the mode store refuses
+production mode (the top bar says it is only for demo purposes).
+
 ### Refreshing
 
 The dashboard refreshes every 30 seconds. The background processes of an LDES server refresh

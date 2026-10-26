@@ -104,7 +104,8 @@ const links = [
         </div>
         <div v-else>
           <strong>Demo mode</strong>
-          <p>Everything you see is sample data. Switch to production in the top bar to manage real servers.</p>
+          <p v-if="mode.demoOnly">Everything you see is sample data. This LDES-admin is only for demo purposes.</p>
+          <p v-else>Everything you see is sample data. Switch to production in the top bar to manage real servers.</p>
         </div>
       </div>
       <div class="links">

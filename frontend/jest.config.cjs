@@ -9,6 +9,8 @@ module.exports = {
   },
   roots: ['<rootDir>/tests/unit'],
   setupFiles: ['<rootDir>/tests/unit/setup.cjs'],
+  // What Vite defines at build time (vite.config.ts)
+  globals: { __DEMO_ONLY__: false },
   moduleFileExtensions: ['ts', 'js', 'mjs', 'json', 'vue'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
+    "build-restrict-to-demo-mode": "vue-tsc --build && vite build --mode demo-only",
     "preview": "vite preview --port 4173 --strictPort",
     "type-check": "vue-tsc --build",
     "test": "jest",
