@@ -131,7 +131,7 @@ export class PipelineSimulator {
           model,
           summary: isIdentityQuery(String(config.query ?? ''))
             ? 'CONSTRUCT { ?s ?p ?o } copied the model'
-            : 'Queries are only evaluated by LDIO; the preview passes the model on unchanged',
+            : 'Demo mode does not evaluate queries: in production mode the sandbox runs the query with the SPARQL construct transformer of LDIO. Passed on unchanged',
         }
       default:
         return { status: 'ok', model, summary: 'Passed on' }
