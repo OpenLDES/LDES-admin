@@ -168,6 +168,81 @@ describe('mock LDES-admin API', () => {
       'application/json')).rejects.toMatchObject({ status: 400 })
   })
 
+  describe('polls from the browser, as there is no backend', () => {
+    const PARKINGS = 'https://data.stad.gent/api/parkings?lang=en'
+    const realFetch = globalThis.fetch
+    let fetched: { url: string; init: RequestInit }[]
+    let next: () => unknown
+
+    function response(status: number, body: string, contentType?: string) {
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: '',
+        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType ?? null : null) },
+        text: async () => body,
+        json: async () => JSON.parse(body),
+      }
+    }
+
+    beforeEach(() => {
+      fetched = []
+      globalThis.fetch = jest.fn(async (url: string, init: RequestInit) => {
+        fetched.push({ url, init })
+        return next()
+      }) as unknown as typeof fetch
+    })
+
+    afterEach(() => {
+      globalThis.fetch = realFetch
+    })
+
+    it('answers the body and content type, with the headers of the poller', async () => {
+      next = () => response(200, '[{"name": "Vrijdagmarkt"}]', 'application/json; charset=utf-8')
+
+      const content = await api.poll({ url: PARKINGS, headers: { 'X-API-KEY': 'secret' } })
+
+      expect(content).toEqual({ contentType: 'application/json; charset=utf-8', body: '[{"name": "Vrijdagmarkt"}]' })
+      expect(fetched[0]).toEqual({ url: PARKINGS, init: { headers: { 'X-API-KEY': 'secret' } } })
+    })
+
+    it('gets an access token first with client credentials', async () => {
+      const answers = [response(200, '{"access_token": "t0k3n"}', 'application/json'), response(200, '<a> <b> <c> .', 'text/turtle')]
+      next = () => answers.shift()
+
+      await api.poll({
+        url: PARKINGS,
+        clientCredentials: { tokenEndpoint: 'https://login.example.org/token', clientId: 'ldes-admin', clientSecret: 's3cr3t' },
+      })
+
+      expect(String(fetched[0].init.body)).toBe('grant_type=client_credentials&client_id=ldes-admin&client_secret=s3cr3t')
+      expect(fetched[1].init.headers).toEqual({ Authorization: 'Bearer t0k3n' })
+    })
+
+    it('reports what the backend would report', async () => {
+      next = () => response(404, 'No such dataset')
+      await expect(api.poll({ url: PARKINGS })).rejects.toEqual(new ApiError(502, `${PARKINGS} answered 404 - No such dataset`))
+
+      next = () => response(200, 'data')
+      await expect(api.poll({ url: PARKINGS })).rejects.toEqual(
+        new ApiError(502, `${PARKINGS} answered without a Content-Type, which LDIO needs to pass it on`))
+
+      await expect(api.poll({ url: 'file:///etc/passwd' })).rejects.toEqual(
+        new ApiError(400, "'url' must be an absolute http(s) URL, but was file:///etc/passwd"))
+    })
+
+    it('explains that a browser cannot read every API', async () => {
+      next = () => {
+        throw new TypeError('Failed to fetch')
+      }
+
+      await expect(api.poll({ url: PARKINGS })).rejects.toMatchObject({
+        status: 502,
+        detail: expect.stringContaining('does not let browsers read it (CORS)'),
+      })
+    })
+  })
+
   it('publishes the server catalog with the datasets that have DCAT', async () => {
     expect((await api.getServerCatalog(IDS.sandboxServer)).catalogId).toBeNull()
     expect(await api.getCatalog(IDS.sandboxServer)).toBe('')

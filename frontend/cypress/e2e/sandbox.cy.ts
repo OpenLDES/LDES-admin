@@ -107,6 +107,46 @@ describe('the sandbox', () => {
     cy.contains('.p-toast', 'Ingested the result in sandbox-parcels')
   })
 
+  it('fetches the input of an HTTP poller, and polls on its schedule', () => {
+    // Demo mode has no backend: the browser polls the URL itself
+    const changes = 'https://api.example.org/changes'
+    cy.intercept('GET', changes, {
+      headers: { 'Content-Type': 'text/turtle; charset=utf-8' },
+      body: '<http://example.org/parcel/1> <http://example.org/area> "512.4" .',
+    }).as('poll')
+    cy.intercept({ method: 'GET', url: changes, times: 1 }, { statusCode: 503, body: 'Down for maintenance' })
+    const pipeline = `{name: polled, input: {name: "Ldio:HttpInPoller", config: {url: "${changes}", cron: "*/2 * * * * *"},
+      adapter: {name: "Ldio:RdfAdapter"}}, outputs: [{name: "Ldio:ConsoleOut"}]}`.replace(/\s+/g, ' ')
+    cy.get('[data-cy=open-yaml]').click()
+    cy.dialogOpened('yaml-dialog')
+    cy.get('[data-cy=yaml-dialog] .cm-content')
+      .type(`{selectall}{backspace}${pipeline.replaceAll('{', '{{}')}`, { delay: 0 })
+    cy.get('[data-cy=apply-yaml]').click()
+    cy.get('[data-cy=canvas] .vue-flow__node').should('have.length', 3)
+    cy.get('[data-cy=toggle-simulation]').click()
+
+    // A failed fetch says why, and leaves the input as it is
+    cy.get('[data-cy=fetch-input]').click()
+    cy.get('[data-cy=poll-status]').should('contain', 'Could not fetch api.example.org/changes')
+      .and('contain', '503').and('contain', 'Down for maintenance')
+
+    cy.get('[data-cy=fetch-input]').click()
+    cy.get('[data-cy=poll-status]').should('contain', 'Fetched api.example.org/changes')
+    cy.get('[data-cy=sample-input] .cm-content').should('contain', '<http://example.org/area> "512.4"')
+    cy.get('[data-cy=sample-content-type]').should('contain', 'Turtle')
+
+    // Polling runs every response through the pipeline
+    cy.get('[data-cy=toggle-polling]').click()
+    cy.get('[data-cy=poll-status]').should('contain', 'Polling cron */2 * * * * *')
+    cy.get('[data-cy=simulation]', { timeout: 10000 }).should('contain', 'Delivered to 1 output')
+    cy.get('[data-cy=simulation-step]').first().should('contain', `Polled ${changes}: 200 OK`)
+    cy.get('[data-cy=poll-status]').invoke('text').should('match', /· [1-9]\d* polls? ·/)
+
+    cy.get('[data-cy=stop-polling]').click()
+    cy.get('[data-cy=poll-status]').should('not.contain', 'Polling')
+    cy.get('[data-cy=stop-polling]').should('not.exist')
+  })
+
   it('loads a template', () => {
     cy.get('[data-cy=templates]').click()
     cy.contains('.p-menu-item', 'Replicate an LDES into a triple store').click()

@@ -21,9 +21,9 @@ module.exports = {
     '^.+\\.vue$': ['@vue/vue3-jest', { tsConfig: '<rootDir>/tsconfig.jest.json' }],
     '^.+\\.m?js$': 'babel-jest',
   },
-  // Transform PrimeVue and nostics (which vue-router 5 requires from its CommonJS build), both in
-  // the pnpm store (.pnpm/@primevue+core@x) and when linked
+  // Transform PrimeVue, Pinia (ESM-only since 4) and nostics (which vue-router 5 requires from its
+  // CommonJS build), both in the pnpm store (.pnpm/@primevue+core@x) and when linked
   transformIgnorePatterns: [
-    '/node_modules/(?!\\.pnpm/(primevue|@primevue\\+|@primeuix\\+|nostics@))(?!primevue|@primevue|@primeuix|nostics)',
+    '/node_modules/(?!\\.pnpm/(primevue|@primevue\\+|@primeuix\\+|pinia@|nostics@))(?!primevue|@primevue|@primeuix|pinia|nostics)',
   ],
 }

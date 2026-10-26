@@ -92,6 +92,7 @@ describe('component configuration', () => {
     it.each([
       ['Ldio:HttpInPoller', 'interval', '1 minute', 'Enter an ISO 8601 duration, e.g. PT1M or PT30S'],
       ['Ldio:HttpInPoller', 'cron', '* * * * *', 'Enter 6 fields: second minute hour day month weekday, e.g. */10 * * * * *'],
+      ['Ldio:HttpInPoller', 'cron', '0 0 25 * * *', 'The hour goes from 0 to 23, not 25'],
       ['Ldio:LdesClient', 'retries.max', '-1', 'Enter 0 or more'],
       ['Ldio:VersionObjectCreator', 'member-type', '<https://example.org/Thing>', 'Leave out the angle brackets'],
       ['Ldio:VersionObjectCreator', 'date-observed-property', 'ex:modified', 'Enter IRIs in angle brackets, e.g. <https://example.org/name>'],

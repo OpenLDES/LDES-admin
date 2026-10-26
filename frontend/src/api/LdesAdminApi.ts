@@ -24,7 +24,7 @@ import type {
   PipelineStatus,
 } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
-import type { Sandbox } from '@/domain/sandbox'
+import type { PolledContent, PollRequest, Sandbox } from '@/domain/sandbox'
 
 /**
  * Everything the frontend needs from the backend. Each method corresponds to an endpoint of the
@@ -45,6 +45,11 @@ export interface LdesAdminApi {
   startSandbox(): Promise<Sandbox>
   /** DELETE /api/v1/sandbox */
   stopSandbox(): Promise<void>
+  /**
+   * POST /api/v1/sandbox/poll: fetches a URL the way an HTTP In Poller does, and answers what it
+   * received, for the simulation
+   */
+  poll(request: PollRequest): Promise<PolledContent>
 
   /** GET /api/v1/ldes-servers | /api/v1/ldios */
   listInstances(type: InstanceType): Promise<Instance[]>

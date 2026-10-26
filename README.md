@@ -20,12 +20,13 @@ Data Interaction Orchestrator (LDIO) pipelines.
   every 2 seconds (or as often as you choose).
 
 | [![Views of an event stream and how far they are paginated](docs/screenshots/event-stream.png)](docs/screenshots/event-stream.png) | [![The background processes of an LDES server](docs/screenshots/background-processes.png)](docs/screenshots/background-processes.png) |
-|:---:|:---:|
-| Views of an event stream, and how far they are paginated | Background processes, with a failed retention run |
+|:----------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------:|
+|                                      Views of an event stream, and how far they are paginated                                      |                                           Background processes, with a failed retention run                                           |
 
 ### Manage LDES servers
 
-* **Add** a server that runs elsewhere by its URL, or **start a local one** in Docker with one click.
+* **Add** a server that runs elsewhere by its URL, or **start a local one** in Docker with one
+  click.
 * **Event streams and views**: create them in a form and as Turtle side by side, validated the way
   the server validates them. Templates for pagination, time-based, geospatial and reference
   fragmentation, and retention policies.
@@ -34,11 +35,11 @@ Data Interaction Orchestrator (LDIO) pipelines.
 * **Browse** a view page by page: follow its relations and read its members.
 * **Ingest** members directly on an event stream, in Turtle, JSON-LD, N-Quads or N-Triples.
 
-| [![LDES servers, registered and local](docs/screenshots/ldes-servers.png)](docs/screenshots/ldes-servers.png) | [![The event streams of an LDES server](docs/screenshots/ldes-server.png)](docs/screenshots/ldes-server.png) |
-|:---:|:---:|
-| LDES servers, registered and local | Event streams with their statistics |
+|         [![LDES servers, registered and local](docs/screenshots/ldes-servers.png)](docs/screenshots/ldes-servers.png)         |        [![The event streams of an LDES server](docs/screenshots/ldes-server.png)](docs/screenshots/ldes-server.png)         |
+|:-----------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------:|
+|                                              LDES servers, registered and local                                               |                                             Event streams with their statistics                                             |
 | [![Creating a view: a form and Turtle that stay in step](docs/screenshots/create-view.png)](docs/screenshots/create-view.png) | [![Browsing the pages and members of a view](docs/screenshots/fragment-browser.png)](docs/screenshots/fragment-browser.png) |
-| Creating a view: form and Turtle stay in step | Browsing the pages and members of a view |
+|                                         Creating a view: form and Turtle stay in step                                         |                                          Browsing the pages and members of a view                                           |
 
 ### Manage LDIOs
 
@@ -54,13 +55,14 @@ Data Interaction Orchestrator (LDIO) pipelines.
 * **Design** a pipeline by dragging components onto a canvas, or start from a template. Configure
   every LDIO component in a form or as YAML, validated as you type.
 * **Simulate**: run a member through the pipeline in the browser and see what each step makes of
-  it.
+  it. A pipeline with an HTTP poller can fetch its input from the URL it polls, once or on its
+  schedule.
 * **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
   LDIO in Docker that work together out of the box.
 
 | [![Designing a pipeline in the sandbox](docs/screenshots/sandbox.png)](docs/screenshots/sandbox.png) | [![Simulating a pipeline step by step](docs/screenshots/simulation.png)](docs/screenshots/simulation.png) |
-|:---:|:---:|
-| Designing a pipeline, with a form for every component | Running a member through the pipeline |
+|:----------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|
+|                        Designing a pipeline, with a form for every component                         |                                   Running a member through the pipeline                                   |
 
 ### Start from a demo
 
@@ -117,10 +119,21 @@ bundle exec jekyll serve   # http://localhost:4000
 
 ## Running LDES-admin
 
-There are two ways to run LDES-admin: as one application, built by Maven, or as a backend and a
-frontend that run separately.
+There are four ways to run LDES-admin: walk through the demo environment, deploy it with Docker,
+run it as one application, built by Maven, or as a backend and a frontend that run separately.
 
-### 1. One application, from the Maven build
+### 1. Demo application
+
+You can walk through the demo environment without installing anything,
+on <https://openldes.github.io/LDES-admin/demo/>. It runs in your browser, with sample data, and
+never calls a backend. The changes that you make are not persisted.
+
+### 2. Run with Docker
+
+See the [installation](https://openldes.github.io/LDES-admin/installation/#run-with-docker-compose)
+page on the LDES-admin documentation site
+
+### 3. One application, from the Maven build
 
 To use LDES-admin, or to work on the backend. Maven builds the frontend along with the backend, and
 the Spring Boot application serves it. You need neither Node.js nor pnpm: Maven downloads Node.js
@@ -142,7 +155,7 @@ The frontend is what the last Maven build packaged: a change to it shows after
 `./mvnw package` builds `bootstrap/target/ldes-admin-bootstrap-*.jar`, which holds the frontend
 too; give it a database with `spring.datasource.*`.
 
-### 2. Backend and frontend separately
+### 4. Backend and frontend separately
 
 To work on the frontend. Vite serves the frontend, with hot reloading: a change shows in the browser
 as soon as you save it. The backend runs on its own, and Vite forwards the calls to its API.
@@ -209,7 +222,8 @@ pnpm build        # type-check and build to dist/
 
 Configuration is in `bootstrap/src/main/resources/application.yaml`: the Docker images for local
 instances (`ldes-admin.local-runtime.*`), how often the instances are monitored
-(`ldes-admin.monitor.*`), and `ldes-admin.security.enabled` to require a JWT.
+(`ldes-admin.monitor.*`), and `ldes-admin.security.enabled` to require a JWT. Require one wherever
+LDES-admin reaches systems its users should not: the sandbox polls URLs through the backend.
 
 ## Sandbox
 
@@ -251,13 +265,13 @@ The GitHub workflows in `.github/workflows` follow the release flow of the
 [OpenLDES server](https://github.com/OpenLDES/LDESServer/tree/main/.github): work happens on
 `develop`, releases on `main`.
 
-| Workflow                           | Runs on                                       | What it does                                                                                                                                                                                             |
-|------------------------------------|-----------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1.a. Build & Test Project          | pull requests, or manually                    | `./mvnw verify` (with a SonarCloud analysis when enabled), the Cypress tests, and a Docker image that Trivy scans (results in the Security tab)                                                          |
-| 2.a. Build & Deploy Project        | pushes to `develop` and `main`, or manually   | Builds and pushes the image: from `develop` to `ghcr.io/<owner>/<repository>:<version>-<timestamp>` (in lowercase) and `latest`; from `main` to Docker Hub, `<namespace>/ldes-admin:<version>`, and `latest` for a release |
-| 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main` | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                  |
-| 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                          |
-| 5. Build & Deploy Documentation    | pushes to `main` that change `docs/` or `frontend/`, pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll, and the frontend restricted to demo mode as a demo in `/demo/` of the site; on `main`, publishes it to GitHub Pages |
+| Workflow                           | Runs on                                                                                             | What it does                                                                                                                                                                                                               |
+|------------------------------------|-----------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.a. Build & Test Project          | pull requests, or manually                                                                          | `./mvnw verify` (with a SonarCloud analysis when enabled), the Cypress tests, and a Docker image that Trivy scans (results in the Security tab)                                                                            |
+| 2.a. Build & Deploy Project        | pushes to `develop` and `main`, or manually                                                         | Builds and pushes the image: from `develop` to `ghcr.io/<owner>/<repository>:<version>-<timestamp>` (in lowercase) and `latest`; from `main` to Docker Hub, `<namespace>/ldes-admin:<version>`, and `latest` for a release |
+| 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main`                                        | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                                                 |
+| 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump                                                     | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                                             |
+| 5. Build & Deploy Documentation    | pushes to `main` that change `docs/` or `frontend/`, pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll, and the frontend restricted to demo mode as a demo in `/demo/` of the site; on `main`, publishes it to GitHub Pages                                                             |
 
 To release a version:
 
@@ -271,24 +285,24 @@ To release a version:
 
 Configure the repository under *Settings › Secrets and variables › Actions*:
 
-| Variable              | Needed for                       | Value                                                              |
-|-----------------------|----------------------------------|--------------------------------------------------------------------|
-| `DOCKER_NAMESPACE`    | 2.a on `main`                    | The Docker Hub namespace (user or organisation) of the image       |
-| `GIT_CONFIG_USERNAME` | 3                                | Author of the commit that promotes the version                     |
-| `GIT_CONFIG_EMAIL`    | 3                                | E-mail address of that author                                      |
-| `JAVA_DISTRIBUTION`   | all, optional                    | The JDK distribution for `actions/setup-java`; default `temurin`   |
-| `JAVA_VERSION`        | all, optional                    | The JDK version; default `25`                                      |
-| `RUBY_VERSION`        | 5, optional                      | The Ruby version that builds the documentation; default `4.0`      |
-| `ANALYSE_PACKAGE`     | 1.a, 2.a, optional               | `true` to analyse the code with SonarCloud                         |
-| `SONAR_ORGANIZATION`  | with `ANALYSE_PACKAGE`           | The SonarCloud organisation                                        |
-| `SONAR_PROJECT_KEY`   | with `ANALYSE_PACKAGE`           | The SonarCloud project key                                         |
+| Variable              | Needed for             | Value                                                            |
+|-----------------------|------------------------|------------------------------------------------------------------|
+| `DOCKER_NAMESPACE`    | 2.a on `main`          | The Docker Hub namespace (user or organisation) of the image     |
+| `GIT_CONFIG_USERNAME` | 3                      | Author of the commit that promotes the version                   |
+| `GIT_CONFIG_EMAIL`    | 3                      | E-mail address of that author                                    |
+| `JAVA_DISTRIBUTION`   | all, optional          | The JDK distribution for `actions/setup-java`; default `temurin` |
+| `JAVA_VERSION`        | all, optional          | The JDK version; default `25`                                    |
+| `RUBY_VERSION`        | 5, optional            | The Ruby version that builds the documentation; default `4.0`    |
+| `ANALYSE_PACKAGE`     | 1.a, 2.a, optional     | `true` to analyse the code with SonarCloud                       |
+| `SONAR_ORGANIZATION`  | with `ANALYSE_PACKAGE` | The SonarCloud organisation                                      |
+| `SONAR_PROJECT_KEY`   | with `ANALYSE_PACKAGE` | The SonarCloud project key                                       |
 
-| Secret            | Needed for             | Value                                                                                                                                                                                  |
-|-------------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `DOCKER_USER`     | 2.a on `main`          | A Docker Hub user that may push to the namespace                                                                                                                                       |
-| `DOCKER_PASSWORD` | 2.a on `main`          | An access token of that user                                                                                                                                                           |
+| Secret            | Needed for             | Value                                                                                                                                                                                      |
+|-------------------|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DOCKER_USER`     | 2.a on `main`          | A Docker Hub user that may push to the namespace                                                                                                                                           |
+| `DOCKER_PASSWORD` | 2.a on `main`          | An access token of that user                                                                                                                                                               |
 | `SSH_PRIVATE_KEY` | 4                      | The private key of a deploy key with write access, which pushes the release commits and tag (see [Setup with SSH](https://github.com/qcastel/github-actions-maven-release#setup-with-ssh)) |
-| `SONAR_TOKEN`     | with `ANALYSE_PACKAGE` | A SonarCloud token                                                                                                                                                                     |
+| `SONAR_TOKEN`     | with `ANALYSE_PACKAGE` | A SonarCloud token                                                                                                                                                                         |
 
 The workflows publish to the GitHub Container Registry with the token GitHub gives them. For
 workflow 3, allow *GitHub Actions to create and approve pull requests* (*Settings › Actions ›

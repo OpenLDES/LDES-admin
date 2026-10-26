@@ -139,7 +139,8 @@ pipeline.
 The simulation has three columns:
 
 * **Input member**: what the input receives, as JSON, Turtle, N-Quads, JSON-LD or CSV. The
-  refresh button brings back the sample member of the template.
+  refresh button brings back the sample member of the template. A pipeline that starts with an
+  HTTP In Poller has buttons to [fetch and poll its URL](#input-from-an-http-poller) instead.
 * **Steps**: every component the member went through, with how long it took and what it did:
   passed on, filtered out, or stopped with an error. Components it did not reach are listed as such.
 * **After …**: the model after the step you select, in Turtle (or JSON).
@@ -147,6 +148,31 @@ The simulation has three columns:
 The bar above sums it up: *Delivered to 2 outputs*, *Filtered out by Change Detection Filter*, or
 *Stopped at Version Object Creator*. *Reset* clears the result. Click the bar to fold the simulation
 away while you design.
+
+### Input from an HTTP poller
+
+When the pipeline starts with an `Ldio:HttpInPoller`, the input member can be what its URL answers
+right now, as the poller would receive it:
+
+* **Fetch** (the cloud button above the input member) gets the URL once and puts the response
+  body in the input, with its content type. Change it if you like, then **Run**. With several URLs,
+  pick one.
+* **Poll** (the button next to it) fetches on the schedule of the component and runs every
+  response through the pipeline, the way the deployed pipeline would: on its `cron` expression (a
+  Spring cron expression, in the time zone of your browser), or right away and then every
+  `interval`. A poll that fails is reported, and polling goes on. The line above the input shows
+  the schedule, the number of polls and when the next one is; **Stop polling** (also in the bar of
+  the simulation) ends it. Polling also stops when you leave the sandbox.
+
+The request is the one LDIO makes: a GET of every URL, with the HTTP headers of the component, its
+API key, or a token from its OAuth2 client credentials. The response must have a `Content-Type`
+header, as LDIO hands it to the adapter. URLs on the host names of the sandbox
+(`http://sandbox-ldes-server:8080/…`) work too.
+
+> The LDES-admin backend fetches the URL for you, as most APIs don't let a browser read them. So
+> whoever can use its API can make LDES-admin fetch any URL it reaches: [secure the
+> API](../installation/#securing-the-api) wherever LDES-admin reaches what its users should not.
+{: .tip }
 
 ### What the simulation does, and doesn't
 
@@ -192,7 +218,9 @@ replaces it there. *New pipeline* on the page of an LDIO opens an empty canvas.
 
 In [demo mode](../installation/#check-that-it-runs) the sandbox works the same, on sample data in
 your browser: the sandbox environment starts without Docker, and its pipelines pass members on to
-the event streams of the demo LDES servers. Nothing reaches a real LDIO.
+the event streams of the demo LDES servers. Nothing reaches a real LDIO. Without a backend, your
+browser fetches the URL of an HTTP poller itself, which only works for APIs that allow it (CORS),
+such as the open data of the city of Ghent.
 
 ## Tips
 

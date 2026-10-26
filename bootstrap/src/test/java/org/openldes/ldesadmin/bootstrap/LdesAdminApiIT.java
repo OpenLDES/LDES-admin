@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -27,6 +28,9 @@ class LdesAdminApiIT {
 
   @Autowired
   private RestTestClient client;
+
+  @LocalServerPort
+  private int port;
 
   @Test
   void registersMonitorsAndRemovesAnLdesServer() {
@@ -87,5 +91,28 @@ class LdesAdminApiIT {
         .expectStatus().isNotFound();
     client.get().uri("/api/v1/ldios/{id}", ldio.get("id")).exchange()
         .expectStatus().isOk();
+  }
+
+  /**
+   * LDES-admin itself is the API that is polled: its health endpoint.
+   */
+  @Test
+  void pollsAUrlForTheSandbox() {
+    client.post().uri("/api/v1/sandbox/poll")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of("url", "http://localhost:%d/actuator/health".formatted(port)))
+        .exchange()
+        .expectStatus().isOk()
+        .expectBody()
+        .jsonPath("$.contentType").isEqualTo("application/vnd.spring-boot.actuator.v3+json")
+        .jsonPath("$.body").value(String.class, body -> assertThat(body).contains("\"UP\""));
+
+    client.post().uri("/api/v1/sandbox/poll")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of("url", "http://localhost:%d/actuator/nothing".formatted(port)))
+        .exchange()
+        .expectStatus().isEqualTo(502)
+        .expectBody().jsonPath("$.detail").value(String.class, detail -> assertThat(detail)
+            .startsWith("http://localhost:%d/actuator/nothing answered 404".formatted(port)));
   }
 }

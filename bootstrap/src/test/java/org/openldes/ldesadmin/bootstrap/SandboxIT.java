@@ -65,6 +65,17 @@ class SandboxIT {
         .exchange()
         .expectStatus().isOk()
         .expectBody().jsonPath("$.views").isEqualTo(List.of("by-page", "by-time"));
+    // The simulation polls the event stream on the host name a pipeline of the LDIO uses
+    client.post().uri("/api/v1/sandbox/poll")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of("url", "http://sandbox-ldes-server:8080/sandbox-parcels"))
+        .exchange()
+        .expectStatus().isOk()
+        .expectBody()
+        .jsonPath("$.contentType").value(String.class,
+            contentType -> assertThat(contentType).isNotBlank())
+        .jsonPath("$.body").value(String.class,
+            body -> assertThat(body).contains("sandbox-parcels"));
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
         client.get().uri("/api/v1/ldios/{id}/pipelines/sandbox-ingest", ldioId).exchange()
             .expectStatus().isOk()

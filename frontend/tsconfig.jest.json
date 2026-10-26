@@ -5,7 +5,6 @@
     "composite": false,
     "noEmit": false,
     "module": "CommonJS",
-    "moduleResolution": "Node10",
     "verbatimModuleSyntax": false,
     "esModuleInterop": true,
     "isolatedModules": true,

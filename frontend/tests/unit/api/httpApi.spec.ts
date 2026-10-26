@@ -78,6 +78,16 @@ describe('HTTP LDES-admin API', () => {
     })
   })
 
+  it('asks the backend to poll a URL', async () => {
+    next = answer(200, { contentType: 'application/json', body: '[]' })
+
+    const content = await api.poll({ url: 'https://api.example.org/changes', headers: { 'X-API-KEY': 'secret' } })
+
+    expect(content).toEqual({ contentType: 'application/json', body: '[]' })
+    expect(calls[0]).toMatchObject({ url: '/api/v1/sandbox/poll', method: 'POST' })
+    expect(JSON.parse(calls[0].body!)).toEqual({ url: 'https://api.example.org/changes', headers: { 'X-API-KEY': 'secret' } })
+  })
+
   it('reads the status of a halted pipeline', async () => {
     next = answer(200, { pipeline: 'parcels', status: 'HALTED' })
 

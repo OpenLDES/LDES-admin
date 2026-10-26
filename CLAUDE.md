@@ -66,6 +66,11 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   `sandbox-ingest` (HttpIn + RdfAdapter → HttpOut to
   `http://sandbox-ldes-server:8080/sandbox-parcels`). Frontend templates and component defaults
   point there.
+* Polling for the simulation (`POST /api/v1/sandbox/poll`, `PollUseCase` → `HttpPoller` /
+  `RestHttpPoller`): fetches any http(s) URL like an HTTP In Poller (GET, no Accept, component
+  headers, OAuth2 client credentials in the form body; needs a Content-Type; max 5 MB;
+  `PollException` → 502). The user chose this deliberate exception to "no open proxy" (CORS blocks
+  the browser); docs tell to secure the API. Internal URLs of local instances are translated.
 
 ### CI
 
@@ -97,7 +102,11 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   options, group, `when`, cross-property `check`), `pipeline/config.ts` (read/write/validate
   config; keys matched like LDIO does), `components/sandbox/ComponentConfigForm.vue` +
   `components/common/ConfigField.vue` (form kept in step with the component YAML),
-  `pipeline/simulator.ts` (in-browser approximation).
+  `pipeline/simulator.ts` (in-browser approximation), `pipeline/poller.ts` (URLs, request and
+  schedule of an `Ldio:HttpInPoller` input) + `pipeline/cron.ts` (Spring cron, also validates the
+  `cron` type). The store fetches the input (`fetchInput`) and polls (`startPolling`: cron when it
+  fires, interval right away; every URL in turn, then `run()`); `SimulationPanel` stops polling on
+  unmount. Demo mode polls with the browser's `fetch` (CORS).
 * Event stream and view dialogs (`components/ldes/Create*Dialog.vue`): a form and the Turtle edit one
   RDF graph. `ldes/turtle.ts` (parse with N3.js, graph changes, a writer that nests blank nodes and
   lists like hand-written Turtle), `ldes/catalog.ts` (configurable predicates, fragmentation and
@@ -115,7 +124,8 @@ bootstrap    Spring Boot app: wiring (ApplicationServiceConfig scans @Applicatio
   `IngestPanel` offers; `ldes/formats.ts` converts them to the chosen RDF format.
 * Patterns: `useAsync`/`useAction` composables; `data-cy` attributes for Cypress;
   `cy.dialogOpened(dataCy)` before typing in a PrimeVue dialog; Cypress pins demo mode in
-  `cypress/support/e2e.ts`; e2e for production mode stubs the backend with `cy.intercept`.
+  `cypress/support/e2e.ts`; e2e for production mode stubs the backend with `cy.intercept` (an
+  object with a `body` key is a StaticResponse: stub such JSON as `{ body: {...} }`).
 * Charts follow the dataviz rules: validated palette (light #2a78d6 #eb6834 #1baf7a, dark #3987e5
   #d95926 #199e70), legend + non-colliding end labels, crosshair tooltip, table view.
 
@@ -147,7 +157,8 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
 * jsdom (Jest) lacks `structuredClone` (use JSON copy / `cloneConfig`), `crypto.randomUUID` and
   `matchMedia` (polyfilled in `tests/unit/setup.cjs`).
 * Spring's test HTTP client decompresses transparently; check `Content-Encoding` with the JDK
-  `HttpClient`. Jest prints to stderr, so the Maven log shows its summary as `[ERROR]` (cosmetic).
+  `HttpClient`. frontend-maven-plugin logs stderr as `[ERROR]`: Jest reports on stderr, so the
+  `test` script redirects it (`jest 2>&1`).
 
 ## Verified behaviour of OpenLDES (LDES server 4.2.1, LDIO 3.1.1)
 
@@ -198,7 +209,13 @@ After running the app, stop it and `docker compose stop` (compose Postgres was n
   a model per named graph (`rr:graphMap`). `Ldio:VersionObjectCreator` versions the first subject of
   a member type and puts the lexical form of the observed time in the version IRI (use `/` as
   delimiter when state IRIs contain `#`). `Ldio:HttpIn` answers 202. The Ghent parking API
-  (`data.stad.gent/.../bezetting-parkeergarages-real-time/exports/json`) lists 14 car parks.
+  (`data.stad.gent/.../bezetting-parkeergarages-real-time/exports/json`) lists 14 car parks and
+  allows CORS (`Access-Control-Allow-Origin: *`).
+* `Ldio:HttpInPoller` (read in the LDIO 3.x sources): `cron` (Spring `CronTrigger`) wins over the
+  deprecated `interval` (`java.time.Duration`, fixed rate starting at once); every tick polls each
+  `url` in turn; a non-2xx or a response without `Content-Type` fails that poll; the request
+  executor adds `http.headers`, the API key header (default `X-API-KEY`) or an OAuth2 client
+  credentials token (id and secret in the request body).
 * LDIO matches config keys ignoring case, `-` and `_` and returns them normalised
   (`membertype`, `rdfwriter.contenttype`). Deleting a pipeline returns 202 (wait until gone).
   `GET /admin/api/v1/pipeline/ldes-client` → `[{pipeline, status}]`. `POST /{pipeline}` feeds an

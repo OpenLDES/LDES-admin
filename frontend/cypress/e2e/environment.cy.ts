@@ -100,6 +100,34 @@ describe('demo and production mode', () => {
     cy.get('[data-cy=sandbox-state]').should('contain', 'Stopped')
   })
 
+  it('polls the URL of an HTTP poller through the backend', () => {
+    stubBackend()
+    cy.intercept('POST', '/api/v1/sandbox/poll', {
+      body: { contentType: 'application/json; charset=utf-8', body: '[{"name": "Vrijdagmarkt", "availablecapacity": 312}]' },
+    }).as('poll')
+    cy.get('[data-cy=mode-production]').click()
+    cy.get('[data-cy=mode-notice]').should('contain', 'Production mode')
+    cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
+
+    const pipeline = `{name: parkings, input: {name: "Ldio:HttpInPoller",
+      config: {url: "https://data.stad.gent/parkings", cron: "0 * * * * *", auth: {type: API_KEY, api-key: secret}},
+      adapter: {name: "Ldio:JsonToLdAdapter"}}, outputs: [{name: "Ldio:ConsoleOut"}]}`.replace(/\s+/g, ' ')
+    cy.get('[data-cy=open-yaml]').click()
+    cy.dialogOpened('yaml-dialog')
+    cy.get('[data-cy=yaml-dialog] .cm-content')
+      .type(`{selectall}{backspace}${pipeline.replaceAll('{', '{{}')}`, { delay: 0 })
+    cy.get('[data-cy=apply-yaml]').click()
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=fetch-input]').click()
+
+    cy.wait('@poll').its('request.body').should('deep.equal', {
+      url: 'https://data.stad.gent/parkings',
+      headers: { 'X-API-KEY': 'secret' },
+    })
+    cy.get('[data-cy=sample-input] .cm-content').should('contain', '"availablecapacity": 312')
+    cy.get('[data-cy=sample-content-type]').should('contain', 'JSON')
+  })
+
   it('tells when the backend does not answer', () => {
     cy.intercept('GET', '/actuator/health', { statusCode: 502 })
     cy.intercept('GET', '/api/v1/**', { statusCode: 502, body: { detail: 'Bad gateway' } })

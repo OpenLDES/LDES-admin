@@ -14,7 +14,8 @@
 * [x] Bugfix: when you create a new "Pagination" or "Recent" view, you can now add a
   "Fragmentation".
   However, it should be impossible to add fragmentations when creating those kind of views.
-* [x] In a first section of the README page, document all features that are packed in this LDES-admin
+* [x] In a first section of the README page, document all features that are packed in this
+  LDES-admin
   application. Add screenshots to this README file, and make it appealing to read. Don't make
   it too verbose. This needs to show all features of this application in a concise way, so that a
   user can quickly understand what this application can do for them.
@@ -49,3 +50,21 @@
 * [x] Create github actions. Support the same release flow as the one for the OpenLDES server
   (See https://github.com/OpenLDES/LDESServer/tree/main/.github). Document in the README on how to
   use this flow, and which variables and passwords that you need to set in Github.
+* [x] When you run a simulation in the sandbox with an HttpInPoller, then you should have the
+  a button to get the data from the url that is configured, and put the response body in the
+  "input member" text area. The user can then choose to change the data, and then run the
+  simulation with the changed data. The user should also have the possibility to fetch the data
+  constantly, and use the cron expression that was configured for the component.
+* [] The sparql construct component in the sandbox should do a sparql construct transformation, so
+  the output of this component should be the transformation of the input with the
+  `Ldio:SparqlConstructTransformer` transformer. Make use of this component to do the transformation
+* [] When you change the content type of the input member in the sandbox environment, the member
+  should be converted to the selected content type. For example, when you have a member in turtle
+  format, and you change the content type to json-ld, the member should be available in json-ld
+* [] You should be able to change the content type of the output member in the sandbox environment
+  after running a test and selecting a step.
+* [] When you run a test in the sandbox environment, and you select a component in the canvas, then
+  the step of the selected component should be selected in the "steps" panel. You leave the steps as
+  long as the user doesn't run or resets the simulation
+* [] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also in
+  demo mode). Now, when I run the 

@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { api } from '@/api'
+import { errorMessage } from '@/composables/useAsync'
 import type { ComponentConfig, Pipeline } from '@/domain/ldio'
 import {
   autoLayout,
@@ -13,6 +15,7 @@ import {
   type NodeRunStatus,
   pipelineToGraph,
 } from '@/pipeline/graph'
+import { describeSchedule, nextPoll, type Poller, pollerOf } from '@/pipeline/poller'
 import { PipelineSimulator, type SimulationInput, type SimulationResult } from '@/pipeline/simulator'
 import { defaultTemplate, templateById } from '@/pipeline/templates'
 import { parsePipelineYaml, pipelineToYaml } from '@/pipeline/yaml'
@@ -23,7 +26,17 @@ export type PipelineOrigin =
   | { kind: 'ldio'; ldioId: string; ldioName: string }
   | { kind: 'scratch' }
 
+/** A poll of the URL of the HTTP In Poller, for the input of the simulation */
+export interface PollOutcome {
+  at: Date
+  url: string
+  /** Why it failed; undefined when it succeeded */
+  error?: string
+}
+
 const STEP_DELAY = 550
+/** The longest delay setTimeout handles; a cron expression can fire later than that */
+const MAX_TIMEOUT = 2 ** 31 - 1
 
 /**
  * The pipeline being edited in the sandbox, as a graph, and its simulation. Lives in a store so it
@@ -42,6 +55,19 @@ export const useSandboxStore = defineStore('sandbox', () => {
   const result = ref<SimulationResult>()
   const activeStep = ref(-1)
   const simulator = new PipelineSimulator()
+  let currentRun: Promise<void> = Promise.resolve()
+
+  const polling = ref(false)
+  /** Successful polls since polling started */
+  const polls = ref(0)
+  const nextPollAt = ref<Date>()
+  const lastPoll = ref<PollOutcome>()
+  let pollTimer: ReturnType<typeof setTimeout> | undefined
+  /** Changes when polling stops or starts again, so a poll of before knows to stop */
+  let pollSession = 0
+  let pollInProgress = false
+  /** What the poller requested when the next poll was scheduled */
+  let scheduledFor = ''
 
   const conversion = computed(() =>
     graphToPipeline({ name: name.value, description: description.value }, nodes.value, edges.value))
@@ -49,12 +75,16 @@ export const useSandboxStore = defineStore('sandbox', () => {
   const selected = computed(() => nodes.value.find((node) => node.id === selectedId.value))
   const errors = computed(() => conversion.value.issues.filter((issue) => issue.severity === 'error'))
   const warnings = computed(() => conversion.value.issues.filter((issue) => issue.severity === 'warning'))
+  /** The HTTP In Poller the pipeline starts with, if it does */
+  const poller = computed(() => pollerOf(conversion.value.pipeline))
 
   function issuesOf(nodeId: string): GraphIssue[] {
     return conversion.value.issues.filter((issue) => issue.nodeId === nodeId)
   }
 
   function load(pipeline: Pipeline, input?: SimulationInput, from: PipelineOrigin = { kind: 'scratch' }) {
+    stopPolling()
+    lastPoll.value = undefined
     const graph = pipelineToGraph(pipeline)
     nodes.value = graph.nodes
     edges.value = graph.edges
@@ -73,6 +103,8 @@ export const useSandboxStore = defineStore('sandbox', () => {
   }
 
   function clear() {
+    stopPolling()
+    lastPoll.value = undefined
     nodes.value = []
     edges.value = []
     name.value = 'my-pipeline'
@@ -146,7 +178,13 @@ export const useSandboxStore = defineStore('sandbox', () => {
     return undefined
   }
 
-  async function run() {
+  /** Runs the input through the pipeline; while a run is in progress, answers that one */
+  function run(): Promise<void> {
+    if (!running.value) currentRun = simulate()
+    return currentRun
+  }
+
+  async function simulate() {
     const pipeline = conversion.value.pipeline
     if (!pipeline || !conversion.value.runnable || running.value) return
     resetSimulation()
@@ -169,6 +207,95 @@ export const useSandboxStore = defineStore('sandbox', () => {
     edges.value = edges.value.map((edge) => ({ ...edge, animated: false }))
     running.value = false
   }
+
+  // Polling: the input as the HTTP In Poller of the pipeline receives it -----------------------
+
+  /** Puts what a URL answers in the input, as the poller would receive it */
+  async function fetchInput(url = poller.value?.urls[0]): Promise<void> {
+    const target = poller.value
+    if (!target || !url) return
+    const at = new Date()
+    try {
+      const content = await api.poll({ url, ...target.request })
+      sample.value = { content: content.body, contentType: mediaType(content.contentType), source: url }
+      lastPoll.value = { at, url }
+    } catch (e) {
+      lastPoll.value = { at, url, error: errorMessage(e) }
+      throw e
+    }
+  }
+
+  /** Polls on the schedule of the component, and runs every response through the pipeline */
+  function startPolling() {
+    const schedule = poller.value?.schedule
+    if (!schedule || polling.value) return
+    polling.value = true
+    polls.value = 0
+    pollSession++
+    // Like LDIO: an interval polls right away, a cron expression waits until it fires
+    schedulePoll(schedule.kind === 'interval')
+  }
+
+  function stopPolling() {
+    polling.value = false
+    pollSession++
+    nextPollAt.value = undefined
+    clearTimeout(pollTimer)
+  }
+
+  function schedulePoll(now = false) {
+    clearTimeout(pollTimer)
+    const schedule = poller.value?.schedule
+    const at = schedule && (now ? new Date() : nextPoll(schedule, new Date()))
+    if (!polling.value || !at) {
+      stopPolling()
+      return
+    }
+    scheduledFor = pollerKey(poller.value)
+    nextPollAt.value = at
+    const session = pollSession
+    wakeAt(at, () => pollEveryUrl(session))
+  }
+
+  function wakeAt(at: Date, then: () => void) {
+    const delay = at.getTime() - Date.now()
+    pollTimer = delay > MAX_TIMEOUT
+      ? setTimeout(() => wakeAt(at, then), MAX_TIMEOUT)
+      : setTimeout(then, Math.max(delay, 0))
+  }
+
+  /** Like LDIO: every URL in turn, going on with the next one when a poll fails */
+  async function pollEveryUrl(session: number) {
+    if (session !== pollSession) return
+    nextPollAt.value = undefined
+    pollInProgress = true
+    try {
+      for (const url of poller.value?.urls ?? []) {
+        // The next poll waits for the run before it, as the steps are shown one by one
+        await currentRun
+        if (session !== pollSession) return
+        // The pipeline changed meanwhile: scheduling again stops polling
+        if (!poller.value) break
+        try {
+          await fetchInput(url)
+        } catch {
+          continue
+        }
+        if (session !== pollSession) return
+        polls.value++
+        await run()
+      }
+    } finally {
+      pollInProgress = false
+    }
+    if (session === pollSession) schedulePoll()
+  }
+
+  // A changed schedule or URL counts from now on; without a schedule, polling stops. Watchers run
+  // later, so it compares with what the current schedule was made for.
+  watch(() => pollerKey(poller.value), (key) => {
+    if (polling.value && !pollInProgress && key !== scheduledFor) schedulePoll()
+  })
 
   function resetSimulation() {
     if (running.value) return
@@ -243,5 +370,25 @@ export const useSandboxStore = defineStore('sandbox', () => {
     run,
     resetSimulation,
     forgetDeployment,
+    poller,
+    polling,
+    polls,
+    nextPollAt,
+    lastPoll,
+    fetchInput,
+    startPolling,
+    stopPolling,
   }
 })
+
+/** Changes when what the poller requests, or when, changes */
+function pollerKey(poller: Poller | undefined): string {
+  return poller
+    ? JSON.stringify([poller.urls, poller.request, poller.schedule && describeSchedule(poller.schedule)])
+    : ''
+}
+
+/** application/json; charset=utf-8 becomes application/json */
+function mediaType(contentType: string): string {
+  return contentType.split(';')[0].trim().toLowerCase()
+}

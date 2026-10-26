@@ -19,23 +19,27 @@ export const useInstancesStore = defineStore('instances', () => {
 
   const sandboxServers = computed(() => ldesServers.value.filter((server) => server.sandbox))
   const sandboxLdios = computed(() => ldios.value.filter((ldio) => ldio.sandbox))
+  /** Counts loads: one that is overtaken, e.g. by a switch of mode, must not overwrite the next */
+  let loads = 0
 
   function listOf(type: InstanceType) {
     return type === 'LDES_SERVER' ? ldesServers : ldios
   }
 
   async function load() {
+    const current = ++loads
     loading.value = true
     try {
       const [servers, orchestrators] = await Promise.all([
         api.listInstances('LDES_SERVER'),
         api.listInstances('LDIO'),
       ])
+      if (current !== loads) return
       ldesServers.value = servers
       ldios.value = orchestrators
       loaded.value = true
     } finally {
-      loading.value = false
+      if (current === loads) loading.value = false
     }
   }
 

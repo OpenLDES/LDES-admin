@@ -72,17 +72,17 @@ org.openldes.ldesadmin
 │   ├── ldes         EventStream, View, Fragment, Fragmentation, RetentionPolicy, DcatTarget, CatalogDescription,
 │   │                StreamStatistics, BackgroundProcess
 │   ├── ldio         Pipeline, InputDefinition, ComponentDefinition, DeployedPipeline, PipelineStatus, LdesClientStatus, …
-│   ├── sandbox      Sandbox
+│   ├── sandbox      Sandbox, Poll, PolledContent
 │   ├── monitoring   ActivityEvent, IngestSample, ThroughputSeries
 │   └── dashboard    DashboardOverview, LdesServerSummary, LdioSummary
 ├── application
 │   ├── port.in      instance | ldes | ldio | sandbox | monitoring | dashboard   use case interfaces and their exceptions
-│   ├── port.out     persistence | ldes | ldio | health | runtime | monitoring, RemoteInstanceException
+│   ├── port.out     persistence | ldes | ldio | health | runtime | monitoring | sandbox, RemoteInstanceException
 │   └── service      instance | ldes | ldio | sandbox | monitoring | dashboard   one service per use case
 ├── adapter
 │   ├── in.rest      instance | ldes | ldio | sandbox | monitoring | dashboard, RestExceptionHandler (RFC 9457)
 │   ├── in.scheduling InstanceMonitorScheduler
-│   └── out          persistence.jpa | ldes | ldio | health | runtime | http (shared HTTP helpers)
+│   └── out          persistence.jpa | ldes | ldio | health | runtime | http (shared HTTP helpers, RestHttpPoller)
 └── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SchedulingConfig, SecurityConfig, FrontendConfig
 ```
 
@@ -123,8 +123,8 @@ Instances, activity and ingest samples are the only state LDES-admin stores itse
 
 Every use case is exposed by a controller under `/api/v1`; errors are problem details (`404` for
 unknown instances, pipelines and remote resources, `409` for duplicates and impossible status
-changes, `400` for invalid input or requests a server rejected, `502` when an instance cannot be
-reached, `503` when a local instance cannot be started).
+changes, `400` for invalid input or requests a server rejected, `502` when an instance or a polled
+URL cannot be reached or answers with an error, `503` when a local instance cannot be started).
 
 | Use case                          | Endpoints                                                                       |
 |-----------------------------------|---------------------------------------------------------------------------------|
@@ -132,6 +132,7 @@ reached, `503` when a local instance cannot be started).
 | Start a local instance            | `POST /ldes-servers/local`, `POST /ldios/local`                                  |
 | Check health                      | `GET /{ldes-servers,ldios}/{id}/health`                                          |
 | Sandbox                           | `GET, POST, DELETE /sandbox` (state, start and prepare, stop)                    |
+| Poll a URL for the simulation     | `POST /sandbox/poll` (`{url, headers, clientCredentials}` → `{contentType, body}`) |
 | Event streams                     | `GET, POST /ldes-servers/{id}/eventstreams`, `GET, DELETE …/eventstreams/{collection}` |
 | Views                             | `GET, POST …/eventstreams/{collection}/views`, `GET, DELETE …/views/{view}`      |
 | Fragments                         | `GET …/views/{view}/fragment?url=` (the root of the view without `url`)          |
@@ -150,6 +151,16 @@ and creates it again.
 
 Fetching a fragment goes through LDES-admin, so it only fetches URLs of the server itself
 (`Instance.serves`): it does not become a proxy to anywhere else.
+
+Polling a URL for the simulation is the deliberate exception: `PollService` fetches any http(s)
+URL, the way the HTTP In Poller of a pipeline would (a GET without an Accept header, with the
+headers of the component, after an OAuth2 client credentials grant if configured; at most 5 MB, and
+the response must have a Content-Type, as LDIO needs one). The browser could not do it, as most
+APIs don't let other sites read their responses (CORS). Whoever can call the API can make
+LDES-admin fetch a URL it reaches and read the response, so secure the API
+(`ldes-admin.security.enabled`) wherever LDES-admin reaches what its users should not. URLs on the
+internal URL of a local instance (`http://sandbox-ldes-server:8080/…`) are translated, as for
+fragments.
 
 ### Monitoring
 
@@ -176,10 +187,12 @@ stops their containers.
 | `LdesServerClient`       | `RestLdesServerClient`        | `/admin/api/v1/…` (Turtle, parsed with Apache Jena), `POST /{collection}`, the fetch API (pages, with `Cache-Control: immutable`), `/actuator/prometheus` (`ldes_server_*_members_count`, `spring_batch_step_*`) |
 | `LdioClient`             | `RestLdioClient`              | `/admin/api/v1/pipeline…`, `/admin/api/v1/pipeline/ldes-client`, `/admin/api/v1/catalog`, `POST /{pipeline}`, `/actuator/prometheus` (`ldio_data_in_total`, `ldio_data_out_total`) |
 | `InstanceHealthProbe`    | `ActuatorHealthProbe`         | `/actuator/health`, falling back to the admin API                 |
+| `HttpPoller`             | `RestHttpPoller`              | Any http(s) URL the simulation polls, and the token endpoint of its OAuth2 client credentials |
 | `LocalInstanceRuntime`   | `DockerLocalInstanceRuntime`  | Docker, through the Testcontainers API: `openldes/ldes-server` with its own Postgres, or `openldes/ldi-orchestrator` |
 
 HTTP errors are translated into a `RemoteInstanceException` with a reason (`NOT_FOUND`, `REJECTED`,
-`UNAVAILABLE`), so no Spring type leaks into the application ring.
+`UNAVAILABLE`), so no Spring type leaks into the application ring; those of a polled URL into a
+`PollException`.
 
 ### Local instances
 
@@ -214,9 +227,9 @@ Assumptions worth knowing:
 | Unit                     | `model`, `application`         | Domain invariants; services against mocked ports (JUnit 6, AssertJ, Mockito) |
 | Slice                    | `adapter`                      | Controllers with `@WebMvcTest` and `MockMvcTester`; HTTP clients against `MockRestServiceServer`, with responses recorded from real servers |
 | Integration (`*IT`)      | `adapter`                      | JPA + Flyway against Postgres; the LDES server and LDIO clients against real `openldes/ldes-server` and `openldes/ldi-orchestrator` containers, started by the local runtime adapter |
-| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres; the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client |
+| Integration (`*IT`)      | `bootstrap`                    | The whole application over HTTP against Postgres (including polling a URL); the secured API; the built frontend, its routes and caching (`FrontendIT`); `SandboxIT` starts the sandbox in Docker and checks that a member sent to the LDIO ends up in the LDES server, can be browsed, and is replicated by an LDIO LDES client, and that the simulation polls the event stream on its internal host name |
 | Architecture             | `bootstrap`                    | `DependencyRuleTest` (ArchUnit)                                       |
-| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML and simulator, event stream and view definitions, examples and creating them, RDF formats, stores, mock and HTTP API, domain helpers, components (Jest) |
+| Frontend unit            | `frontend/tests/unit`          | Pipeline graph, YAML, simulator, poller and cron expressions, event stream and view definitions, examples and creating them, RDF formats, stores, mock and HTTP API, domain helpers, components (Jest) |
 | Frontend end-to-end      | `frontend/cypress/e2e`         | Navigation, instance management, LDES server, examples, sandbox, demo and production mode with a stubbed backend (Cypress) |
 
 `./mvnw test` runs the unit, slice and architecture tests, and the frontend unit tests;
@@ -248,7 +261,8 @@ and pnpm.
 frontend/src
 ├── domain       TypeScript types mirroring the web models of the REST API, and helpers to present them
 ├── api          LdesAdminApi (the port: one method per endpoint), http/ (the backend) and mock/ (sample data)
-├── pipeline     catalog of LDIO components, graph ⇄ pipeline conversion and validation, YAML, simulator, templates
+├── pipeline     catalog of LDIO components, graph ⇄ pipeline conversion and validation, YAML, simulator, templates,
+│                the HTTP In Poller of a pipeline and Spring cron expressions
 ├── ldes         event stream and view definitions (catalog, Turtle ⇄ form, validation), member templates, formats
 ├── examples     the sensor and parking demos (event stream, views, pipeline, members) and creating them
 ├── stores       Pinia: mode, instances, sandbox (the pipeline being designed), sandboxEnvironment, ui
@@ -392,6 +406,18 @@ context: its vocabulary, prefixes and terms, with IRIs and datatypes for their v
 nodes are skolemised, the change detection filter remembers members). SPARQL queries and RML
 mappings are not evaluated. The result can be ingested in a sandbox LDES server, and the input
 member can be sent to a deployed pipeline with an HTTP input, which really processes it.
+
+When the pipeline starts with an HTTP In Poller, the input can come from its URL
+(`pipeline/poller.ts` reads the URLs, headers, API key or OAuth2 client credentials, and schedule
+the way LDIO does). Fetching puts the response body and its content type in the input, to edit and
+run. Polling does that on the schedule of the component, and runs every response through the
+pipeline: a cron expression when it fires (`pipeline/cron.ts` evaluates Spring cron expressions,
+with the Quartz extensions L, W and #, in the time zone of the browser), an interval right away and
+then after every poll; every URL in turn, going on when a poll fails. A poll waits for the run before
+it. Polling stops when the sandbox is left or the pipeline no longer starts with a poller. In
+production mode the backend polls (`POST /sandbox/poll`); demo mode has no backend, so the browser
+fetches the URL itself, which only works for APIs that allow it (CORS), such as the open data of
+Ghent.
 
 ## Next steps
 

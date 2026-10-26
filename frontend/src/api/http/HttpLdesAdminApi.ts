@@ -24,7 +24,7 @@ import type {
   PipelineStatus,
 } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
-import type { Sandbox } from '@/domain/sandbox'
+import type { PolledContent, PollRequest, Sandbox } from '@/domain/sandbox'
 import { ApiError, type LdesAdminApi } from '../LdesAdminApi'
 
 const TURTLE = 'text/turtle'
@@ -71,6 +71,10 @@ export class HttpLdesAdminApi implements LdesAdminApi {
 
   async stopSandbox(): Promise<void> {
     await this.request('/sandbox', { method: 'DELETE' })
+  }
+
+  poll(request: PollRequest): Promise<PolledContent> {
+    return this.json('/sandbox/poll', { method: 'POST', body: request })
   }
 
   // Instances ----------------------------------------------------------------------------------

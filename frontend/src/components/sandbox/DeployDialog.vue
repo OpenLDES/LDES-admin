@@ -35,10 +35,19 @@ const replaces = computed(() => existing.value.includes(sandbox.name))
 watch(visible, (open) => {
   if (!open) return
   error.value = undefined
-  const origin = sandbox.origin
-  ldioId.value = origin.kind === 'ldio' ? origin.ldioId
-    : instances.sandboxLdios[0]?.id ?? instances.ldios[0]?.id
+  ldioId.value = defaultLdio()
 })
+
+// The LDIOs can still be loading when the dialog opens
+watch(options, () => {
+  if (visible.value && !ldioId.value) ldioId.value = defaultLdio()
+})
+
+function defaultLdio(): string | undefined {
+  const origin = sandbox.origin
+  return origin.kind === 'ldio' ? origin.ldioId
+    : instances.sandboxLdios[0]?.id ?? instances.ldios[0]?.id
+}
 
 watch(ldioId, async (id) => {
   existing.value = []

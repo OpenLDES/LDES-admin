@@ -6,6 +6,7 @@ import org.openldes.ldesadmin.application.port.in.ldio.IllegalPipelineStateExcep
 import org.openldes.ldesadmin.application.port.in.ldio.PipelineNotFoundException;
 import org.openldes.ldesadmin.application.port.out.RemoteInstanceException;
 import org.openldes.ldesadmin.application.port.out.runtime.LocalRuntimeException;
+import org.openldes.ldesadmin.application.port.out.sandbox.PollException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -51,6 +52,14 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(LocalRuntimeException.class)
   ProblemDetail handleLocalRuntime(LocalRuntimeException e) {
     return problem(HttpStatus.SERVICE_UNAVAILABLE, e);
+  }
+
+  /**
+   * A URL polled for the sandbox failed, as a gateway does when the server behind it fails.
+   */
+  @ExceptionHandler(PollException.class)
+  ProblemDetail handlePoll(PollException e) {
+    return problem(HttpStatus.BAD_GATEWAY, e);
   }
 
   private static ProblemDetail problem(HttpStatus status, RuntimeException e) {
