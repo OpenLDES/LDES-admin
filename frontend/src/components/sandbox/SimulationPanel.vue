@@ -107,6 +107,12 @@ watch(() => steps.value.length, (length) => {
   if (length) selectedStep.value = length - 1
 })
 
+// Selecting a component on the canvas shows what it did
+watch(() => sandbox.selectedId, (id) => {
+  const index = id ? sandbox.stepNodeIds.indexOf(id) : -1
+  if (index >= 0 && index < steps.value.length) selectedStep.value = index
+})
+
 const targetServer = ref<string>()
 const targetCollection = ref<string>()
 const streams = ref<EventStream[]>([])

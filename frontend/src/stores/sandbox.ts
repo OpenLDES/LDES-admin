@@ -54,7 +54,13 @@ export const useSandboxStore = defineStore('sandbox', () => {
   const origin = ref<PipelineOrigin>({ kind: 'scratch' })
 
   const running = ref(false)
+  /**
+   * The last run, step by step. It stays while the pipeline is edited, until it runs again or the
+   * simulation is reset; another pipeline starts without one.
+   */
   const result = ref<SimulationResult>()
+  /** The node of every step of the result */
+  const stepNodeIds = ref<string[]>([])
   /** Why the last run could not run at all, e.g. the backend does not answer */
   const runError = ref<string>()
   const activeStep = ref(-1)
@@ -137,7 +143,6 @@ export const useSandboxStore = defineStore('sandbox', () => {
     const node = createNode(component, position)
     nodes.value = [...nodes.value, node]
     selectedId.value = node.id
-    resetSimulation()
     return node
   }
 
@@ -146,7 +151,6 @@ export const useSandboxStore = defineStore('sandbox', () => {
     const problem = connectionProblem(find(source), find(target), edges.value)
     if (!problem) {
       edges.value = [...edges.value, { id: edgeId(source, target), source, target }]
-      resetSimulation()
     }
     return problem
   }
@@ -155,7 +159,6 @@ export const useSandboxStore = defineStore('sandbox', () => {
     nodes.value = nodes.value.filter((node) => node.id !== id)
     edges.value = edges.value.filter((edge) => edge.source !== id && edge.target !== id)
     if (selectedId.value === id) selectedId.value = undefined
-    resetSimulation()
   }
 
   function duplicate(id: string) {
@@ -171,7 +174,6 @@ export const useSandboxStore = defineStore('sandbox', () => {
     nodes.value = nodes.value.map((node) => node.id === id
       ? { ...node, data: { ...node.data, component, config } }
       : node)
-    resetSimulation()
   }
 
   function layout() {
@@ -211,6 +213,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
       return
     }
     const ids = nodeIdsInOrder()
+    stepNodeIds.value = outcome.steps.map((step) => ids[step.kind][step.index])
     for (const [index, step] of outcome.steps.entries()) {
       activeStep.value = index
       const id = ids[step.kind][step.index]
@@ -342,6 +345,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
   function resetSimulation() {
     if (running.value) return
     result.value = undefined
+    stepNodeIds.value = []
     runError.value = undefined
     activeStep.value = -1
     if (nodes.value.some((node) => node.data.runStatus)) {
@@ -392,6 +396,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
     origin,
     running,
     result,
+    stepNodeIds,
     runError,
     activeStep,
     executeOutputs,

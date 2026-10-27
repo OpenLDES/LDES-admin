@@ -146,14 +146,15 @@ The simulation has three columns:
   HTTP In Poller has buttons to [fetch and poll its URL](#input-from-an-http-poller) instead.
 * **Steps**: every component the member went through, with how long it took and what it did:
   passed on, filtered out, or stopped with an error. Components it did not reach are listed as such.
+  Click a component on the canvas to select its step.
 * **After …**: what the step you select made, in Turtle; for an output, what it sends. A step can
   make several models: an adapter makes one per object of a JSON array, or per named graph of an
   RML mapping. Page through them with the arrows (*Model 2 of 14*). Linked data can be shown in
   another RDF format: Turtle, JSON-LD, N-Quads or N-Triples.
 
 The bar above sums it up: *Delivered to 2 outputs*, *Filtered out by Change Detection Filter*, or
-*Stopped at Version Object Creator*. *Reset* clears the result. Click the bar to fold the simulation
-away while you design.
+*Stopped at Version Object Creator*. The result stays while you change the pipeline, until you run
+it again or *Reset* clears it. Click the bar to fold the simulation away while you design.
 
 ### Dry run or execute
 

@@ -140,6 +140,29 @@ outputs:
     expect(requests[2].session).not.toBe(requests[0].session)
   })
 
+  it('keeps the steps of a run while the pipeline is edited, until it runs again or is reset', async () => {
+    jest.useFakeTimers()
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+    const running = sandbox.run()
+    await jest.runAllTimersAsync()
+    await running
+    jest.useRealTimers()
+    const nodes = sandbox.nodes.map((node) => node.id)
+    expect(sandbox.stepNodeIds).toEqual(sandbox.conversion.order)
+
+    sandbox.updateComponent('output-1', 'Ldio:ConsoleOut', { 'rdf-writer': { 'content-type': 'text/turtle' } })
+    sandbox.addComponent('Ldio:NoopOut')
+    sandbox.removeNode(sandbox.nodes.at(-1)!.id)
+
+    expect(sandbox.result?.steps).toHaveLength(3)
+    expect(sandbox.stepNodeIds).toHaveLength(3)
+    expect(sandbox.nodes.filter((node) => nodes.includes(node.id)).every((node) => node.data.runStatus === 'done')).toBe(true)
+    sandbox.resetSimulation()
+    expect(sandbox.result).toBeUndefined()
+    expect(sandbox.stepNodeIds).toEqual([])
+  })
+
   it('converts linked data in the input to another content type', () => {
     const sandbox = useSandboxStore()
     sandbox.loadTemplate('http-to-console')

@@ -116,6 +116,25 @@ describe('the sandbox', () => {
     cy.contains('.p-toast', 'Ingested the result in sandbox-parcels')
   })
 
+  it('shows the step of the component selected on the canvas, and keeps the steps until run again or reset', () => {
+    cy.get('[data-cy=run-simulation]').click()
+    cy.get('[data-cy=simulation-step]', { timeout: 8000 }).should('have.length', 6)
+
+    cy.get('[data-cy="node-Ldio:GeoJsonToWktTransformer"]').click()
+    cy.contains('[data-cy=simulation-step]', 'GeoJSON to WKT').should('have.class', 'selected')
+    cy.get('[data-cy=step-output] .cm-content').should('contain', 'geo:asWKT')
+
+    // Editing the pipeline keeps the steps
+    cy.get('[data-cy="node-Ldio:HttpOut"]').click()
+    cy.contains('[data-cy=simulation-step]', 'HTTP Out').should('have.class', 'selected')
+    cy.get('[data-cy=component-yaml] .cm-content').type('{selectall}{backspace}name: Ldio:ConsoleOut', { delay: 0 })
+    cy.get('[data-cy="node-Ldio:ConsoleOut"]').should('have.length', 2)
+    cy.get('[data-cy=simulation-step]').should('have.length', 6)
+
+    cy.contains('[data-cy=simulation] button', 'Reset').click()
+    cy.get('[data-cy=simulation-step]').should('not.exist')
+  })
+
   it('fetches the input of an HTTP poller, and polls on its schedule', () => {
     // Demo mode has no backend: the browser polls the URL itself
     const changes = 'https://api.example.org/changes'
