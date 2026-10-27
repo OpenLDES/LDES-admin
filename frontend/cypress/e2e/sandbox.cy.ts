@@ -99,6 +99,12 @@ describe('the sandbox', () => {
     cy.get('[data-cy=run-simulation]').click()
     cy.get('[data-cy=simulation-step]', { timeout: 8000 }).should('have.length', 6)
     cy.get('[data-cy=simulation]').should('contain', 'Delivered to 2 outputs')
+    // The JSON to JSON-LD adapter makes JSON-LD
+    cy.contains('[data-cy=simulation-step]', 'JSON to JSON-LD').click()
+    cy.get('[data-cy=output-content-type]').should('contain', 'JSON-LD')
+    cy.get('[data-cy=step-output] .cm-content').should('contain', '"@context"')
+      .and('contain', '"@id": "https://data.vlaanderen.be/id/perceel/24062B0123-00A000"')
+
     cy.contains('[data-cy=simulation-step]', 'Version Object Creator').click()
     cy.get('[data-cy=step-output] .cm-content').should('contain', 'dcterms:isVersionOf')
 

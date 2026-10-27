@@ -444,7 +444,8 @@ In production mode, *Run* sends the pipeline and the input member to the backend
 store sends a session id, renewed for every pipeline loaded, and whether to execute the outputs
 (the *Execute outputs* switch; a dry run by default). A step can hold several models; the output
 column pages through them, shows linked data in the RDF format chosen for it (every step
-has the content type of what it made), and *Ingest* ingests every delivered member. The result
+has the content type of what it made; the models of the JSON to JSON-LD adapter show as JSON-LD
+unless another format is chosen), and *Ingest* ingests every delivered member. The result
 stays while the pipeline is edited, until it runs again or is reset; the store keeps the node of
 every step, so selecting a node on the canvas selects its step.
 

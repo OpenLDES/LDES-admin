@@ -59,10 +59,15 @@ function toJsonLd(quads: Quad[], prefixes: Record<string, string>): JsonLdNode {
   quads.filter((q) => q.object.termType === 'BlankNode')
     .forEach((q) => references.set(q.object.value, (references.get(q.object.value) ?? 0) + 1))
   const nested = (term: Term) => term.termType === 'BlankNode' && references.get(term.value) === 1
-  const compact = (iri: string) => {
-    const [prefix, namespace] = Object.entries(prefixes)
+  // JSON-LD has no empty prefix: the empty prefix of Turtle becomes the vocabulary, for
+  // properties and types (an @id is not relative to the vocabulary)
+  const { '': vocab, ...named } = prefixes
+  const compact = (iri: string, vocabRelative = true) => {
+    const [prefix, namespace] = Object.entries(named)
       .filter(([, candidate]) => iri.startsWith(candidate)).sort(([, a], [, b]) => b.length - a.length)[0] ?? []
-    return prefix === undefined ? iri : `${prefix}:${iri.slice(namespace!.length)}`
+    if (prefix !== undefined) return `${prefix}:${iri.slice(namespace!.length)}`
+    const local = vocab !== undefined && vocabRelative && iri.startsWith(vocab) ? iri.slice(vocab.length) : ''
+    return local && !/[:@]/.test(local) && !(local in named) ? local : iri
   }
 
   const node = (subject: Term): JsonLdNode => {
@@ -75,7 +80,7 @@ function toJsonLd(quads: Quad[], prefixes: Record<string, string>): JsonLdNode {
     }
     return result
   }
-  const id = (term: Term) => (term.termType === 'BlankNode' ? `_:${term.value}` : compact(term.value))
+  const id = (term: Term) => (term.termType === 'BlankNode' ? `_:${term.value}` : compact(term.value, false))
   const value = (term: Term): unknown => {
     if (term.termType === 'Literal') {
       const literal = term as Literal
@@ -88,7 +93,7 @@ function toJsonLd(quads: Quad[], prefixes: Record<string, string>): JsonLdNode {
 
   const subjects = quads.map((q) => q.subject)
     .filter((subject, i, all) => all.findIndex((other) => other.equals(subject)) === i && !nested(subject))
-  const context = { '@context': prefixes }
+  const context = { '@context': vocab === undefined ? named : { '@vocab': vocab, ...named } }
   return subjects.length === 1
     ? { ...context, ...node(subjects[0]) }
     : { ...context, '@graph': subjects.map(node) }

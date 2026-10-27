@@ -68,5 +68,5 @@
 * [x] When you run a test in the sandbox environment, and you select a component in the canvas, then
   the step of the selected component should be selected in the "steps" panel. You leave the steps as
   long as the user doesn't run or resets the simulation
-* [] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also in
+* [x] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also in
   demo mode). Now, when I run the 

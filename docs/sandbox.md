@@ -149,8 +149,9 @@ The simulation has three columns:
   Click a component on the canvas to select its step.
 * **After …**: what the step you select made, in Turtle; for an output, what it sends. A step can
   make several models: an adapter makes one per object of a JSON array, or per named graph of an
-  RML mapping. Page through them with the arrows (*Model 2 of 14*). Linked data can be shown in
-  another RDF format: Turtle, JSON-LD, N-Quads or N-Triples.
+  RML mapping. Page through them with the arrows (*Model 2 of 14*). What the JSON to JSON-LD
+  adapter makes shows as JSON-LD. Linked data can be shown in another RDF format: Turtle, JSON-LD,
+  N-Quads or N-Triples.
 
 The bar above sums it up: *Delivered to 2 outputs*, *Filtered out by Change Detection Filter*, or
 *Stopped at Version Object Creator*. The result stays while you change the pipeline, until you run

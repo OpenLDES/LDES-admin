@@ -80,6 +80,20 @@ describe('converting linked data between formats', () => {
     expect(() => convertRdf('<a> <b> .', 'text/turtle', 'application/ld+json')).toThrow()
   })
 
+  it('writes the empty prefix of Turtle as the vocabulary of JSON-LD', () => {
+    const turtle = 'PREFIX : <http://example.org/>\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n:p1 a :Parcel ; :size 512 .'
+
+    const jsonLd = convertRdf(turtle, 'text/turtle', 'application/ld+json')
+
+    expect(JSON.parse(jsonLd)).toEqual({
+      '@context': { '@vocab': 'http://example.org/', xsd: 'http://www.w3.org/2001/XMLSchema#' },
+      '@id': 'http://example.org/p1',
+      '@type': 'Parcel',
+      size: { '@value': '512', '@type': 'xsd:integer' },
+    })
+    sameStatements(convertRdf(jsonLd, 'application/ld+json', 'text/turtle'), 'Turtle', turtle, 'Turtle')
+  })
+
   it('knows which content types are RDF formats', () => {
     expect(isRdfFormat('application/ld+json; charset=utf-8')).toBe(true)
     expect(isRdfFormat('application/json')).toBe(false)

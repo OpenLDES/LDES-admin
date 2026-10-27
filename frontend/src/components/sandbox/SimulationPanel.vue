@@ -68,8 +68,15 @@ const outputFormat = ref<RdfFormat>()
 const shownFormat = computed<RdfFormat | undefined>(() => {
   const step = shown.value
   if (!step?.outputs.length || !isRdfFormat(step.contentType)) return undefined
-  return outputFormat.value ?? mediaTypeOf(step.contentType) as RdfFormat
+  return outputFormat.value ?? naturalFormat(step)
 })
+
+/** The JSON to JSON-LD adapter makes JSON-LD; other steps are shown as they made it */
+function naturalFormat(step: SimulationStep): RdfFormat {
+  return step.kind === 'adapter' && step.component === 'Ldio:JsonToLdAdapter'
+    ? 'application/ld+json'
+    : mediaTypeOf(step.contentType) as RdfFormat
+}
 const shownOutput = computed<{ text?: string; error?: string }>(() => {
   const step = shown.value
   const made = step?.outputs[shownModel.value]
