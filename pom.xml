@@ -54,7 +54,7 @@
     <!-- Extended by modules that load Mockito as a Java agent, and by JaCoCo (profile coverage) -->
     <argLine/>
     <maven-release-plugin.version>3.3.1</maven-release-plugin.version>
-    <jacoco.version>0.8.15</jacoco.version>
+    <jacoco.version>0.8.16</jacoco.version>
     <!-- SonarCloud analysis in the GitHub workflows, with the coverage of the coverage profile -->
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     <sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
