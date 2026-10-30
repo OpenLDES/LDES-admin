@@ -88,6 +88,8 @@ Ingesting in their event streams starts from a member that fits, in the format o
   monitoring, LDES servers, LDIO and the sandbox
 * [_analysis/README.md](_analysis/README.md) – what LDES-admin does
 * [_analysis/architecture.md](_analysis/architecture.md) – how it is built
+* [AI contributor guide](docs/ai/README.md) – shared agent instructions, development conventions,
+  optional agents and change/review templates; start with [AGENTS.md](AGENTS.md)
 
 The documentation site is a [Jekyll](https://jekyllrb.com/) 4 site in `docs/`, published to GitHub
 Pages by workflow 5 (see [below](#continuous-integration-and-releases)). It reuses the screenshots
@@ -204,6 +206,18 @@ demo mode: it never calls the backend, and choosing production mode shows an err
 for demo purposes.
 
 ## Tests and builds
+
+Java production and test sources use Google Java Format (standard Google style), enforced by
+Spotless in every Maven module. With JDK 25, run from the project root:
+
+```shell
+./mvnw spotless:apply   # Apply formatting
+./mvnw spotless:check   # Check without changing sources
+```
+
+Formatting is checked automatically in Maven's `validate` phase, including existing CI builds.
+Generated sources and non-Java files are not formatted. Formatter versions are pinned in the
+root POM; see the [Java style guide](docs/ai/java-style.md) for focused formatting and IDE guidance.
 
 With Maven, for the whole project:
 
