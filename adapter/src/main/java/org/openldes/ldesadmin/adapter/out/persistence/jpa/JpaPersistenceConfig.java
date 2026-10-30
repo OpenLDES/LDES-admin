@@ -11,6 +11,4 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @Configuration(proxyBeanMethods = false)
 @EntityScan(basePackageClasses = InstanceJpaEntity.class)
 @EnableJpaRepositories(basePackageClasses = InstanceJpaRepository.class)
-class JpaPersistenceConfig {
-
-}
+class JpaPersistenceConfig {}

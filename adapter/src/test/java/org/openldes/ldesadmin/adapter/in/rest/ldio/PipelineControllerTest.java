@@ -34,7 +34,8 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 class PipelineControllerTest {
 
   private static final InstanceId LDIO = InstanceId.of("0c8a5f43-0a9e-4c39-8e0f-6f2f7d3c2b10");
-  private static final String PIPELINE_JSON = """
+  private static final String PIPELINE_JSON =
+      """
       {
         "name": "parcels",
         "description": "Parcels to LDES",
@@ -52,46 +53,51 @@ class PipelineControllerTest {
       }
       """;
 
-  @Autowired
-  private MockMvcTester mvc;
+  @Autowired private MockMvcTester mvc;
 
-  @MockitoBean
-  private PipelineUseCase pipelineUseCase;
-  @MockitoBean
-  private PipelineLifecycleUseCase pipelineLifecycleUseCase;
-  @MockitoBean
-  private ComponentCatalogUseCase componentCatalogUseCase;
-  @MockitoBean
-  private PipelineStatisticsUseCase pipelineStatisticsUseCase;
+  @MockitoBean private PipelineUseCase pipelineUseCase;
+  @MockitoBean private PipelineLifecycleUseCase pipelineLifecycleUseCase;
+  @MockitoBean private ComponentCatalogUseCase componentCatalogUseCase;
+  @MockitoBean private PipelineStatisticsUseCase pipelineStatisticsUseCase;
 
   @Test
   void createsAPipelineFromItsJsonDefinition() {
-    when(pipelineUseCase.create(eq(LDIO), any())).thenAnswer(invocation -> new DeployedPipeline(
-        invocation.getArgument(1), PipelineStatus.INIT, StatusChangeSource.AUTO));
+    when(pipelineUseCase.create(eq(LDIO), any()))
+        .thenAnswer(
+            invocation ->
+                new DeployedPipeline(
+                    invocation.getArgument(1), PipelineStatus.INIT, StatusChangeSource.AUTO));
 
-    assertThat(mvc.post().uri("/api/v1/ldios/{id}/pipelines", LDIO)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(PIPELINE_JSON))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldios/{id}/pipelines", LDIO)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(PIPELINE_JSON))
         .hasStatus(HttpStatus.CREATED)
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             {"status": "INIT", "pipeline": {"name": "parcels",
              "input": {"name": "Ldio:HttpIn", "adapter": {"name": "Ldio:RdfAdapter"}}}}
             """);
 
     ArgumentCaptor<Pipeline> pipeline = ArgumentCaptor.forClass(Pipeline.class);
     Mockito.verify(pipelineUseCase).create(eq(LDIO), pipeline.capture());
-    assertThat(pipeline.getValue().transformers()).containsExactly(new ComponentDefinition(
-        "Ldio:VersionObjectCreator", Map.of("member-type", "https://example.org/Parcel")));
+    assertThat(pipeline.getValue().transformers())
+        .containsExactly(
+            new ComponentDefinition(
+                "Ldio:VersionObjectCreator", Map.of("member-type", "https://example.org/Parcel")));
     assertThat(pipeline.getValue().outputs().getFirst().config())
         .containsEntry("rdf-writer", Map.of("content-type", "text/turtle"));
   }
 
   @Test
   void rejectsPipelineNamesThatCannotBeUsedInUrls() {
-    assertThat(mvc.post().uri("/api/v1/ldios/{id}/pipelines", LDIO)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(PIPELINE_JSON.replace("\"parcels\"", "\"my parcels\"")))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldios/{id}/pipelines", LDIO)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(PIPELINE_JSON.replace("\"parcels\"", "\"my parcels\"")))
         .hasStatus(HttpStatus.BAD_REQUEST);
 
     verifyNoInteractions(pipelineUseCase);
@@ -99,17 +105,22 @@ class PipelineControllerTest {
 
   @Test
   void doesNotRenameAPipeline() {
-    assertThat(mvc.put().uri("/api/v1/ldios/{id}/pipelines/addresses", LDIO)
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(PIPELINE_JSON))
+    assertThat(
+            mvc.put()
+                .uri("/api/v1/ldios/{id}/pipelines/addresses", LDIO)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(PIPELINE_JSON))
         .hasStatus(HttpStatus.BAD_REQUEST)
-        .bodyJson().extractingPath("$.detail").asString().contains("cannot be renamed");
+        .bodyJson()
+        .extractingPath("$.detail")
+        .asString()
+        .contains("cannot be renamed");
   }
 
   @Test
   void reportsAnImpossibleStatusChangeAsConflict() {
-    when(pipelineLifecycleUseCase.halt(LDIO, "parcels")).thenThrow(
-        new IllegalPipelineStateException("parcels", PipelineStatus.HALTED, "halt"));
+    when(pipelineLifecycleUseCase.halt(LDIO, "parcels"))
+        .thenThrow(new IllegalPipelineStateException("parcels", PipelineStatus.HALTED, "halt"));
 
     assertThat(mvc.post().uri("/api/v1/ldios/{id}/pipelines/parcels/halt", LDIO))
         .hasStatus(HttpStatus.CONFLICT);
@@ -127,13 +138,14 @@ class PipelineControllerTest {
 
   @Test
   void reportsThroughputPerPipeline() {
-    when(pipelineStatisticsUseCase.statistics(LDIO)).thenReturn(List.of(
-        new PipelineStatistics("parcels", 120, 118)));
+    when(pipelineStatisticsUseCase.statistics(LDIO))
+        .thenReturn(List.of(new PipelineStatistics("parcels", 120, 118)));
 
     assertThat(mvc.get().uri("/api/v1/ldios/{id}/statistics", LDIO))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             [{"pipeline": "parcels", "membersIn": 120, "membersOut": 118, "inFlight": 2}]
             """);
   }

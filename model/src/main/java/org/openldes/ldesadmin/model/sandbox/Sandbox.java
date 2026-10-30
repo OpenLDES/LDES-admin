@@ -5,12 +5,12 @@ import java.util.Optional;
 import org.openldes.ldesadmin.model.instance.Instance;
 
 /**
- * A local LDES server and LDIO to experiment with. They run in the same Docker network, so the
- * LDIO reaches the LDES server on its internal URL: out of the box, the
- * {@value #INGEST_PIPELINE} pipeline of the LDIO feeds the {@value #EVENT_STREAM} event stream.
+ * A local LDES server and LDIO to experiment with. They run in the same Docker network, so the LDIO
+ * reaches the LDES server on its internal URL: out of the box, the {@value #INGEST_PIPELINE}
+ * pipeline of the LDIO feeds the {@value #EVENT_STREAM} event stream.
  *
  * @param ldesServer the sandbox LDES server, {@code null} when it does not run
- * @param ldio       the sandbox LDIO, {@code null} when it does not run
+ * @param ldio the sandbox LDIO, {@code null} when it does not run
  */
 public record Sandbox(Instance ldesServer, Instance ldio) {
 

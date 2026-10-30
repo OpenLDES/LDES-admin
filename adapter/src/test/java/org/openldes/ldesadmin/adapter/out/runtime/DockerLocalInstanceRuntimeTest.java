@@ -8,9 +8,10 @@ import org.openldes.ldesadmin.model.instance.InstanceType;
 
 class DockerLocalInstanceRuntimeTest {
 
-  private final DockerLocalInstanceRuntime runtime = new DockerLocalInstanceRuntime(
-      new LocalRuntimeProperties("ldes-server", "ldio", "postgres", Duration.ofMinutes(1),
-          "*/5 * * * * *"));
+  private final DockerLocalInstanceRuntime runtime =
+      new DockerLocalInstanceRuntime(
+          new LocalRuntimeProperties(
+              "ldes-server", "ldio", "postgres", Duration.ofMinutes(1), "*/5 * * * * *"));
 
   @Test
   void derivesTheHostNameFromTheName() {
@@ -24,8 +25,7 @@ class DockerLocalInstanceRuntimeTest {
   @Test
   void makesHostNamesUnique() {
     assertThat(runtime.reserveAlias("Sandbox LDIO", InstanceType.LDIO)).isEqualTo("sandbox-ldio");
-    assertThat(runtime.reserveAlias("Sandbox LDIO", InstanceType.LDIO))
-        .isEqualTo("sandbox-ldio-2");
+    assertThat(runtime.reserveAlias("Sandbox LDIO", InstanceType.LDIO)).isEqualTo("sandbox-ldio-2");
   }
 
   @Test

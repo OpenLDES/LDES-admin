@@ -19,9 +19,7 @@ public enum PipelineStatus {
   STOPPING,
   STOPPED;
 
-  /**
-   * Only a running pipeline can be paused.
-   */
+  /** Only a running pipeline can be paused. */
   public boolean canBeHalted() {
     return this == RUNNING;
   }

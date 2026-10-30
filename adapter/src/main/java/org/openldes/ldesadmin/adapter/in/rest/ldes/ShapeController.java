@@ -33,10 +33,16 @@ class ShapeController {
     return shapeUseCase.get(new InstanceId(serverId), collection).content();
   }
 
-  @PutMapping(consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES}, produces = TURTLE)
-  String update(@PathVariable UUID serverId, @PathVariable String collection,
-      @RequestBody String shape, @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
-    return shapeUseCase.update(new InstanceId(serverId), collection,
-        RdfMediaTypes.document(shape, contentType)).content();
+  @PutMapping(
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES},
+      produces = TURTLE)
+  String update(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
+      @RequestBody String shape,
+      @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+    return shapeUseCase
+        .update(new InstanceId(serverId), collection, RdfMediaTypes.document(shape, contentType))
+        .content();
   }
 }

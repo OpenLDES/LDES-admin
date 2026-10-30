@@ -33,28 +33,24 @@ import org.openldes.ldesadmin.model.ldio.PipelineStatus;
 @ExtendWith(MockitoExtension.class)
 class PipelineServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private LdioClient ldioClient;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private LdioClient ldioClient;
+  @Mock private ActivityRecorder activity;
 
   private final Instance ldio = TestFixtures.ldio();
   private PipelineService service;
 
   @BeforeEach
   void setUp() {
-    service = new PipelineService(new InstanceLookup(instanceRepository), ldioClient,
-        activity);
+    service = new PipelineService(new InstanceLookup(instanceRepository), ldioClient, activity);
   }
 
   @Test
   void findsADeployedPipelineByName() {
     givenLdioExists();
     DeployedPipeline parcels = TestFixtures.deployed("parcels", PipelineStatus.RUNNING);
-    when(ldioClient.getPipelines(ldio)).thenReturn(List.of(
-        TestFixtures.deployed("addresses", PipelineStatus.HALTED), parcels));
+    when(ldioClient.getPipelines(ldio))
+        .thenReturn(List.of(TestFixtures.deployed("addresses", PipelineStatus.HALTED), parcels));
 
     assertThat(service.get(ldio.id(), "parcels")).isEqualTo(parcels);
   }
@@ -74,8 +70,8 @@ class PipelineServiceTest {
     givenLdioExists();
     Pipeline updated = TestFixtures.pipeline("parcels");
     DeployedPipeline redeployed = TestFixtures.deployed("parcels", PipelineStatus.INIT);
-    when(ldioClient.getPipelines(ldio)).thenReturn(List.of(
-        TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
+    when(ldioClient.getPipelines(ldio))
+        .thenReturn(List.of(TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
     when(ldioClient.createPipeline(ldio, updated)).thenReturn(redeployed);
 
     assertThat(service.update(ldio.id(), updated)).isEqualTo(redeployed);

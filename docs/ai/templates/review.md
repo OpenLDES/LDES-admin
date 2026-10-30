@@ -12,17 +12,17 @@ Changed paths and boundaries: <actual paths; mention demo/production parity wher
 
 ## Findings
 
-| Priority | Path and lines | Observable failure and evidence | Suggested correction | Confidence |
-|----------|----------------|---------------------------------|----------------------|------------|
-| <level> | <path:lines> | <reproducible issue, not a style preference> | <bounded fix> | <level> |
+| Priority | Path and lines | Observable failure and evidence              | Suggested correction | Confidence |
+|----------|----------------|----------------------------------------------|----------------------|------------|
+| <level>  | <path:lines>   | <reproducible issue, not a style preference> | <bounded fix>        | <level>    |
 
 If none were found, remove the placeholder row and state that explicitly. Distinguish verified
 bugs from questions; do not invent findings to fill the table.
 
 ## Verification
 
-| Command/check | Outcome | Evidence or blocker |
-|---------------|---------|---------------------|
+| Command/check                         | Outcome                               | Evidence or blocker                 |
+|---------------------------------------|---------------------------------------|-------------------------------------|
 | <exact command and working directory> | <passed / failed / not run / blocked> | <exit/result or actionable blocker> |
 
 ## Remaining work

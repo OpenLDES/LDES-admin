@@ -16,10 +16,14 @@ public record ViewWebModel(
     String definition) {
 
   public static ViewWebModel fromDomain(View view) {
-    return new ViewWebModel(view.collection(), view.name(), view.pageSize(),
+    return new ViewWebModel(
+        view.collection(),
+        view.name(),
+        view.pageSize(),
         view.fragmentations().stream()
-            .map(fragmentation -> new TypedConfigWebModel(fragmentation.type(),
-                fragmentation.properties()))
+            .map(
+                fragmentation ->
+                    new TypedConfigWebModel(fragmentation.type(), fragmentation.properties()))
             .toList(),
         view.retentionPolicies().stream()
             .map(policy -> new TypedConfigWebModel(policy.type(), policy.properties()))
@@ -27,10 +31,6 @@ public record ViewWebModel(
         view.definition().content());
   }
 
-  /**
-   * A fragmentation or retention policy.
-   */
-  public record TypedConfigWebModel(String type, Map<String, String> properties) {
-
-  }
+  /** A fragmentation or retention policy. */
+  public record TypedConfigWebModel(String type, Map<String, String> properties) {}
 }

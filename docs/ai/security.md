@@ -20,7 +20,7 @@ Fragment fetching is limited by `Instance.serves(url)`; `Instance.reachable(iri)
 locally published internal URLs. Preserve both the ownership guard and translation, including
 tests for unrelated hosts and instance lifecycle changes.
 
-Sandbox polling is a **deliberate exception**: it accepts arbitrary HTTP(S) URLs reachable by the
+Sandbox polling is a **deliberate exception**: it accepts arbitrary HTTP (S) URLs reachable by the
 backend, including internal resources. This bypasses browser CORS, not server-side access
 controls. Users able to call it can read those resources. Keep this limitation documented and
 require an appropriately secured API/network in deployments; do not present scheme validation

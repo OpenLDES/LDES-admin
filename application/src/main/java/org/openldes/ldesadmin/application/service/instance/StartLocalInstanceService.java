@@ -18,8 +18,11 @@ public class StartLocalInstanceService implements StartLocalInstanceUseCase {
   private final ActivityRecorder activity;
   private final Clock clock;
 
-  public StartLocalInstanceService(LocalInstanceRuntime localInstanceRuntime,
-      InstanceRepository instanceRepository, ActivityRecorder activity, Clock clock) {
+  public StartLocalInstanceService(
+      LocalInstanceRuntime localInstanceRuntime,
+      InstanceRepository instanceRepository,
+      ActivityRecorder activity,
+      Clock clock) {
     this.localInstanceRuntime = localInstanceRuntime;
     this.instanceRepository = instanceRepository;
     this.activity = activity;
@@ -33,11 +36,24 @@ public class StartLocalInstanceService implements StartLocalInstanceUseCase {
     }
     LocalRuntimeHandle handle = localInstanceRuntime.start(command.type(), command.name());
     try {
-      Instance instance = Instance.local(command.type(), command.name(), handle.url(),
-          handle.internalUrl(), handle.runtimeReference(), command.sandbox(), clock.instant());
+      Instance instance =
+          Instance.local(
+              command.type(),
+              command.name(),
+              handle.url(),
+              handle.internalUrl(),
+              handle.runtimeReference(),
+              command.sandbox(),
+              clock.instant());
       instanceRepository.save(instance);
-      activity.record(instance, Severity.SUCCESS, "Local " + command.type().label() + " started",
-          "On " + instance.url() + ", and on " + instance.internalUrl()
+      activity.record(
+          instance,
+          Severity.SUCCESS,
+          "Local " + command.type().label() + " started",
+          "On "
+              + instance.url()
+              + ", and on "
+              + instance.internalUrl()
               + " for other local instances");
       return instance;
     } catch (RuntimeException e) {

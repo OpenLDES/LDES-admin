@@ -41,24 +41,32 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 @WebMvcTest(controllers = SandboxController.class)
 class SandboxControllerTest {
 
-  private static final Instance SANDBOX_SERVER = Instance.local(InstanceType.LDES_SERVER,
-      Sandbox.LDES_SERVER_NAME, URI.create("http://localhost:32769"),
-      URI.create("http://sandbox-ldes-server:8080"), "container-1", true, AdapterFixtures.NOW);
-  private static final Instance SANDBOX_LDIO = Instance.local(InstanceType.LDIO,
-      Sandbox.LDIO_NAME, URI.create("http://localhost:32770"),
-      URI.create("http://sandbox-ldio:8080"), "container-2", true, AdapterFixtures.NOW);
+  private static final Instance SANDBOX_SERVER =
+      Instance.local(
+          InstanceType.LDES_SERVER,
+          Sandbox.LDES_SERVER_NAME,
+          URI.create("http://localhost:32769"),
+          URI.create("http://sandbox-ldes-server:8080"),
+          "container-1",
+          true,
+          AdapterFixtures.NOW);
+  private static final Instance SANDBOX_LDIO =
+      Instance.local(
+          InstanceType.LDIO,
+          Sandbox.LDIO_NAME,
+          URI.create("http://localhost:32770"),
+          URI.create("http://sandbox-ldio:8080"),
+          "container-2",
+          true,
+          AdapterFixtures.NOW);
 
-  @Autowired
-  private MockMvcTester mvc;
+  @Autowired private MockMvcTester mvc;
 
-  @MockitoBean
-  private SandboxUseCase sandboxUseCase;
+  @MockitoBean private SandboxUseCase sandboxUseCase;
 
-  @MockitoBean
-  private PollUseCase pollUseCase;
+  @MockitoBean private PollUseCase pollUseCase;
 
-  @MockitoBean
-  private RunPipelineUseCase runPipelineUseCase;
+  @MockitoBean private RunPipelineUseCase runPipelineUseCase;
 
   @Test
   void reportsAStoppedSandbox() {
@@ -67,7 +75,8 @@ class SandboxControllerTest {
     assertThat(mvc.get().uri("/api/v1/sandbox"))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             {"state": "STOPPED", "ldesServer": null, "ldio": null,
              "eventStream": "sandbox-parcels", "ingestPipeline": "sandbox-ingest",
              "eventStreamUrl": null}
@@ -81,7 +90,8 @@ class SandboxControllerTest {
     assertThat(mvc.post().uri("/api/v1/sandbox"))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             {"state": "RUNNING",
              "ldesServer": {"name": "Sandbox LDES server", "url": "http://localhost:32769",
                "internalUrl": "http://sandbox-ldes-server:8080", "origin": "LOCAL"},
@@ -92,12 +102,15 @@ class SandboxControllerTest {
 
   @Test
   void reportsThatDockerIsNotAvailable() {
-    when(sandboxUseCase.start()).thenThrow(new LocalRuntimeException(
-        "Could not start a local LDES server: Docker is not running", null));
+    when(sandboxUseCase.start())
+        .thenThrow(
+            new LocalRuntimeException(
+                "Could not start a local LDES server: Docker is not running", null));
 
     assertThat(mvc.post().uri("/api/v1/sandbox"))
         .hasStatus(HttpStatus.SERVICE_UNAVAILABLE)
-        .bodyJson().extractingPath("$.detail")
+        .bodyJson()
+        .extractingPath("$.detail")
         .isEqualTo("Could not start a local LDES server: Docker is not running");
   }
 
@@ -110,12 +123,16 @@ class SandboxControllerTest {
 
   @Test
   void pollsAUrlForTheSimulation() {
-    when(pollUseCase.poll(any())).thenReturn(
-        new PolledContent("application/json; charset=utf-8", "[{\"name\": \"Vrijdagmarkt\"}]"));
+    when(pollUseCase.poll(any()))
+        .thenReturn(
+            new PolledContent("application/json; charset=utf-8", "[{\"name\": \"Vrijdagmarkt\"}]"));
 
-    assertThat(mvc.post().uri("/api/v1/sandbox/poll")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("""
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/sandbox/poll")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
             {"url": "https://api.example.org/parkings?lang=en",
              "headers": {"X-API-KEY": "secret"},
              "clientCredentials": {"tokenEndpoint": "https://login.example.org/token",
@@ -123,39 +140,69 @@ class SandboxControllerTest {
             """))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             {"contentType": "application/json; charset=utf-8",
              "body": "[{\\"name\\": \\"Vrijdagmarkt\\"}]"}
             """);
 
-    verify(pollUseCase).poll(new Poll(URI.create("https://api.example.org/parkings?lang=en"),
-        Map.of("X-API-KEY", "secret"),
-        new ClientCredentials(URI.create("https://login.example.org/token"), "ldes-admin",
-            "s3cr3t", null)));
+    verify(pollUseCase)
+        .poll(
+            new Poll(
+                URI.create("https://api.example.org/parkings?lang=en"),
+                Map.of("X-API-KEY", "secret"),
+                new ClientCredentials(
+                    URI.create("https://login.example.org/token"), "ldes-admin", "s3cr3t", null)));
   }
 
   @Test
   void refusesToPollWhatIsNotAnHttpUrl() {
-    assertThat(mvc.post().uri("/api/v1/sandbox/poll")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"url\": \"file:///etc/passwd\"}"))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/sandbox/poll")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"url\": \"file:///etc/passwd\"}"))
         .hasStatus(HttpStatus.BAD_REQUEST)
-        .bodyJson().extractingPath("$.detail")
+        .bodyJson()
+        .extractingPath("$.detail")
         .isEqualTo("'url' must be an absolute http(s) URL, but was file:///etc/passwd");
   }
 
   @Test
   void runsAPipelineStepByStep() {
-    when(runPipelineUseCase.run(any(), any(), any())).thenReturn(new PipelineRun(List.of(
-        new StepResult(Kind.INPUT, 0, "Ldio:HttpIn", Status.OK, "Received POST /parcels",
-            List.of("<a> <b> <c> ."), "text/turtle", Format.TURTLE, 0),
-        new StepResult(Kind.OUTPUT, 0, "Ldio:HttpOut", Status.ERROR,
-            "POST http://ldes/parcels answered 400", List.of(), "text/plain", Format.TEXT, 12)),
-        false, List.of()));
+    when(runPipelineUseCase.run(any(), any(), any()))
+        .thenReturn(
+            new PipelineRun(
+                List.of(
+                    new StepResult(
+                        Kind.INPUT,
+                        0,
+                        "Ldio:HttpIn",
+                        Status.OK,
+                        "Received POST /parcels",
+                        List.of("<a> <b> <c> ."),
+                        "text/turtle",
+                        Format.TURTLE,
+                        0),
+                    new StepResult(
+                        Kind.OUTPUT,
+                        0,
+                        "Ldio:HttpOut",
+                        Status.ERROR,
+                        "POST http://ldes/parcels answered 400",
+                        List.of(),
+                        "text/plain",
+                        Format.TEXT,
+                        12)),
+                false,
+                List.of()));
 
-    assertThat(mvc.post().uri("/api/v1/sandbox/runs")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("""
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/sandbox/runs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
             {"pipeline": {"name": "parcels",
                "input": {"name": "Ldio:HttpIn", "adapter": {"name": "Ldio:RdfAdapter"}},
                "outputs": [{"name": "Ldio:HttpOut", "config": {"endpoint": "http://ldes/parcels"}}]},
@@ -164,7 +211,8 @@ class SandboxControllerTest {
             """))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             {"delivered": false, "members": [],
              "steps": [
                {"kind": "input", "index": 0, "component": "Ldio:HttpIn", "status": "ok",
@@ -174,18 +222,28 @@ class SandboxControllerTest {
                 "summary": "POST http://ldes/parcels answered 400", "durationMs": 12}]}
             """);
 
-    verify(runPipelineUseCase).run(
-        new Pipeline("parcels", null, new InputDefinition("Ldio:HttpIn", null,
-            ComponentDefinition.of("Ldio:RdfAdapter")), null,
-            List.of(new ComponentDefinition("Ldio:HttpOut", Map.of("endpoint", "http://ldes/parcels")))),
-        RunInput.of("<a> <b> <c> .", "text/turtle"), new RunOptions("4b9e", true));
+    verify(runPipelineUseCase)
+        .run(
+            new Pipeline(
+                "parcels",
+                null,
+                new InputDefinition("Ldio:HttpIn", null, ComponentDefinition.of("Ldio:RdfAdapter")),
+                null,
+                List.of(
+                    new ComponentDefinition(
+                        "Ldio:HttpOut", Map.of("endpoint", "http://ldes/parcels")))),
+            RunInput.of("<a> <b> <c> .", "text/turtle"),
+            new RunOptions("4b9e", true));
   }
 
   @Test
   void refusesARunWithoutSession() {
-    assertThat(mvc.post().uri("/api/v1/sandbox/runs")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("""
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/sandbox/runs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
             {"pipeline": {"name": "parcels", "input": {"name": "Ldio:HttpIn"}},
              "input": {"content": "", "contentType": "text/turtle"}}
             """))
@@ -194,14 +252,17 @@ class SandboxControllerTest {
 
   @Test
   void reportsAFailedPollAsBadGateway() {
-    when(pollUseCase.poll(any())).thenThrow(new PollException(
-        "https://api.example.org/parkings answered 404 NOT_FOUND"));
+    when(pollUseCase.poll(any()))
+        .thenThrow(new PollException("https://api.example.org/parkings answered 404 NOT_FOUND"));
 
-    assertThat(mvc.post().uri("/api/v1/sandbox/poll")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"url\": \"https://api.example.org/parkings\"}"))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/sandbox/poll")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"url\": \"https://api.example.org/parkings\"}"))
         .hasStatus(HttpStatus.BAD_GATEWAY)
-        .bodyJson().extractingPath("$.detail")
+        .bodyJson()
+        .extractingPath("$.detail")
         .isEqualTo("https://api.example.org/parkings answered 404 NOT_FOUND");
   }
 }

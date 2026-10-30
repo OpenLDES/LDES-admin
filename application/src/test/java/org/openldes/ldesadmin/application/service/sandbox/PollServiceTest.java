@@ -25,10 +25,8 @@ class PollServiceTest {
 
   private static final PolledContent CONTENT = new PolledContent("application/json", "[]");
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private HttpPoller httpPoller;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private HttpPoller httpPoller;
 
   private PollService service;
 
@@ -44,8 +42,11 @@ class PollServiceTest {
   void pollsAUrlAsItIs() {
     when(instanceRepository.findByType(InstanceType.LDIO))
         .thenReturn(List.of(TestFixtures.localLdio()));
-    Poll poll = new Poll(URI.create("https://api.example.org/changes?since=1"),
-        Map.of("X-API-KEY", "secret"), null);
+    Poll poll =
+        new Poll(
+            URI.create("https://api.example.org/changes?since=1"),
+            Map.of("X-API-KEY", "secret"),
+            null);
 
     assertThat(service.poll(poll)).isEqualTo(CONTENT);
 
@@ -54,12 +55,15 @@ class PollServiceTest {
 
   @Test
   void reachesLocalInstancesOnTheUrlOfLdesAdmin() {
-    Poll poll = new Poll(URI.create("http://sandbox-ldes-server:8080/sandbox-parcels/by-page"),
-        Map.of("Accept", "text/turtle"), null);
+    Poll poll =
+        new Poll(
+            URI.create("http://sandbox-ldes-server:8080/sandbox-parcels/by-page"),
+            Map.of("Accept", "text/turtle"),
+            null);
 
     service.poll(poll);
 
-    verify(httpPoller).poll(
-        poll.withUrl(URI.create("http://localhost:32769/sandbox-parcels/by-page")));
+    verify(httpPoller)
+        .poll(poll.withUrl(URI.create("http://localhost:32769/sandbox-parcels/by-page")));
   }
 }

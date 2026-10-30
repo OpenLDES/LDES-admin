@@ -34,12 +34,11 @@ import org.springframework.stereotype.Component;
  *
  * <p>Components are kept per session and position. A stateful one (the change detection filter)
  * thus remembers what it saw across the runs of a session, and a mapping or query is not parsed
- * again for every run. A component whose definition changed is made anew, as a redeployed
- * pipeline would. Sessions are forgotten after 30 minutes without a run, or when there are too
- * many.
+ * again for every run. A component whose definition changed is made anew, as a redeployed pipeline
+ * would. Sessions are forgotten after 30 minutes without a run, or when there are too many.
  *
- * <p>Every call has a time limit ({@code ldes-admin.sandbox.component-timeout}): a query or an
- * HTTP request that hangs does not hold up the request of the user.
+ * <p>Every call has a time limit ({@code ldes-admin.sandbox.component-timeout}): a query or an HTTP
+ * request that hangs does not hold up the request of the user.
  */
 @Component
 public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
@@ -48,7 +47,8 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
     // GeoSPARQL looks up coordinate systems in the embedded Derby database of Apache SIS, which
     // would otherwise write derby.log in the working directory of LDES-admin
     if (System.getProperty("derby.stream.error.file") == null) {
-      System.setProperty("derby.stream.error.file",
+      System.setProperty(
+          "derby.stream.error.file",
           Path.of(System.getProperty("java.io.tmpdir"), "ldes-admin-derby.log").toString());
     }
   }
@@ -59,6 +59,7 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
   private final Duration componentTimeout;
   private final Clock clock;
   private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+
   /** Least recently used first */
   private final Map<String, Session> sessions = new LinkedHashMap<>(16, 0.75f, true);
 
@@ -76,31 +77,40 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
 
   @Override
   public List<RdfDocument> adapt(String session, ComponentDefinition adapter, RunInput input) {
-    return call(() -> {
-      LdiAdapter component = component(session, "adapter", 0, adapter, Adapters::create);
-      return component.apply(LdiAdapter.Content.of(input.content(), input.contentType()))
-          .map(LdiComponentRuntime::turtle)
-          .toList();
-    });
+    return call(
+        () -> {
+          LdiAdapter component = component(session, "adapter", 0, adapter, Adapters::create);
+          return component
+              .apply(LdiAdapter.Content.of(input.content(), input.contentType()))
+              .map(LdiComponentRuntime::turtle)
+              .toList();
+        });
   }
 
   @Override
-  public List<RdfDocument> transform(String session, int position,
-      ComponentDefinition transformer, RdfDocument model) {
-    return call(() -> {
-      Transformer component = component(session, "transformer", position, transformer,
-          Transformer::create);
-      return component.transform(Rdf.fromTurtle(model.content())).stream()
-          .map(LdiComponentRuntime::turtle)
-          .toList();
-    });
+  public List<RdfDocument> transform(
+      String session, int position, ComponentDefinition transformer, RdfDocument model) {
+    return call(
+        () -> {
+          Transformer component =
+              component(session, "transformer", position, transformer, Transformer::create);
+          return component.transform(Rdf.fromTurtle(model.content())).stream()
+              .map(LdiComponentRuntime::turtle)
+              .toList();
+        });
   }
 
   @Override
-  public OutputResult write(String session, int position, ComponentDefinition output,
-      RdfDocument model, boolean execute) {
-    return call(() -> component(session, "output", position, output, Output::create)
-        .write(Rdf.fromTurtle(model.content()), execute));
+  public OutputResult write(
+      String session,
+      int position,
+      ComponentDefinition output,
+      RdfDocument model,
+      boolean execute) {
+    return call(
+        () ->
+            component(session, "output", position, output, Output::create)
+                .write(Rdf.fromTurtle(model.content()), execute));
   }
 
   @Override
@@ -108,15 +118,22 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
     executor.shutdownNow();
   }
 
-  private <T> T component(String sessionId, String kind, int position,
-      ComponentDefinition definition, BiFunction<String, LdioConfig, T> factory) {
+  private <T> T component(
+      String sessionId,
+      String kind,
+      int position,
+      ComponentDefinition definition,
+      BiFunction<String, LdioConfig, T> factory) {
     Session session = session(sessionId);
     synchronized (session) {
       String slot = kind + "/" + position;
       Kept kept = session.components.get(slot);
       if (kept == null || !kept.definition().equals(definition)) {
-        kept = new Kept(definition, factory.apply(definition.name(),
-            LdioConfig.of(definition.name(), definition.config())));
+        kept =
+            new Kept(
+                definition,
+                factory.apply(
+                    definition.name(), LdioConfig.of(definition.name(), definition.config())));
         session.components.put(slot, kept);
       }
       @SuppressWarnings("unchecked")
@@ -149,11 +166,15 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
       return future.get(componentTimeout.toMillis(), TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
       future.cancel(true);
-      throw new ComponentException("Took longer than %s, the limit of the sandbox"
-          .formatted(componentTimeout.toMillis() < 1000 ? componentTimeout.toMillis() + " ms"
-              : componentTimeout.toSeconds() + " seconds"));
+      throw new ComponentException(
+          "Took longer than %s, the limit of the sandbox"
+              .formatted(
+                  componentTimeout.toMillis() < 1000
+                      ? componentTimeout.toMillis() + " ms"
+                      : componentTimeout.toSeconds() + " seconds"));
     } catch (ExecutionException e) {
-      throw e.getCause() instanceof ComponentException failure ? failure
+      throw e.getCause() instanceof ComponentException failure
+          ? failure
           : new ComponentException(messageOf(e.getCause()), e.getCause());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -161,9 +182,7 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
     }
   }
 
-  /**
-   * The first message along the causes: LDI and carml often wrap the error that explains it.
-   */
+  /** The first message along the causes: LDI and carml often wrap the error that explains it. */
   private static String messageOf(Throwable error) {
     for (Throwable cause = error; cause != null; cause = cause.getCause()) {
       if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
@@ -183,7 +202,5 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
     private Instant lastUsed;
   }
 
-  private record Kept(ComponentDefinition definition, Object component) {
-
-  }
+  private record Kept(ComponentDefinition definition, Object component) {}
 }

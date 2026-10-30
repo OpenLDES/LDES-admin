@@ -21,42 +21,50 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 @WebMvcTest(controllers = ActivityController.class)
 class ActivityControllerTest {
 
-  @Autowired
-  private MockMvcTester mvc;
+  @Autowired private MockMvcTester mvc;
 
-  @MockitoBean
-  private ActivityUseCase activityUseCase;
+  @MockitoBean private ActivityUseCase activityUseCase;
 
   @Test
   void listsTheRecentActivity() {
-    ActivityEvent event = ActivityEvent.of(ldio, Severity.SUCCESS,
-        "Pipeline sandbox-ingest deployed", null, AdapterFixtures.NOW);
+    ActivityEvent event =
+        ActivityEvent.of(
+            ldio, Severity.SUCCESS, "Pipeline sandbox-ingest deployed", null, AdapterFixtures.NOW);
     when(activityUseCase.recentActivity(10)).thenReturn(List.of(event));
 
     assertThat(mvc.get().uri("/api/v1/activity").param("limit", "10"))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             [{"time": "2026-10-23T10:15:30Z", "severity": "success",
               "source": {"type": "LDIO", "id": "%s", "name": "Ingest LDIO"},
               "title": "Pipeline sandbox-ingest deployed"}]
-            """.formatted(ldio.id()));
+            """
+                .formatted(ldio.id()));
   }
 
   @Test
   void reportsTheThroughputPerServer() {
     InstanceId id = server.id();
-    when(activityUseCase.throughput()).thenReturn(List.of(new ThroughputSeries(id,
-        "Production", List.of(new ThroughputSeries.Point(
-            Instant.parse("2026-10-23T10:00:00Z"), 42)))));
+    when(activityUseCase.throughput())
+        .thenReturn(
+            List.of(
+                new ThroughputSeries(
+                    id,
+                    "Production",
+                    List.of(
+                        new ThroughputSeries.Point(Instant.parse("2026-10-23T10:00:00Z"), 42)))));
 
     assertThat(mvc.get().uri("/api/v1/dashboard/throughput"))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             [{"instanceId": "%s", "label": "Production",
               "points": [{"time": "2026-10-23T10:00:00Z", "members": 42}]}]
-            """.formatted(id));
+            """
+                .formatted(id));
   }
 
   private final Instance ldio = AdapterFixtures.ldio();

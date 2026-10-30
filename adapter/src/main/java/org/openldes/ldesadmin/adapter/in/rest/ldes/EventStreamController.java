@@ -42,8 +42,8 @@ class EventStreamController {
 
   @GetMapping("/{collection}")
   EventStreamWebModel get(@PathVariable UUID serverId, @PathVariable String collection) {
-    return EventStreamWebModel.fromDomain(eventStreamUseCase.get(new InstanceId(serverId),
-        collection));
+    return EventStreamWebModel.fromDomain(
+        eventStreamUseCase.get(new InstanceId(serverId), collection));
   }
 
   /**
@@ -51,10 +51,13 @@ class EventStreamController {
    */
   @PostMapping(consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.CREATED)
-  EventStreamWebModel create(@PathVariable UUID serverId, @RequestBody String definition,
+  EventStreamWebModel create(
+      @PathVariable UUID serverId,
+      @RequestBody String definition,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
-    EventStream created = eventStreamUseCase.create(new InstanceId(serverId),
-        RdfMediaTypes.document(definition, contentType));
+    EventStream created =
+        eventStreamUseCase.create(
+            new InstanceId(serverId), RdfMediaTypes.document(definition, contentType));
     return EventStreamWebModel.fromDomain(created);
   }
 

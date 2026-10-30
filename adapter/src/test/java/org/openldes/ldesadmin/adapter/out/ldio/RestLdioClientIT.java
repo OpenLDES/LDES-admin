@@ -26,9 +26,7 @@ import org.openldes.ldesadmin.model.ldio.PipelineStatistics;
 import org.openldes.ldesadmin.model.ldio.PipelineStatus;
 import org.springframework.web.client.RestClient;
 
-/**
- * Runs the LDIO client against a real LDIO, started by the local runtime adapter.
- */
+/** Runs the LDIO client against a real LDIO, started by the local runtime adapter. */
 class RestLdioClientIT {
 
   private static DockerLocalInstanceRuntime runtime;
@@ -37,14 +35,29 @@ class RestLdioClientIT {
 
   @BeforeAll
   static void startLdio() {
-    runtime = new DockerLocalInstanceRuntime(new LocalRuntimeProperties(
-        "openldes/ldes-server:4.2.1", "openldes/ldi-orchestrator:3.1.1", "postgres:16-alpine",
-        Duration.ofMinutes(5), "*/5 * * * * *"));
+    runtime =
+        new DockerLocalInstanceRuntime(
+            new LocalRuntimeProperties(
+                "openldes/ldes-server:4.2.1",
+                "openldes/ldi-orchestrator:3.1.1",
+                "postgres:16-alpine",
+                Duration.ofMinutes(5),
+                "*/5 * * * * *"));
     LocalRuntimeHandle handle = runtime.start(InstanceType.LDIO, "it-ldio");
-    ldio = Instance.local(InstanceType.LDIO, "it-ldio", handle.url(), handle.internalUrl(),
-        handle.runtimeReference(), true, Instant.now());
-    client = new RestLdioClient(new InstanceRestClients(RestClient.builder()), Clock.systemUTC(),
-        Duration.ofSeconds(30));
+    ldio =
+        Instance.local(
+            InstanceType.LDIO,
+            "it-ldio",
+            handle.url(),
+            handle.internalUrl(),
+            handle.runtimeReference(),
+            true,
+            Instant.now());
+    client =
+        new RestLdioClient(
+            new InstanceRestClients(RestClient.builder()),
+            Clock.systemUTC(),
+            Duration.ofSeconds(30));
   }
 
   @AfterAll
@@ -56,8 +69,8 @@ class RestLdioClientIT {
 
   @Test
   void isHealthy() {
-    ActuatorHealthProbe probe = new ActuatorHealthProbe(
-        new InstanceRestClients(RestClient.builder()), Clock.systemUTC());
+    ActuatorHealthProbe probe =
+        new ActuatorHealthProbe(new InstanceRestClients(RestClient.builder()), Clock.systemUTC());
 
     assertThat(probe.check(ldio).isUp()).isTrue();
   }
@@ -68,14 +81,16 @@ class RestLdioClientIT {
     assertThat(created.name()).isEqualTo("it-lifecycle");
     awaitRunning("it-lifecycle");
 
-    assertThat(client.getPipelines(ldio)).extracting(DeployedPipeline::name)
+    assertThat(client.getPipelines(ldio))
+        .extracting(DeployedPipeline::name)
         .contains("it-lifecycle");
     assertThat(client.halt(ldio, "it-lifecycle")).isEqualTo(PipelineStatus.HALTED);
     assertThat(client.resume(ldio, "it-lifecycle")).isEqualTo(PipelineStatus.RUNNING);
 
     client.deletePipeline(ldio, "it-lifecycle");
 
-    assertThat(client.getPipelines(ldio)).extracting(DeployedPipeline::name)
+    assertThat(client.getPipelines(ldio))
+        .extracting(DeployedPipeline::name)
         .doesNotContain("it-lifecycle");
   }
 
@@ -94,12 +109,18 @@ class RestLdioClientIT {
     client.createPipeline(ldio, httpToConsole("it-metrics"));
     awaitRunning("it-metrics");
 
-    client.send(ldio, "it-metrics",
-        "<http://example.org/parcel/1> a <http://example.org/Parcel> .", "text/turtle");
+    client.send(
+        ldio,
+        "it-metrics",
+        "<http://example.org/parcel/1> a <http://example.org/Parcel> .",
+        "text/turtle");
 
-    await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
-        assertThat(client.getStatistics(ldio)).contains(
-            new PipelineStatistics("it-metrics", 1, 1)));
+    await()
+        .atMost(Duration.ofSeconds(30))
+        .untilAsserted(
+            () ->
+                assertThat(client.getStatistics(ldio))
+                    .contains(new PipelineStatistics("it-metrics", 1, 1)));
   }
 
   @Test
@@ -108,13 +129,17 @@ class RestLdioClientIT {
   }
 
   private static Pipeline httpToConsole(String name) {
-    return new Pipeline(name, "Integration test",
+    return new Pipeline(
+        name,
+        "Integration test",
         new InputDefinition("Ldio:HttpIn", null, ComponentDefinition.of("Ldio:RdfAdapter")),
-        List.of(), List.of(ComponentDefinition.of("Ldio:ConsoleOut")));
+        List.of(),
+        List.of(ComponentDefinition.of("Ldio:ConsoleOut")));
   }
 
   private static void awaitRunning(String pipeline) {
-    await().atMost(Duration.ofSeconds(30))
+    await()
+        .atMost(Duration.ofSeconds(30))
         .until(() -> client.getStatus(ldio, pipeline) == PipelineStatus.RUNNING);
   }
 }

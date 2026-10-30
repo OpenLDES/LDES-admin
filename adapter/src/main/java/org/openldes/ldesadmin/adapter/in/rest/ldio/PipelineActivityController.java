@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * What goes through the pipelines of an LDIO: the progress of its LDES clients, and members sent
- * to its HTTP inputs.
+ * What goes through the pipelines of an LDIO: the progress of its LDES clients, and members sent to
+ * its HTTP inputs.
  */
 @RestController
 @RequestMapping("/api/v1/ldios/{ldioId}")
@@ -30,9 +30,7 @@ class PipelineActivityController {
     this.pipelineActivityUseCase = pipelineActivityUseCase;
   }
 
-  /**
-   * The status of every pipeline with an LDES client input, by pipeline name.
-   */
+  /** The status of every pipeline with an LDES client input, by pipeline name. */
   @GetMapping("/ldes-clients")
   Map<String, LdesClientStatus> ldesClients(@PathVariable UUID ldioId) {
     return pipelineActivityUseCase.ldesClientStatuses(new InstanceId(ldioId));
@@ -44,7 +42,10 @@ class PipelineActivityController {
    */
   @PostMapping("/pipelines/{pipeline}/members")
   @ResponseStatus(HttpStatus.ACCEPTED)
-  void send(@PathVariable UUID ldioId, @PathVariable String pipeline, @RequestBody String message,
+  void send(
+      @PathVariable UUID ldioId,
+      @PathVariable String pipeline,
+      @RequestBody String message,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     pipelineActivityUseCase.send(new InstanceId(ldioId), pipeline, message, contentType);
   }

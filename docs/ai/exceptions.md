@@ -4,18 +4,19 @@ Reuse the existing exception taxonomy instead of introducing a generic `AppExcep
 global error-code enum. The inner rings express failures without Spring HTTP types.
 
 `adapter.in.rest.RestExceptionHandler` extends Spring's `ResponseEntityExceptionHandler` and
-maps application/integration failures to [RFC 9457 problem details](https://www.rfc-editor.org/rfc/rfc9457).
+maps application/integration failures
+to [RFC 9457 problem details](https://www.rfc-editor.org/rfc/rfc9457).
 
-| Failure | Current HTTP status |
-|---------|---------------------|
-| `InstanceNotFoundException`, `PipelineNotFoundException` | `404` |
-| `InstanceAlreadyRegisteredException`, `IllegalPipelineStateException` | `409` |
-| `IllegalArgumentException` / invalid request | `400` |
-| `RemoteInstanceException`: `NOT_FOUND` | `404` |
-| `RemoteInstanceException`: `REJECTED` | `400` |
-| `RemoteInstanceException`: `UNAVAILABLE` | `502` |
-| `PollException` | `502` |
-| `LocalRuntimeException` | `503` |
+| Failure                                                               | Current HTTP status |
+|-----------------------------------------------------------------------|---------------------|
+| `InstanceNotFoundException`, `PipelineNotFoundException`              | `404`               |
+| `InstanceAlreadyRegisteredException`, `IllegalPipelineStateException` | `409`               |
+| `IllegalArgumentException` / invalid request                          | `400`               |
+| `RemoteInstanceException`: `NOT_FOUND`                                | `404`               |
+| `RemoteInstanceException`: `REJECTED`                                 | `400`               |
+| `RemoteInstanceException`: `UNAVAILABLE`                              | `502`               |
+| `PollException`                                                       | `502`               |
+| `LocalRuntimeException`                                               | `503`               |
 
 Translate HTTP/client exceptions inside outbound adapters into the output port's vocabulary.
 Preserve the cause and useful, non-sensitive context. Do not leak Spring client types into

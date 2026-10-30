@@ -13,9 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * What the instances did lately, as far as LDES-admin noticed.
- */
+/** What the instances did lately, as far as LDES-admin noticed. */
 @RestController
 @RequestMapping("/api/v1")
 class ActivityController {
@@ -26,9 +24,7 @@ class ActivityController {
     this.activityUseCase = activityUseCase;
   }
 
-  /**
-   * The latest activity, newest first.
-   */
+  /** The latest activity, newest first. */
   @GetMapping("/activity")
   List<ActivityEventWebModel> activity(@RequestParam(defaultValue = "50") int limit) {
     return activityUseCase.recentActivity(limit).stream()
@@ -36,50 +32,46 @@ class ActivityController {
         .toList();
   }
 
-  /**
-   * Members ingested per hour by the LDES servers, over the last 24 hours.
-   */
+  /** Members ingested per hour by the LDES servers, over the last 24 hours. */
   @GetMapping("/dashboard/throughput")
   List<ThroughputSeriesWebModel> throughput() {
-    return activityUseCase.throughput().stream()
-        .map(ThroughputSeriesWebModel::fromDomain)
-        .toList();
+    return activityUseCase.throughput().stream().map(ThroughputSeriesWebModel::fromDomain).toList();
   }
 
   /**
    * @param severity {@code info}, {@code success}, {@code warn} or {@code error}
    */
-  record ActivityEventWebModel(UUID id, Instant time, String severity, Source source,
-                               String title, String detail) {
+  record ActivityEventWebModel(
+      UUID id, Instant time, String severity, Source source, String title, String detail) {
 
     static ActivityEventWebModel fromDomain(ActivityEvent event) {
-      return new ActivityEventWebModel(event.id(), event.time(),
+      return new ActivityEventWebModel(
+          event.id(),
+          event.time(),
           event.severity().name().toLowerCase(Locale.ROOT),
           new Source(event.sourceType(), event.sourceId().value(), event.sourceName()),
-          event.title(), event.detail());
+          event.title(),
+          event.detail());
     }
 
     /**
      * @param name name of the instance when it happened
      */
-    record Source(InstanceType type, UUID id, String name) {
-
-    }
+    record Source(InstanceType type, UUID id, String name) {}
   }
 
   record ThroughputSeriesWebModel(UUID instanceId, String label, List<Point> points) {
 
     static ThroughputSeriesWebModel fromDomain(ThroughputSeries series) {
-      return new ThroughputSeriesWebModel(series.instanceId().value(), series.label(),
-          series.points().stream().map(point -> new Point(point.hour(), point.members()))
-              .toList());
+      return new ThroughputSeriesWebModel(
+          series.instanceId().value(),
+          series.label(),
+          series.points().stream().map(point -> new Point(point.hour(), point.members())).toList());
     }
 
     /**
      * @param time start of the hour
      */
-    record Point(Instant time, long members) {
-
-    }
+    record Point(Instant time, long members) {}
   }
 }

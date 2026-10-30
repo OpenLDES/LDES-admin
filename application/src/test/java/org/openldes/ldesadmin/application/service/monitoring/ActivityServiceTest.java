@@ -25,12 +25,9 @@ import org.openldes.ldesadmin.model.monitoring.ThroughputSeries;
 @ExtendWith(MockitoExtension.class)
 class ActivityServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private IngestSampleRepository ingestSamples;
-  @Mock
-  private ActivityLog activityLog;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private IngestSampleRepository ingestSamples;
+  @Mock private ActivityLog activityLog;
 
   @Test
   void derivesTheThroughputOfTheSampledServers() {
@@ -38,24 +35,33 @@ class ActivityServiceTest {
     Instance neverSampled = TestFixtures.localLdesServer();
     when(instanceRepository.findByType(InstanceType.LDES_SERVER))
         .thenReturn(List.of(sampled, neverSampled));
-    when(ingestSamples.findSince(TestFixtures.NOW.minus(Duration.ofHours(25)))).thenReturn(List.of(
-        new IngestSample(sampled.id(), TestFixtures.NOW.minus(Duration.ofMinutes(90)), 100),
-        new IngestSample(sampled.id(), TestFixtures.NOW.minus(Duration.ofMinutes(1)), 160)));
+    when(ingestSamples.findSince(TestFixtures.NOW.minus(Duration.ofHours(25))))
+        .thenReturn(
+            List.of(
+                new IngestSample(sampled.id(), TestFixtures.NOW.minus(Duration.ofMinutes(90)), 100),
+                new IngestSample(
+                    sampled.id(), TestFixtures.NOW.minus(Duration.ofMinutes(1)), 160)));
 
     List<ThroughputSeries> throughput = service().throughput();
 
-    assertThat(throughput).singleElement().satisfies(series -> {
-      assertThat(series.label()).isEqualTo("LDES server");
-      // Sampling started at 8:45, the second sample is from the current hour
-      assertThat(series.points()).extracting(ThroughputSeries.Point::members)
-          .containsExactly(0L, 0L, 60L);
-    });
+    assertThat(throughput)
+        .singleElement()
+        .satisfies(
+            series -> {
+              assertThat(series.label()).isEqualTo("LDES server");
+              // Sampling started at 8:45, the second sample is from the current hour
+              assertThat(series.points())
+                  .extracting(ThroughputSeries.Point::members)
+                  .containsExactly(0L, 0L, 60L);
+            });
   }
 
   @Test
   void limitsTheRecentActivity() {
-    List<ActivityEvent> events = List.of(ActivityEvent.of(TestFixtures.ldio(), Severity.INFO,
-        "LDIO added", null, TestFixtures.NOW));
+    List<ActivityEvent> events =
+        List.of(
+            ActivityEvent.of(
+                TestFixtures.ldio(), Severity.INFO, "LDIO added", null, TestFixtures.NOW));
     when(activityLog.findRecent(ActivityService.MAX_ACTIVITY)).thenReturn(events);
 
     assertThat(service().recentActivity(10_000)).isEqualTo(events);
@@ -71,7 +77,6 @@ class ActivityServiceTest {
   }
 
   private ActivityService service() {
-    return new ActivityService(instanceRepository, ingestSamples, activityLog,
-        TestFixtures.CLOCK);
+    return new ActivityService(instanceRepository, ingestSamples, activityLog, TestFixtures.CLOCK);
   }
 }

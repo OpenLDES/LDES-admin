@@ -5,8 +5,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Creates {@link RestClient RestClients} pointing at an instance. They share the timeouts and
- * other HTTP client settings of the application ({@code spring.http.clients.*}).
+ * Creates {@link RestClient RestClients} pointing at an instance. They share the timeouts and other
+ * HTTP client settings of the application ({@code spring.http.clients.*}).
  */
 @Component
 public class InstanceRestClients {
@@ -18,8 +18,6 @@ public class InstanceRestClients {
   }
 
   public RestClient forInstance(Instance instance) {
-    return restClientBuilder.clone()
-        .baseUrl(instance.url().toString())
-        .build();
+    return restClientBuilder.clone().baseUrl(instance.url().toString()).build();
   }
 }

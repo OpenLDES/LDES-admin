@@ -25,8 +25,8 @@ class PipelineController {
   private final PipelineUseCase pipelineUseCase;
   private final PipelineLifecycleUseCase pipelineLifecycleUseCase;
 
-  PipelineController(PipelineUseCase pipelineUseCase,
-      PipelineLifecycleUseCase pipelineLifecycleUseCase) {
+  PipelineController(
+      PipelineUseCase pipelineUseCase, PipelineLifecycleUseCase pipelineLifecycleUseCase) {
     this.pipelineUseCase = pipelineUseCase;
     this.pipelineLifecycleUseCase = pipelineLifecycleUseCase;
   }
@@ -40,27 +40,32 @@ class PipelineController {
 
   @GetMapping("/{pipeline}")
   DeployedPipelineWebModel get(@PathVariable UUID ldioId, @PathVariable String pipeline) {
-    return DeployedPipelineWebModel.fromDomain(pipelineUseCase.get(new InstanceId(ldioId),
-        pipeline));
+    return DeployedPipelineWebModel.fromDomain(
+        pipelineUseCase.get(new InstanceId(ldioId), pipeline));
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  DeployedPipelineWebModel create(@PathVariable UUID ldioId,
-      @Valid @RequestBody PipelineWebModel pipeline) {
-    return DeployedPipelineWebModel.fromDomain(pipelineUseCase.create(new InstanceId(ldioId),
-        pipeline.toDomain()));
+  DeployedPipelineWebModel create(
+      @PathVariable UUID ldioId, @Valid @RequestBody PipelineWebModel pipeline) {
+    return DeployedPipelineWebModel.fromDomain(
+        pipelineUseCase.create(new InstanceId(ldioId), pipeline.toDomain()));
   }
 
   @PutMapping("/{pipeline}")
-  DeployedPipelineWebModel update(@PathVariable UUID ldioId, @PathVariable String pipeline,
+  DeployedPipelineWebModel update(
+      @PathVariable UUID ldioId,
+      @PathVariable String pipeline,
       @Valid @RequestBody PipelineWebModel definition) {
     if (!pipeline.equals(definition.name())) {
-      throw new IllegalArgumentException("A pipeline cannot be renamed, expected name "
-          + pipeline + " but got " + definition.name());
+      throw new IllegalArgumentException(
+          "A pipeline cannot be renamed, expected name "
+              + pipeline
+              + " but got "
+              + definition.name());
     }
-    return DeployedPipelineWebModel.fromDomain(pipelineUseCase.update(new InstanceId(ldioId),
-        definition.toDomain()));
+    return DeployedPipelineWebModel.fromDomain(
+        pipelineUseCase.update(new InstanceId(ldioId), definition.toDomain()));
   }
 
   @DeleteMapping("/{pipeline}")
@@ -71,23 +76,21 @@ class PipelineController {
 
   @GetMapping("/{pipeline}/status")
   PipelineStatusWebModel status(@PathVariable UUID ldioId, @PathVariable String pipeline) {
-    return new PipelineStatusWebModel(pipeline,
-        pipelineLifecycleUseCase.status(new InstanceId(ldioId), pipeline));
+    return new PipelineStatusWebModel(
+        pipeline, pipelineLifecycleUseCase.status(new InstanceId(ldioId), pipeline));
   }
 
   @PostMapping("/{pipeline}/halt")
   PipelineStatusWebModel halt(@PathVariable UUID ldioId, @PathVariable String pipeline) {
-    return new PipelineStatusWebModel(pipeline,
-        pipelineLifecycleUseCase.halt(new InstanceId(ldioId), pipeline));
+    return new PipelineStatusWebModel(
+        pipeline, pipelineLifecycleUseCase.halt(new InstanceId(ldioId), pipeline));
   }
 
   @PostMapping("/{pipeline}/resume")
   PipelineStatusWebModel resume(@PathVariable UUID ldioId, @PathVariable String pipeline) {
-    return new PipelineStatusWebModel(pipeline,
-        pipelineLifecycleUseCase.resume(new InstanceId(ldioId), pipeline));
+    return new PipelineStatusWebModel(
+        pipeline, pipelineLifecycleUseCase.resume(new InstanceId(ldioId), pipeline));
   }
 
-  record PipelineStatusWebModel(String pipeline, PipelineStatus status) {
-
-  }
+  record PipelineStatusWebModel(String pipeline, PipelineStatus status) {}
 }

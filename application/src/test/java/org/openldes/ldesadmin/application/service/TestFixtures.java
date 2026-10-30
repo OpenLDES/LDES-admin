@@ -19,34 +19,47 @@ public final class TestFixtures {
   public static final Instant NOW = Instant.parse("2026-10-23T10:15:30Z");
   public static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-  private TestFixtures() {
-  }
+  private TestFixtures() {}
 
   public static Instance ldesServer() {
-    return Instance.register(InstanceType.LDES_SERVER, "LDES server",
-        URI.create("http://ldes.example.org"), false, NOW);
+    return Instance.register(
+        InstanceType.LDES_SERVER, "LDES server", URI.create("http://ldes.example.org"), false, NOW);
   }
 
   public static Instance ldio() {
-    return Instance.register(InstanceType.LDIO, "LDIO", URI.create("http://ldio.example.org"),
-        false, NOW);
+    return Instance.register(
+        InstanceType.LDIO, "LDIO", URI.create("http://ldio.example.org"), false, NOW);
   }
 
   public static Instance localLdio() {
-    return Instance.local(InstanceType.LDIO, "Sandbox LDIO", URI.create("http://localhost:32768"),
-        URI.create("http://sandbox-ldio:8080"), "container-42", true, NOW);
+    return Instance.local(
+        InstanceType.LDIO,
+        "Sandbox LDIO",
+        URI.create("http://localhost:32768"),
+        URI.create("http://sandbox-ldio:8080"),
+        "container-42",
+        true,
+        NOW);
   }
 
   public static Instance localLdesServer() {
-    return Instance.local(InstanceType.LDES_SERVER, "Sandbox LDES server",
-        URI.create("http://localhost:32769"), URI.create("http://sandbox-ldes-server:8080"),
-        "container-43", true, NOW);
+    return Instance.local(
+        InstanceType.LDES_SERVER,
+        "Sandbox LDES server",
+        URI.create("http://localhost:32769"),
+        URI.create("http://sandbox-ldes-server:8080"),
+        "container-43",
+        true,
+        NOW);
   }
 
   public static Pipeline pipeline(String name) {
-    return new Pipeline(name, "Test pipeline",
+    return new Pipeline(
+        name,
+        "Test pipeline",
         new InputDefinition("Ldio:HttpIn", null, ComponentDefinition.of("Ldio:RdfAdapter")),
-        null, List.of(ComponentDefinition.of("Ldio:ConsoleOut")));
+        null,
+        List.of(ComponentDefinition.of("Ldio:ConsoleOut")));
   }
 
   public static DeployedPipeline deployed(String name, PipelineStatus status) {

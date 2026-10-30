@@ -9,8 +9,8 @@ public interface MonitorInstancesUseCase {
   void monitor();
 
   /**
-   * Removes local instances whose container no longer runs, typically because they belonged to
-   * a previous run of LDES-admin.
+   * Removes local instances whose container no longer runs, typically because they belonged to a
+   * previous run of LDES-admin.
    *
    * @return the number of removed instances
    */

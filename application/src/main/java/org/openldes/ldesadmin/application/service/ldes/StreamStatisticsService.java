@@ -14,8 +14,7 @@ public class StreamStatisticsService implements StreamStatisticsUseCase {
   private final InstanceLookup instanceLookup;
   private final LdesServerClient ldesServerClient;
 
-  public StreamStatisticsService(InstanceLookup instanceLookup,
-      LdesServerClient ldesServerClient) {
+  public StreamStatisticsService(InstanceLookup instanceLookup, LdesServerClient ldesServerClient) {
     this.instanceLookup = instanceLookup;
     this.ldesServerClient = ldesServerClient;
   }

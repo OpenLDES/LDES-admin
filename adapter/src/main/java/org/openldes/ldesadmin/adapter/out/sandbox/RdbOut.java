@@ -20,8 +20,8 @@ import org.openldes.ldesadmin.model.sandbox.OutputResult;
 
 /**
  * The relational database output of LDIO ({@code LdioRdbOut}): inserts the rows a SPARQL select
- * query finds in the model into a table. It runs dry in the sandbox, which has no database
- * driver: it shows the rows.
+ * query finds in the model into a table. It runs dry in the sandbox, which has no database driver:
+ * it shows the rows.
  */
 final class RdbOut implements Output {
 
@@ -55,11 +55,15 @@ final class RdbOut implements Output {
         rows.add(row);
       }
     }
-    String action = "insert %d %s into table %s".formatted(rows.size(),
-        rows.size() == 1 ? "row" : "rows", table);
-    return new OutputResult(json(rows), "application/json", execute
-        ? "LdioRdbOut only runs dry in the sandbox: it would " + action
-        : "Would " + action);
+    String action =
+        "insert %d %s into table %s"
+            .formatted(rows.size(), rows.size() == 1 ? "row" : "rows", table);
+    return new OutputResult(
+        json(rows),
+        "application/json",
+        execute
+            ? "LdioRdbOut only runs dry in the sandbox: it would " + action
+            : "Would " + action);
   }
 
   private static String valueOf(RDFNode node) {

@@ -25,18 +25,18 @@ import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Polls a URL like the HTTP In Poller of LDIO does: a GET without an Accept header, so the server
- * answers in its default format, with the headers of the component and, for OAuth2, a bearer
- * token. Uses the timeouts of the application ({@code spring.http.clients.*}).
+ * answers in its default format, with the headers of the component and, for OAuth2, a bearer token.
+ * Uses the timeouts of the application ({@code spring.http.clients.*}).
  */
 @Component
 public class RestHttpPoller implements HttpPoller {
 
   /** More than the editor of the sandbox handles comfortably */
   static final int MAX_BODY_SIZE = 5 * 1024 * 1024;
+
   private static final int MAX_ERROR_LENGTH = 500;
   private static final ParameterizedTypeReference<Map<String, Object>> JSON_OBJECT =
-      new ParameterizedTypeReference<>() {
-      };
+      new ParameterizedTypeReference<>() {};
 
   private final RestClient restClient;
 
@@ -46,18 +46,19 @@ public class RestHttpPoller implements HttpPoller {
 
   @Override
   public PolledContent poll(Poll poll) {
-    String accessToken = poll.clientCredentials() == null
-        ? null
-        : accessToken(poll.clientCredentials());
+    String accessToken =
+        poll.clientCredentials() == null ? null : accessToken(poll.clientCredentials());
     try {
-      return restClient.get()
+      return restClient
+          .get()
           .uri(poll.url())
-          .headers(headers -> {
-            poll.headers().forEach(headers::add);
-            if (accessToken != null) {
-              headers.setBearerAuth(accessToken);
-            }
-          })
+          .headers(
+              headers -> {
+                poll.headers().forEach(headers::add);
+                if (accessToken != null) {
+                  headers.setBearerAuth(accessToken);
+                }
+              })
           .exchange((request, response) -> read(poll.url(), response));
     } catch (ResourceAccessException e) {
       throw new PollException("Could not poll %s: it is unreachable".formatted(poll.url()), e);
@@ -69,13 +70,14 @@ public class RestHttpPoller implements HttpPoller {
   private static PolledContent read(URI url, ClientHttpResponse response) throws IOException {
     HttpStatusCode status = response.getStatusCode();
     if (!status.is2xxSuccessful()) {
-      String body = new String(response.getBody().readNBytes(MAX_ERROR_LENGTH + 1),
-          StandardCharsets.UTF_8).strip();
+      String body =
+          new String(response.getBody().readNBytes(MAX_ERROR_LENGTH + 1), StandardCharsets.UTF_8)
+              .strip();
       if (body.length() > MAX_ERROR_LENGTH) {
         body = body.substring(0, MAX_ERROR_LENGTH) + "…";
       }
-      throw new PollException("%s answered %s%s".formatted(url, status,
-          body.isEmpty() ? "" : " - " + body));
+      throw new PollException(
+          "%s answered %s%s".formatted(url, status, body.isEmpty() ? "" : " - " + body));
     }
     String contentType = response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE);
     if (contentType == null || contentType.isBlank()) {
@@ -84,8 +86,9 @@ public class RestHttpPoller implements HttpPoller {
     }
     byte[] body = response.getBody().readNBytes(MAX_BODY_SIZE + 1);
     if (body.length > MAX_BODY_SIZE) {
-      throw new PollException("%s answered more than %d MB, too much for the sandbox"
-          .formatted(url, MAX_BODY_SIZE / 1024 / 1024));
+      throw new PollException(
+          "%s answered more than %d MB, too much for the sandbox"
+              .formatted(url, MAX_BODY_SIZE / 1024 / 1024));
     }
     return new PolledContent(contentType, new String(body, charsetOf(contentType)));
   }
@@ -101,8 +104,8 @@ public class RestHttpPoller implements HttpPoller {
   }
 
   /**
-   * The client credentials grant as LDIO requests it: the client id and secret in the form, not
-   * in an Authorization header.
+   * The client credentials grant as LDIO requests it: the client id and secret in the form, not in
+   * an Authorization header.
    */
   private String accessToken(ClientCredentials credentials) {
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
@@ -115,24 +118,27 @@ public class RestHttpPoller implements HttpPoller {
     URI endpoint = credentials.tokenEndpoint();
     Map<String, Object> token;
     try {
-      token = restClient.post()
-          .uri(endpoint)
-          .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-          .accept(MediaType.APPLICATION_JSON)
-          .body(form)
-          .retrieve()
-          .body(JSON_OBJECT);
+      token =
+          restClient
+              .post()
+              .uri(endpoint)
+              .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+              .accept(MediaType.APPLICATION_JSON)
+              .body(form)
+              .retrieve()
+              .body(JSON_OBJECT);
     } catch (RestClientResponseException e) {
-      throw new PollException("Could not get an access token from %s: %s"
-          .formatted(endpoint, e.getStatusCode()), e);
+      throw new PollException(
+          "Could not get an access token from %s: %s".formatted(endpoint, e.getStatusCode()), e);
     } catch (ResourceAccessException e) {
       throw new PollException(
           "Could not get an access token from %s: it is unreachable".formatted(endpoint), e);
     } catch (RestClientException e) {
-      throw new PollException("Could not get an access token from %s: %s"
-          .formatted(endpoint, e.getMessage()), e);
+      throw new PollException(
+          "Could not get an access token from %s: %s".formatted(endpoint, e.getMessage()), e);
     }
-    if (token == null || !(token.get("access_token") instanceof String accessToken)
+    if (token == null
+        || !(token.get("access_token") instanceof String accessToken)
         || accessToken.isBlank()) {
       throw new PollException("%s answered without an access token".formatted(endpoint));
     }

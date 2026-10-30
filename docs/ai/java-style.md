@@ -58,7 +58,8 @@ Do not import `jena-bom` or `rdf4j-bom` without resolving their Spring 5 managem
 
 ## Examples to follow
 
-* `model/.../instance/Instance.java`: value validation, registered/local instances and URL behaviour.
+* `model/.../instance/Instance.java`: value validation, registered/local instances and URL
+  behaviour.
 * `application/.../service/instance/RegisterInstanceService.java`: plain Java orchestration.
 * `application/.../service/instance/RegisterInstanceServiceTest.java`: constructor-based test setup.
 

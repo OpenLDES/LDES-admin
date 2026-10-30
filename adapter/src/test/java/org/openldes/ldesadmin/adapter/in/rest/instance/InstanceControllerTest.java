@@ -35,19 +35,13 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 @Import(InstanceUseCases.class)
 class InstanceControllerTest {
 
-  @Autowired
-  private MockMvcTester mvc;
+  @Autowired private MockMvcTester mvc;
 
-  @MockitoBean
-  private FindInstancesUseCase findInstancesUseCase;
-  @MockitoBean
-  private RegisterInstanceUseCase registerInstanceUseCase;
-  @MockitoBean
-  private StartLocalInstanceUseCase startLocalInstanceUseCase;
-  @MockitoBean
-  private UnregisterInstanceUseCase unregisterInstanceUseCase;
-  @MockitoBean
-  private CheckInstanceHealthUseCase checkInstanceHealthUseCase;
+  @MockitoBean private FindInstancesUseCase findInstancesUseCase;
+  @MockitoBean private RegisterInstanceUseCase registerInstanceUseCase;
+  @MockitoBean private StartLocalInstanceUseCase startLocalInstanceUseCase;
+  @MockitoBean private UnregisterInstanceUseCase unregisterInstanceUseCase;
+  @MockitoBean private CheckInstanceHealthUseCase checkInstanceHealthUseCase;
 
   private final Instance server = AdapterFixtures.ldesServer();
 
@@ -58,7 +52,8 @@ class InstanceControllerTest {
     assertThat(mvc.get().uri("/api/v1/ldes-servers"))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             [{
               "id": "%s",
               "type": "LDES_SERVER",
@@ -68,7 +63,8 @@ class InstanceControllerTest {
               "sandbox": false,
               "registeredAt": "2026-10-23T10:15:30Z"
             }]
-            """.formatted(server.id()));
+            """
+                .formatted(server.id()));
   }
 
   @Test
@@ -76,25 +72,36 @@ class InstanceControllerTest {
     Instance ldio = AdapterFixtures.ldio();
     when(registerInstanceUseCase.register(any())).thenReturn(ldio);
 
-    assertThat(mvc.post().uri("/api/v1/ldios")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("""
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
             {"name": "Ingest LDIO", "url": "http://ldio.example.org", "sandbox": false}
             """))
         .hasStatus(HttpStatus.CREATED)
-        .satisfies(result -> assertThat(result.getResponse().getHeader("Location"))
-            .isEqualTo("http://localhost/api/v1/ldios/" + ldio.id()))
-        .bodyJson().extractingPath("$.type").isEqualTo("LDIO");
+        .satisfies(
+            result ->
+                assertThat(result.getResponse().getHeader("Location"))
+                    .isEqualTo("http://localhost/api/v1/ldios/" + ldio.id()))
+        .bodyJson()
+        .extractingPath("$.type")
+        .isEqualTo("LDIO");
 
-    verify(registerInstanceUseCase).register(new RegisterInstanceCommand(InstanceType.LDIO,
-        "Ingest LDIO", URI.create("http://ldio.example.org"), false));
+    verify(registerInstanceUseCase)
+        .register(
+            new RegisterInstanceCommand(
+                InstanceType.LDIO, "Ingest LDIO", URI.create("http://ldio.example.org"), false));
   }
 
   @Test
   void rejectsARegistrationWithoutName() {
-    assertThat(mvc.post().uri("/api/v1/ldes-servers")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"url\": \"http://ldes.example.org\"}"))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldes-servers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"url\": \"http://ldes.example.org\"}"))
         .hasStatus(HttpStatus.BAD_REQUEST);
 
     verifyNoInteractions(registerInstanceUseCase);
@@ -102,14 +109,17 @@ class InstanceControllerTest {
 
   @Test
   void reportsADuplicateRegistrationAsConflict() {
-    when(registerInstanceUseCase.register(any())).thenThrow(
-        new InstanceAlreadyRegisteredException(InstanceType.LDES_SERVER, server.url()));
+    when(registerInstanceUseCase.register(any()))
+        .thenThrow(new InstanceAlreadyRegisteredException(InstanceType.LDES_SERVER, server.url()));
 
-    assertThat(mvc.post().uri("/api/v1/ldes-servers")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"name\": \"Production\", \"url\": \"http://ldes.example.org\"}"))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldes-servers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"Production\", \"url\": \"http://ldes.example.org\"}"))
         .hasStatus(HttpStatus.CONFLICT)
-        .bodyJson().extractingPath("$.detail")
+        .bodyJson()
+        .extractingPath("$.detail")
         .isEqualTo("An LDES server with URL http://ldes.example.org is already registered");
   }
 
@@ -121,17 +131,22 @@ class InstanceControllerTest {
 
     assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}", id))
         .hasStatus(HttpStatus.NOT_FOUND)
-        .bodyJson().extractingPath("$.status").isEqualTo(404);
+        .bodyJson()
+        .extractingPath("$.status")
+        .isEqualTo(404);
   }
 
   @Test
   void reportsThatALocalInstanceCouldNotBeStarted() {
-    when(startLocalInstanceUseCase.start(any())).thenThrow(new LocalRuntimeException(
-        "Could not start a local LDIO: Docker is not running", null));
+    when(startLocalInstanceUseCase.start(any()))
+        .thenThrow(
+            new LocalRuntimeException("Could not start a local LDIO: Docker is not running", null));
 
-    assertThat(mvc.post().uri("/api/v1/ldios/local")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"name\": \"Sandbox\", \"sandbox\": true}"))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldios/local")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"Sandbox\", \"sandbox\": true}"))
         .hasStatus(HttpStatus.SERVICE_UNAVAILABLE);
   }
 
@@ -150,6 +165,8 @@ class InstanceControllerTest {
 
     assertThat(mvc.get().uri("/api/v1/ldes-servers/{id}/health", server.id()))
         .hasStatusOk()
-        .bodyJson().extractingPath("$.status").isEqualTo("UP");
+        .bodyJson()
+        .extractingPath("$.status")
+        .isEqualTo("UP");
   }
 }

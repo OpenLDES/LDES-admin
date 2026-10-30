@@ -8,7 +8,7 @@ import java.util.Objects;
  * data.
  *
  * @param contentType e.g. {@code application/json}; the adapter decides which ones it reads
- * @param source      the URL it was polled from, if it was; {@code null} otherwise
+ * @param source the URL it was polled from, if it was; {@code null} otherwise
  */
 public record RunInput(String content, String contentType, String source) {
 

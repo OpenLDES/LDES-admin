@@ -13,9 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-/**
- * Turns exceptions of the application ring into RFC 9457 problem details.
- */
+/** Turns exceptions of the application ring into RFC 9457 problem details. */
 @RestControllerAdvice
 public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -24,8 +22,7 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     return problem(HttpStatus.NOT_FOUND, e);
   }
 
-  @ExceptionHandler({InstanceAlreadyRegisteredException.class,
-      IllegalPipelineStateException.class})
+  @ExceptionHandler({InstanceAlreadyRegisteredException.class, IllegalPipelineStateException.class})
   ProblemDetail handleConflict(RuntimeException e) {
     return problem(HttpStatus.CONFLICT, e);
   }
@@ -41,11 +38,12 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
    */
   @ExceptionHandler(RemoteInstanceException.class)
   ProblemDetail handleRemoteInstance(RemoteInstanceException e) {
-    HttpStatus status = switch (e.reason()) {
-      case NOT_FOUND -> HttpStatus.NOT_FOUND;
-      case REJECTED -> HttpStatus.BAD_REQUEST;
-      case UNAVAILABLE -> HttpStatus.BAD_GATEWAY;
-    };
+    HttpStatus status =
+        switch (e.reason()) {
+          case NOT_FOUND -> HttpStatus.NOT_FOUND;
+          case REJECTED -> HttpStatus.BAD_REQUEST;
+          case UNAVAILABLE -> HttpStatus.BAD_GATEWAY;
+        };
     return problem(status, e);
   }
 
@@ -54,9 +52,7 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     return problem(HttpStatus.SERVICE_UNAVAILABLE, e);
   }
 
-  /**
-   * A URL polled for the sandbox failed, as a gateway does when the server behind it fails.
-   */
+  /** A URL polled for the sandbox failed, as a gateway does when the server behind it fails. */
   @ExceptionHandler(PollException.class)
   ProblemDetail handlePoll(PollException e) {
     return problem(HttpStatus.BAD_GATEWAY, e);

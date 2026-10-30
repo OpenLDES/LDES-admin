@@ -10,10 +10,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JpaActivityLog implements ActivityLog {
 
-  /**
-   * Longer texts are cut to fit their column.
-   */
+  /** Longer texts are cut to fit their column. */
   private static final int MAX_TITLE = 255;
+
   private static final int MAX_DETAIL = 2048;
 
   private final ActivityEventJpaRepository jpaRepository;
@@ -39,9 +38,17 @@ public class JpaActivityLog implements ActivityLog {
   @Override
   public List<ActivityEvent> findRecent(int limit) {
     return jpaRepository.findByOrderByOccurredAtDesc(Limit.of(limit)).stream()
-        .map(entity -> new ActivityEvent(entity.getId(), entity.getOccurredAt(),
-            entity.getSeverity(), entity.getSourceType(), new InstanceId(entity.getSourceId()),
-            entity.getSourceName(), entity.getTitle(), entity.getDetail()))
+        .map(
+            entity ->
+                new ActivityEvent(
+                    entity.getId(),
+                    entity.getOccurredAt(),
+                    entity.getSeverity(),
+                    entity.getSourceType(),
+                    new InstanceId(entity.getSourceId()),
+                    entity.getSourceName(),
+                    entity.getTitle(),
+                    entity.getDetail()))
         .toList();
   }
 

@@ -23,9 +23,9 @@ import org.openldes.ldi.sparqlfunctions.PointAtFromStart;
  * The SPARQL construct transformer of LDI ({@code org.openldes.ldi.SparqlConstructTransformer}),
  * with its geospatial functions.
  *
- * <p>LDI's own class registers those functions with a method that Jena 6 no longer has, so this
- * one registers them itself and transforms in the same way: the result of the query is the model,
- * or one model per named graph (with the default graph added).
+ * <p>LDI's own class registers those functions with a method that Jena 6 no longer has, so this one
+ * registers them itself and transforms in the same way: the result of the query is the model, or
+ * one model per named graph (with the default graph added).
  */
 final class SparqlConstruct {
 
@@ -41,6 +41,7 @@ final class SparqlConstruct {
   }
 
   private final Query query;
+
   /** The {@code infer} property: the result includes the original model */
   private final boolean includeOriginal;
 
@@ -51,13 +52,14 @@ final class SparqlConstruct {
 
   List<Model> transform(Model model) {
     Dataset dataset;
-    try (QueryExecution execution = QueryExecutionFactory.create(query,
-        DatasetFactory.create(model))) {
+    try (QueryExecution execution =
+        QueryExecutionFactory.create(query, DatasetFactory.create(model))) {
       dataset = execution.execConstructDataset();
     }
-    List<Model> result = dataset.listNames().hasNext()
-        ? splitDataset(dataset)
-        : new ArrayList<>(List.of(dataset.getDefaultModel()));
+    List<Model> result =
+        dataset.listNames().hasNext()
+            ? splitDataset(dataset)
+            : new ArrayList<>(List.of(dataset.getDefaultModel()));
     if (includeOriginal && result.size() == 1) {
       result.getFirst().add(model);
     }

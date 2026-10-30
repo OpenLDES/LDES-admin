@@ -12,9 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * What an LDIO can do (its component catalog) and what it did (pipeline throughput).
- */
+/** What an LDIO can do (its component catalog) and what it did (pipeline throughput). */
 @RestController
 @RequestMapping("/api/v1/ldios/{ldioId}")
 class LdioInsightsController {
@@ -22,7 +20,8 @@ class LdioInsightsController {
   private final ComponentCatalogUseCase componentCatalogUseCase;
   private final PipelineStatisticsUseCase pipelineStatisticsUseCase;
 
-  LdioInsightsController(ComponentCatalogUseCase componentCatalogUseCase,
+  LdioInsightsController(
+      ComponentCatalogUseCase componentCatalogUseCase,
       PipelineStatisticsUseCase pipelineStatisticsUseCase) {
     this.componentCatalogUseCase = componentCatalogUseCase;
     this.pipelineStatisticsUseCase = pipelineStatisticsUseCase;
@@ -40,12 +39,15 @@ class LdioInsightsController {
         .toList();
   }
 
-  record PipelineStatisticsWebModel(String pipeline, long membersIn, long membersOut,
-                                    long inFlight) {
+  record PipelineStatisticsWebModel(
+      String pipeline, long membersIn, long membersOut, long inFlight) {
 
     static PipelineStatisticsWebModel fromDomain(PipelineStatistics statistics) {
-      return new PipelineStatisticsWebModel(statistics.pipeline(), statistics.membersIn(),
-          statistics.membersOut(), statistics.inFlight());
+      return new PipelineStatisticsWebModel(
+          statistics.pipeline(),
+          statistics.membersIn(),
+          statistics.membersOut(),
+          statistics.inFlight());
     }
   }
 }

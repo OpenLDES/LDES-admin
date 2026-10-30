@@ -21,8 +21,7 @@ import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 @NoArgsConstructor
 public class ActivityEventJpaEntity {
 
-  @Id
-  private UUID id;
+  @Id private UUID id;
 
   @Column(nullable = false)
   private Instant occurredAt;

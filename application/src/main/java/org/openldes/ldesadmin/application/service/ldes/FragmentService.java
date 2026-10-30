@@ -25,15 +25,16 @@ public class FragmentService implements FragmentUseCase {
   public Fragment fetch(InstanceId serverId, String collection, String view, String url) {
     Instance server = instanceLookup.requireLdesServer(serverId);
     EventStream eventStream = ldesServerClient.getEventStream(server, collection);
-    URI location = url == null || url.isBlank()
-        ? server.resolve(collection + "/" + view)
-        : server.reachable(url);
+    URI location =
+        url == null || url.isBlank()
+            ? server.resolve(collection + "/" + view)
+            : server.reachable(url);
     // LDES-admin fetches on behalf of the user, so it must not become a proxy to anywhere else
     if (!server.serves(location)) {
       throw new IllegalArgumentException(
           "%s is not a fragment of LDES server '%s'".formatted(url, server.name()));
     }
-    return ldesServerClient.getFragment(server, location, eventStream.timestampPath(),
-        eventStream.versionOfPath());
+    return ldesServerClient.getFragment(
+        server, location, eventStream.timestampPath(), eventStream.versionOfPath());
   }
 }

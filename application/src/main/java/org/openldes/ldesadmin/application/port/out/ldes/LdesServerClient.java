@@ -16,8 +16,9 @@ import org.openldes.ldesadmin.model.rdf.RdfDocument;
 /**
  * Talks to the admin API, ingest and fetch endpoints, and metrics of an LDES server.
  *
- * <p>Implementations throw a {@link org.openldes.ldesadmin.application.port.out.RemoteInstanceException}
- * when the server cannot fulfil a request.
+ * <p>Implementations throw a {@link
+ * org.openldes.ldesadmin.application.port.out.RemoteInstanceException} when the server cannot
+ * fulfil a request.
  */
 public interface LdesServerClient {
 
@@ -43,9 +44,7 @@ public interface LdesServerClient {
 
   RdfDocument getCatalog(Instance server);
 
-  /**
-   * The {@code dcat:Catalog} of the server itself, or an empty one to start from.
-   */
+  /** The {@code dcat:Catalog} of the server itself, or an empty one to start from. */
   CatalogDescription getServerCatalog(Instance server);
 
   /**
@@ -62,7 +61,7 @@ public interface LdesServerClient {
   /**
    * Fetches a fragment of a view.
    *
-   * @param url           where LDES-admin reaches the fragment
+   * @param url where LDES-admin reaches the fragment
    * @param timestampPath property holding the timestamp of a member, may be {@code null}
    * @param versionOfPath property linking a member to its state object, may be {@code null}
    */
@@ -70,8 +69,6 @@ public interface LdesServerClient {
 
   List<StreamStatistics> getStatistics(Instance server);
 
-  /**
-   * The steps of the fragmentation and maintenance jobs, from the batch metrics.
-   */
+  /** The steps of the fragmentation and maintenance jobs, from the batch metrics. */
   List<BackgroundProcess> getBackgroundProcesses(Instance server);
 }

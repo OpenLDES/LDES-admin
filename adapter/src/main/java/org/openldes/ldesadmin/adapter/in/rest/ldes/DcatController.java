@@ -28,8 +28,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * DCAT metadata of the server ({@code dcat:Catalog}), its event streams ({@code dcat:Dataset})
- * and their views ({@code dcat:DataService}).
+ * DCAT metadata of the server ({@code dcat:Catalog}), its event streams ({@code dcat:Dataset}) and
+ * their views ({@code dcat:DataService}).
  */
 @RestController
 @RequestMapping("/api/v1/ldes-servers/{serverId}")
@@ -44,45 +44,53 @@ class DcatController {
     this.dcatUseCase = dcatUseCase;
   }
 
-  /**
-   * The combined catalog: server catalog, datasets and data services.
-   */
+  /** The combined catalog: server catalog, datasets and data services. */
   @GetMapping(value = "/dcat", produces = TURTLE)
   String catalog(@PathVariable UUID serverId) {
     return dcatUseCase.getCatalog(new InstanceId(serverId)).content();
   }
 
-  /**
-   * The catalog of the server itself, ready to edit.
-   */
+  /** The catalog of the server itself, ready to edit. */
   @GetMapping("/server-catalog")
   ServerCatalogWebModel serverCatalog(@PathVariable UUID serverId) {
     CatalogDescription catalog = dcatUseCase.getServerCatalog(new InstanceId(serverId));
     return new ServerCatalogWebModel(catalog.catalogId(), catalog.document().content());
   }
 
-  /**
-   * Creates or replaces the catalog of the server itself.
-   */
-  @PutMapping(value = "/server-catalog", consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
-  ServerCatalogWebModel saveServerCatalog(@PathVariable UUID serverId, @RequestBody String dcat,
+  /** Creates or replaces the catalog of the server itself. */
+  @PutMapping(
+      value = "/server-catalog",
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  ServerCatalogWebModel saveServerCatalog(
+      @PathVariable UUID serverId,
+      @RequestBody String dcat,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
-    String catalogId = dcatUseCase.saveServerCatalog(new InstanceId(serverId),
-        RdfMediaTypes.document(dcat, contentType));
+    String catalogId =
+        dcatUseCase.saveServerCatalog(
+            new InstanceId(serverId), RdfMediaTypes.document(dcat, contentType));
     return new ServerCatalogWebModel(catalogId, dcat);
   }
 
-  @PostMapping(value = "/dcat", consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  @PostMapping(
+      value = "/dcat",
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.CREATED)
-  void createServerCatalog(@PathVariable UUID serverId, @RequestBody String dcat,
+  void createServerCatalog(
+      @PathVariable UUID serverId,
+      @RequestBody String dcat,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     create(serverId, new ServerCatalog(null), dcat, contentType);
   }
 
-  @PutMapping(value = "/dcat/{catalogId}", consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  @PutMapping(
+      value = "/dcat/{catalogId}",
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  void updateServerCatalog(@PathVariable UUID serverId, @PathVariable String catalogId,
-      @RequestBody String dcat, @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+  void updateServerCatalog(
+      @PathVariable UUID serverId,
+      @PathVariable String catalogId,
+      @RequestBody String dcat,
+      @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     update(serverId, new ServerCatalog(catalogId), dcat, contentType);
   }
 
@@ -92,17 +100,27 @@ class DcatController {
     dcatUseCase.delete(new InstanceId(serverId), new ServerCatalog(catalogId));
   }
 
-  @PostMapping(value = STREAM_DCAT, consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  @PostMapping(
+      value = STREAM_DCAT,
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.CREATED)
-  void createDataset(@PathVariable UUID serverId, @PathVariable String collection,
-      @RequestBody String dcat, @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+  void createDataset(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
+      @RequestBody String dcat,
+      @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     create(serverId, new EventStreamDataset(collection), dcat, contentType);
   }
 
-  @PutMapping(value = STREAM_DCAT, consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  @PutMapping(
+      value = STREAM_DCAT,
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  void updateDataset(@PathVariable UUID serverId, @PathVariable String collection,
-      @RequestBody String dcat, @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+  void updateDataset(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
+      @RequestBody String dcat,
+      @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     update(serverId, new EventStreamDataset(collection), dcat, contentType);
   }
 
@@ -112,44 +130,50 @@ class DcatController {
     dcatUseCase.delete(new InstanceId(serverId), new EventStreamDataset(collection));
   }
 
-  @PostMapping(value = VIEW_DCAT, consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  @PostMapping(
+      value = VIEW_DCAT,
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.CREATED)
-  void createDataService(@PathVariable UUID serverId, @PathVariable String collection,
-      @PathVariable String view, @RequestBody String dcat,
+  void createDataService(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
+      @PathVariable String view,
+      @RequestBody String dcat,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     create(serverId, new ViewDataService(collection, view), dcat, contentType);
   }
 
-  @PutMapping(value = VIEW_DCAT, consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
+  @PutMapping(
+      value = VIEW_DCAT,
+      consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  void updateDataService(@PathVariable UUID serverId, @PathVariable String collection,
-      @PathVariable String view, @RequestBody String dcat,
+  void updateDataService(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
+      @PathVariable String view,
+      @RequestBody String dcat,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
     update(serverId, new ViewDataService(collection, view), dcat, contentType);
   }
 
   @DeleteMapping(VIEW_DCAT)
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  void deleteDataService(@PathVariable UUID serverId, @PathVariable String collection,
-      @PathVariable String view) {
+  void deleteDataService(
+      @PathVariable UUID serverId, @PathVariable String collection, @PathVariable String view) {
     dcatUseCase.delete(new InstanceId(serverId), new ViewDataService(collection, view));
   }
 
   /**
    * @param catalogId the id the server gave the catalog, {@code null} if it has none yet
-   * @param document  the catalog in Turtle
+   * @param document the catalog in Turtle
    */
-  record ServerCatalogWebModel(String catalogId, String document) {
-
-  }
+  record ServerCatalogWebModel(String catalogId, String document) {}
 
   private void create(UUID serverId, DcatTarget target, String dcat, String contentType) {
-    dcatUseCase.create(new InstanceId(serverId), target,
-        RdfMediaTypes.document(dcat, contentType));
+    dcatUseCase.create(new InstanceId(serverId), target, RdfMediaTypes.document(dcat, contentType));
   }
 
   private void update(UUID serverId, DcatTarget target, String dcat, String contentType) {
-    dcatUseCase.update(new InstanceId(serverId), target,
-        RdfMediaTypes.document(dcat, contentType));
+    dcatUseCase.update(new InstanceId(serverId), target, RdfMediaTypes.document(dcat, contentType));
   }
 }

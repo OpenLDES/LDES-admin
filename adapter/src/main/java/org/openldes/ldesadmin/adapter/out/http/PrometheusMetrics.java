@@ -27,16 +27,19 @@ public final class PrometheusMetrics {
 
   public static PrometheusMetrics parse(String exposition) {
     List<Sample> samples = new ArrayList<>();
-    exposition.lines()
+    exposition
+        .lines()
         .map(String::strip)
         .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-        .forEach(line -> {
-          Matcher matcher = SAMPLE.matcher(line);
-          if (matcher.matches()) {
-            samples.add(new Sample(matcher.group(1), labels(matcher.group(2)),
-                value(matcher.group(3))));
-          }
-        });
+        .forEach(
+            line -> {
+              Matcher matcher = SAMPLE.matcher(line);
+              if (matcher.matches()) {
+                samples.add(
+                    new Sample(
+                        matcher.group(1), labels(matcher.group(2)), value(matcher.group(3))));
+              }
+            });
     return new PrometheusMetrics(List.copyOf(samples));
   }
 

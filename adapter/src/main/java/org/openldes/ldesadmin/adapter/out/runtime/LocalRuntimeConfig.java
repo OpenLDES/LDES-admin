@@ -5,6 +5,4 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(LocalRuntimeProperties.class)
-class LocalRuntimeConfig {
-
-}
+class LocalRuntimeConfig {}

@@ -45,15 +45,16 @@ class RestHttpPollerTest {
 
   @Test
   void getsTheUrlWithTheHeadersOfTheComponent() {
-    mockServer.expect(requestTo(URL))
+    mockServer
+        .expect(requestTo(URL))
         .andExpect(method(HttpMethod.GET))
         .andExpect(header("X-API-KEY", "secret"))
         // Like LDIO: the server answers in the format it prefers
         .andExpect(headerDoesNotExist(HttpHeaders.ACCEPT))
         .andRespond(withSuccess("[{\"id\": 1}]", MediaType.APPLICATION_JSON));
 
-    PolledContent content = poller.poll(
-        new Poll(URI.create(URL), Map.of("X-API-KEY", "secret"), null));
+    PolledContent content =
+        poller.poll(new Poll(URI.create(URL), Map.of("X-API-KEY", "secret"), null));
 
     assertThat(content).isEqualTo(new PolledContent("application/json", "[{\"id\": 1}]"));
     mockServer.verify();
@@ -62,7 +63,8 @@ class RestHttpPollerTest {
   @Test
   void readsTheBodyInItsCharset() {
     MediaType latin1 = new MediaType("text", "csv", StandardCharsets.ISO_8859_1);
-    mockServer.expect(requestTo(URL))
+    mockServer
+        .expect(requestTo(URL))
         .andRespond(withSuccess("name\nCafé".getBytes(StandardCharsets.ISO_8859_1), latin1));
 
     assertThat(poller.poll(Poll.of(URI.create(URL))))
@@ -71,7 +73,8 @@ class RestHttpPollerTest {
 
   @Test
   void reportsAnErrorResponse() {
-    mockServer.expect(requestTo(URL))
+    mockServer
+        .expect(requestTo(URL))
         .andRespond(withStatus(HttpStatus.NOT_FOUND).body("No such dataset"));
 
     assertThatThrownBy(() -> poller.poll(Poll.of(URI.create(URL))))
@@ -90,8 +93,10 @@ class RestHttpPollerTest {
 
   @Test
   void refusesAResponseTooLargeForTheSandbox() {
-    mockServer.expect(requestTo(URL)).andRespond(withSuccess(
-        new byte[RestHttpPoller.MAX_BODY_SIZE + 1], MediaType.APPLICATION_JSON));
+    mockServer
+        .expect(requestTo(URL))
+        .andRespond(
+            withSuccess(new byte[RestHttpPoller.MAX_BODY_SIZE + 1], MediaType.APPLICATION_JSON));
 
     assertThatThrownBy(() -> poller.poll(Poll.of(URI.create(URL))))
         .isInstanceOf(PollException.class)
@@ -100,7 +105,8 @@ class RestHttpPollerTest {
 
   @Test
   void reportsAnUnreachableUrl() {
-    mockServer.expect(requestTo(URL))
+    mockServer
+        .expect(requestTo(URL))
         .andRespond(withException(new ConnectException("Connection refused")));
 
     assertThatThrownBy(() -> poller.poll(Poll.of(URI.create(URL))))
@@ -110,16 +116,23 @@ class RestHttpPollerTest {
 
   @Test
   void getsAnAccessTokenFirstWithClientCredentials() {
-    mockServer.expect(requestTo(TOKEN_ENDPOINT))
+    mockServer
+        .expect(requestTo(TOKEN_ENDPOINT))
         .andExpect(method(HttpMethod.POST))
-        .andExpect(content().formDataContains(Map.of(
-            "grant_type", "client_credentials",
-            "client_id", "ldes-admin",
-            "client_secret", "s3cr3t",
-            "scope", "read")))
-        .andRespond(withSuccess("{\"access_token\": \"t0k3n\", \"token_type\": \"Bearer\"}",
-            MediaType.APPLICATION_JSON));
-    mockServer.expect(requestTo(URL))
+        .andExpect(
+            content()
+                .formDataContains(
+                    Map.of(
+                        "grant_type", "client_credentials",
+                        "client_id", "ldes-admin",
+                        "client_secret", "s3cr3t",
+                        "scope", "read")))
+        .andRespond(
+            withSuccess(
+                "{\"access_token\": \"t0k3n\", \"token_type\": \"Bearer\"}",
+                MediaType.APPLICATION_JSON));
+    mockServer
+        .expect(requestTo(URL))
         .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer t0k3n"))
         .andRespond(withSuccess("<a> <b> <c> .", MediaType.valueOf("text/turtle")));
 
@@ -131,13 +144,11 @@ class RestHttpPollerTest {
 
   @Test
   void reportsThatNoAccessTokenWasGranted() {
-    mockServer.expect(requestTo(TOKEN_ENDPOINT))
-        .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+    mockServer.expect(requestTo(TOKEN_ENDPOINT)).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
     assertThatThrownBy(() -> poller.poll(new Poll(URI.create(URL), Map.of(), credentials())))
         .isInstanceOf(PollException.class)
-        .hasMessage("Could not get an access token from " + TOKEN_ENDPOINT
-            + ": 401 UNAUTHORIZED");
+        .hasMessage("Could not get an access token from " + TOKEN_ENDPOINT + ": 401 UNAUTHORIZED");
   }
 
   private static ClientCredentials credentials() {

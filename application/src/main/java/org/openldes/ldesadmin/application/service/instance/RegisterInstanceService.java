@@ -15,8 +15,8 @@ public class RegisterInstanceService implements RegisterInstanceUseCase {
   private final ActivityRecorder activity;
   private final Clock clock;
 
-  public RegisterInstanceService(InstanceRepository instanceRepository, ActivityRecorder activity,
-      Clock clock) {
+  public RegisterInstanceService(
+      InstanceRepository instanceRepository, ActivityRecorder activity, Clock clock) {
     this.instanceRepository = instanceRepository;
     this.activity = activity;
     this.clock = clock;
@@ -24,8 +24,9 @@ public class RegisterInstanceService implements RegisterInstanceUseCase {
 
   @Override
   public Instance register(RegisterInstanceCommand command) {
-    Instance instance = Instance.register(command.type(), command.name(), command.url(),
-        command.sandbox(), clock.instant());
+    Instance instance =
+        Instance.register(
+            command.type(), command.name(), command.url(), command.sandbox(), clock.instant());
     if (instanceRepository.existsByTypeAndUrl(instance.type(), instance.url())) {
       throw new InstanceAlreadyRegisteredException(instance.type(), instance.url());
     }

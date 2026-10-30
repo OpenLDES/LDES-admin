@@ -40,18 +40,12 @@ class SandboxServiceTest {
   private static final URI EVENT_STREAM_FOR_LDIO =
       URI.create("http://sandbox-ldes-server:8080/sandbox-parcels");
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private StartLocalInstanceUseCase startLocalInstance;
-  @Mock
-  private UnregisterInstanceUseCase unregisterInstance;
-  @Mock
-  private EventStreamUseCase eventStreams;
-  @Mock
-  private ViewUseCase views;
-  @Mock
-  private PipelineUseCase pipelines;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private StartLocalInstanceUseCase startLocalInstance;
+  @Mock private UnregisterInstanceUseCase unregisterInstance;
+  @Mock private EventStreamUseCase eventStreams;
+  @Mock private ViewUseCase views;
+  @Mock private PipelineUseCase pipelines;
 
   private final Instance server = TestFixtures.localLdesServer();
   private final Instance ldio = TestFixtures.localLdio();
@@ -59,14 +53,25 @@ class SandboxServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new SandboxService(instanceRepository, startLocalInstance, unregisterInstance,
-        eventStreams, views, pipelines);
+    service =
+        new SandboxService(
+            instanceRepository,
+            startLocalInstance,
+            unregisterInstance,
+            eventStreams,
+            views,
+            pipelines);
   }
 
   @Test
   void findsTheLocalSandboxInstances() {
-    Instance registered = Instance.register(InstanceType.LDES_SERVER, Sandbox.LDES_SERVER_NAME,
-        URI.create("http://ldes.example.org"), true, TestFixtures.NOW);
+    Instance registered =
+        Instance.register(
+            InstanceType.LDES_SERVER,
+            Sandbox.LDES_SERVER_NAME,
+            URI.create("http://ldes.example.org"),
+            true,
+            TestFixtures.NOW);
     when(instanceRepository.findByType(InstanceType.LDES_SERVER))
         .thenReturn(List.of(registered, server));
     when(instanceRepository.findByType(InstanceType.LDIO)).thenReturn(List.of());
@@ -80,35 +85,63 @@ class SandboxServiceTest {
   @Test
   void startsBothInstancesAndPreparesThem() {
     givenNothingRuns();
-    when(startLocalInstance.start(new StartLocalInstanceCommand(InstanceType.LDES_SERVER,
-        Sandbox.LDES_SERVER_NAME, true))).thenReturn(server);
-    when(startLocalInstance.start(new StartLocalInstanceCommand(InstanceType.LDIO,
-        Sandbox.LDIO_NAME, true))).thenReturn(ldio);
+    when(startLocalInstance.start(
+            new StartLocalInstanceCommand(
+                InstanceType.LDES_SERVER, Sandbox.LDES_SERVER_NAME, true)))
+        .thenReturn(server);
+    when(startLocalInstance.start(
+            new StartLocalInstanceCommand(InstanceType.LDIO, Sandbox.LDIO_NAME, true)))
+        .thenReturn(ldio);
     when(eventStreams.list(server.id())).thenReturn(List.of());
     when(pipelines.list(ldio.id())).thenReturn(List.of());
 
     Sandbox sandbox = service.start();
 
     assertThat(sandbox.state()).isEqualTo(Sandbox.State.RUNNING);
-    verify(eventStreams).create(eq(server.id()), argThat(definition ->
-        definition.content().contains("@prefix server:  <http://sandbox-ldes-server:8080/>")
-            && definition.content().contains("server:sandbox-parcels a ldes:EventStream")));
-    verify(views).create(eq(server.id()), eq(Sandbox.EVENT_STREAM),
-        argThat(definition -> definition.content().contains("server:by-page")));
-    verify(views).create(eq(server.id()), eq(Sandbox.EVENT_STREAM),
-        argThat(definition -> definition.content().contains("server:by-time")
-            && definition.content().contains("tree:HierarchicalTimeBasedFragmentation")));
+    verify(eventStreams)
+        .create(
+            eq(server.id()),
+            argThat(
+                definition ->
+                    definition
+                            .content()
+                            .contains("@prefix server:  <http://sandbox-ldes-server:8080/>")
+                        && definition
+                            .content()
+                            .contains("server:sandbox-parcels a ldes:EventStream")));
+    verify(views)
+        .create(
+            eq(server.id()),
+            eq(Sandbox.EVENT_STREAM),
+            argThat(definition -> definition.content().contains("server:by-page")));
+    verify(views)
+        .create(
+            eq(server.id()),
+            eq(Sandbox.EVENT_STREAM),
+            argThat(
+                definition ->
+                    definition.content().contains("server:by-time")
+                        && definition
+                            .content()
+                            .contains("tree:HierarchicalTimeBasedFragmentation")));
     verify(pipelines).create(ldio.id(), SandboxDefinitions.ingestPipeline(EVENT_STREAM_FOR_LDIO));
   }
 
   @Test
   void leavesWhatIsAlreadyPreparedAlone() {
     givenRunning(server, ldio);
-    when(eventStreams.list(server.id())).thenReturn(List.of(new EventStream(
-        Sandbox.EVENT_STREAM, null, null, false, List.of(), RdfDocument.turtle(""))));
-    when(pipelines.list(ldio.id())).thenReturn(List.of(new DeployedPipeline(
-        SandboxDefinitions.ingestPipeline(EVENT_STREAM_FOR_LDIO), PipelineStatus.RUNNING,
-        StatusChangeSource.AUTO)));
+    when(eventStreams.list(server.id()))
+        .thenReturn(
+            List.of(
+                new EventStream(
+                    Sandbox.EVENT_STREAM, null, null, false, List.of(), RdfDocument.turtle(""))));
+    when(pipelines.list(ldio.id()))
+        .thenReturn(
+            List.of(
+                new DeployedPipeline(
+                    SandboxDefinitions.ingestPipeline(EVENT_STREAM_FOR_LDIO),
+                    PipelineStatus.RUNNING,
+                    StatusChangeSource.AUTO)));
 
     service.start();
 
@@ -122,11 +155,19 @@ class SandboxServiceTest {
   @Test
   void redeploysAnIngestPipelineThatFeedsAnotherServer() {
     givenRunning(server, ldio);
-    when(eventStreams.list(server.id())).thenReturn(List.of(new EventStream(
-        Sandbox.EVENT_STREAM, null, null, false, List.of(), RdfDocument.turtle(""))));
-    when(pipelines.list(ldio.id())).thenReturn(List.of(new DeployedPipeline(
-        SandboxDefinitions.ingestPipeline(URI.create("http://sandbox-ldes-server-2:8080/x")),
-        PipelineStatus.RUNNING, StatusChangeSource.AUTO)));
+    when(eventStreams.list(server.id()))
+        .thenReturn(
+            List.of(
+                new EventStream(
+                    Sandbox.EVENT_STREAM, null, null, false, List.of(), RdfDocument.turtle(""))));
+    when(pipelines.list(ldio.id()))
+        .thenReturn(
+            List.of(
+                new DeployedPipeline(
+                    SandboxDefinitions.ingestPipeline(
+                        URI.create("http://sandbox-ldes-server-2:8080/x")),
+                    PipelineStatus.RUNNING,
+                    StatusChangeSource.AUTO)));
 
     service.start();
 
@@ -136,8 +177,7 @@ class SandboxServiceTest {
   @Test
   void reportsAnInstanceThatDoesNotStart() {
     givenRunning(server, null);
-    when(startLocalInstance.start(any()))
-        .thenThrow(new LocalRuntimeException("No Docker", null));
+    when(startLocalInstance.start(any())).thenThrow(new LocalRuntimeException("No Docker", null));
 
     assertThatThrownBy(() -> service.start()).isInstanceOf(LocalRuntimeException.class);
     verify(eventStreams, never()).create(any(), any());

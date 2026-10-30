@@ -7,13 +7,12 @@ import org.openldes.ldesadmin.model.sandbox.RunOptions;
 
 /**
  * Runs a pipeline in the sandbox, on the LDI components LDIO runs, and shows what every component
- * did: the input as it is received, what the adapter and every transformer made of it, and what
- * the outputs send (or would send, in a dry run).
+ * did: the input as it is received, what the adapter and every transformer made of it, and what the
+ * outputs send (or would send, in a dry run).
  *
- * <p>Running a pipeline fetches what its components fetch (JSON-LD contexts, SPARQL
- * {@code SERVICE} calls, the HTTP enricher), and executing its outputs sends what they make
- * wherever they point: the API must be secured wherever LDES-admin reaches what its users should
- * not.
+ * <p>Running a pipeline fetches what its components fetch (JSON-LD contexts, SPARQL {@code SERVICE}
+ * calls, the HTTP enricher), and executing its outputs sends what they make wherever they point:
+ * the API must be secured wherever LDES-admin reaches what its users should not.
  */
 public interface RunPipelineUseCase {
 

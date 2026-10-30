@@ -33,8 +33,10 @@ final class HttpEnricher {
   private final PropertyExtractor httpMethod;
 
   HttpEnricher(LdioConfig config) {
-    this.adapter = Adapters.create(config.property("adapter.name"),
-        config.nestedConfig("adapter.config", config.property("adapter.name")));
+    this.adapter =
+        Adapters.create(
+            config.property("adapter.name"),
+            config.nestedConfig("adapter.config", config.property("adapter.name")));
     this.requestExecutor = RequestExecutors.create(config);
     this.url = PropertyPathExtractor.from(config.property("url-property-path"));
     this.body = extractor(config, "body-property-path");
@@ -56,17 +58,24 @@ final class HttpEnricher {
   }
 
   private Request request(Model model) {
-    String target = first(url, model).orElseThrow(() ->
-        new IllegalArgumentException("No url found on the defined property path."));
-    RequestHeaders requestHeaders = new RequestHeaders(headers.getProperties(model).stream()
-        .map(RDFNode::toString)
-        .map(RequestHeader::from)
-        .toList());
+    String target =
+        first(url, model)
+            .orElseThrow(
+                () -> new IllegalArgumentException("No url found on the defined property path."));
+    RequestHeaders requestHeaders =
+        new RequestHeaders(
+            headers.getProperties(model).stream()
+                .map(RDFNode::toString)
+                .map(RequestHeader::from)
+                .toList());
     String method = first(httpMethod, model).map(String::toUpperCase).orElse("GET");
     return switch (method) {
       case "GET" -> new GetRequest(target, requestHeaders);
-      case "POST" -> new PostRequest(target, requestHeaders,
-          StringEscapeUtils.unescapeJava(first(body, model).orElse(null)));
+      case "POST" ->
+          new PostRequest(
+              target,
+              requestHeaders,
+              StringEscapeUtils.unescapeJava(first(body, model).orElse(null)));
       default -> throw new IllegalStateException("Http method not supported: " + method);
     };
   }
@@ -76,14 +85,16 @@ final class HttpEnricher {
   }
 
   private static String mimeType(Response response) {
-    return response.getFirstHeaderValue("Content-Type")
+    return response
+        .getFirstHeaderValue("Content-Type")
         .map(ContentType::parse)
         .map(ContentType::getMimeType)
         .orElse(ContentType.TEXT_PLAIN.getMimeType());
   }
 
   private static PropertyExtractor extractor(LdioConfig config, String key) {
-    return config.optional(key)
+    return config
+        .optional(key)
         .map(PropertyPathExtractor::from)
         .map(PropertyExtractor.class::cast)
         .orElseGet(EmptyPropertyExtractor::new);

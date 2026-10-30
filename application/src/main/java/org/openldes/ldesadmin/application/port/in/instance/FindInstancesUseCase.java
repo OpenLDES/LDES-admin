@@ -7,9 +7,7 @@ import org.openldes.ldesadmin.model.instance.InstanceType;
 
 public interface FindInstancesUseCase {
 
-  /**
-   * All instances of the given type, ordered by name.
-   */
+  /** All instances of the given type, ordered by name. */
   List<Instance> findAll(InstanceType type);
 
   /**

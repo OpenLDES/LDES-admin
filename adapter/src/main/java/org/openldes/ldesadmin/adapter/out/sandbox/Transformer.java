@@ -31,21 +31,26 @@ interface Transformer {
 
   static Transformer create(String name, LdioConfig config) {
     return switch (name) {
-      case "Ldio:SparqlConstructTransformer" -> new SparqlConstruct(query(config),
-          config.optionalBoolean("infer").orElse(false))::transform;
+      case "Ldio:SparqlConstructTransformer" ->
+          new SparqlConstruct(query(config), config.optionalBoolean("infer").orElse(false))
+              ::transform;
       case "Ldio:VersionObjectCreator" -> {
         VersionObjectCreator creator = versionObjectCreator(config);
         yield model -> List.of(creator.transform(model));
       }
       case "Ldio:VersionMaterialiser" -> {
-        var materialiser = new VersionMaterialiser(ModelFactory.createDefaultModel()
-            .createProperty(config.optional("versionOf-property").orElse(DCTERMS_IS_VERSION_OF)),
-            config.optionalBoolean("restrict-to-members").orElse(false));
+        var materialiser =
+            new VersionMaterialiser(
+                ModelFactory.createDefaultModel()
+                    .createProperty(
+                        config.optional("versionOf-property").orElse(DCTERMS_IS_VERSION_OF)),
+                config.optionalBoolean("restrict-to-members").orElse(false));
         yield model -> List.of(materialiser.transform(model));
       }
       case "Ldio:GeoJsonToWktTransformer" -> {
-        var transformer = new GeoJsonToWktTransformer(
-            config.optionalBoolean("transform-to-rdf+wkt-enabled").orElse(false));
+        var transformer =
+            new GeoJsonToWktTransformer(
+                config.optionalBoolean("transform-to-rdf+wkt-enabled").orElse(false));
         yield model -> List.of(transformer.transform(model));
       }
       case "Ldio:SkolemisationTransformer" -> {
@@ -79,16 +84,19 @@ interface Transformer {
     if (memberTypes.stream().allMatch(String::isBlank)) {
       throw new ComponentException(config.component() + " needs 'member-type'");
     }
-    PropertyExtractor dateObserved = config.optional("date-observed-property")
-        .map(PropertyPathExtractor::from)
-        .map(PropertyExtractor.class::cast)
-        .orElseGet(EmptyPropertyExtractor::new);
+    PropertyExtractor dateObserved =
+        config
+            .optional("date-observed-property")
+            .map(PropertyPathExtractor::from)
+            .map(PropertyExtractor.class::cast)
+            .orElseGet(EmptyPropertyExtractor::new);
     List<Resource> types = memberTypes.stream().map(model::createResource).toList();
-    return new VersionObjectCreator(dateObserved, types,
+    return new VersionObjectCreator(
+        dateObserved,
+        types,
         config.optional("delimiter").orElse("/"),
-        model.createProperty(config.optional("generatedAt-property")
-            .orElse(PROV_GENERATED_AT_TIME)),
-        model.createProperty(config.optional("versionOf-property")
-            .orElse(DCTERMS_IS_VERSION_OF)));
+        model.createProperty(
+            config.optional("generatedAt-property").orElse(PROV_GENERATED_AT_TIME)),
+        model.createProperty(config.optional("versionOf-property").orElse(DCTERMS_IS_VERSION_OF)));
   }
 }

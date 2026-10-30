@@ -25,8 +25,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * Runs local LDES servers and LDIOs as Docker containers, using the Testcontainers API.
  *
  * <p>All local instances join one Docker network, on a host name derived from their name, e.g.
- * {@code http://sandbox-ldes-server:8080}. LDES servers publish their IRIs on that host name, so
- * an LDIO can follow the links in the pages it fetches.
+ * {@code http://sandbox-ldes-server:8080}. LDES servers publish their IRIs on that host name, so an
+ * LDIO can follow the links in the pages it fetches.
  *
  * <p>Local instances are meant for experimenting: Testcontainers removes them when LDES-admin
  * stops.
@@ -53,14 +53,15 @@ public class DockerLocalInstanceRuntime implements LocalInstanceRuntime {
     log.info("Starting local {} '{}' as {}", type.label(), name, alias);
     LocalDeployment deployment;
     try {
-      deployment = switch (type) {
-        case LDES_SERVER -> startLdesServer(alias);
-        case LDIO -> startLdio(alias);
-      };
+      deployment =
+          switch (type) {
+            case LDES_SERVER -> startLdesServer(alias);
+            case LDIO -> startLdio(alias);
+          };
     } catch (RuntimeException e) {
       releaseAlias(alias);
-      throw new LocalRuntimeException("Could not start a local %s: %s".formatted(type.label(),
-          e.getMessage()), e);
+      throw new LocalRuntimeException(
+          "Could not start a local %s: %s".formatted(type.label(), e.getMessage()), e);
     }
     deployments.put(deployment.reference(), deployment);
     return new LocalRuntimeHandle(deployment.url(), internalUrl(alias), deployment.reference());
@@ -94,42 +95,50 @@ public class DockerLocalInstanceRuntime implements LocalInstanceRuntime {
 
   private LocalDeployment startLdesServer(String alias) {
     String postgresAlias = alias + "-postgres";
-    PostgreSQLContainer postgres = new PostgreSQLContainer(properties.postgresImage())
-        .withNetwork(network)
-        .withNetworkAliases(postgresAlias);
-    GenericContainer<?> server = new GenericContainer<>(properties.ldesServerImage())
-        .withNetwork(network)
-        .withNetworkAliases(alias)
-        .withExposedPorts(HTTP_PORT)
-        .withEnv("SPRING_DATASOURCE_URL",
-            "jdbc:postgresql://%s:5432/%s".formatted(postgresAlias, postgres.getDatabaseName()))
-        .withEnv("SPRING_DATASOURCE_USERNAME", postgres.getUsername())
-        .withEnv("SPRING_DATASOURCE_PASSWORD", postgres.getPassword())
-        .withEnv("SPRING_BATCH_JDBC_INITIALIZESCHEMA", "always")
-        // LDES clients need absolute IRIs, on a host name the other local instances resolve
-        .withEnv("LDESSERVER_HOSTNAME", internalUrl(alias).toString())
-        .withEnv("LDESSERVER_FRAGMENTATIONCRON", properties.fragmentationCron())
-        .withEnv("MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,prometheus")
-        .withEnv("MANAGEMENT_TRACING_ENABLED", "false")
-        .dependsOn(postgres)
-        .waitingFor(Wait.forHttp("/actuator/health").forStatusCode(200)
-            .withStartupTimeout(properties.startupTimeout()));
+    PostgreSQLContainer postgres =
+        new PostgreSQLContainer(properties.postgresImage())
+            .withNetwork(network)
+            .withNetworkAliases(postgresAlias);
+    GenericContainer<?> server =
+        new GenericContainer<>(properties.ldesServerImage())
+            .withNetwork(network)
+            .withNetworkAliases(alias)
+            .withExposedPorts(HTTP_PORT)
+            .withEnv(
+                "SPRING_DATASOURCE_URL",
+                "jdbc:postgresql://%s:5432/%s".formatted(postgresAlias, postgres.getDatabaseName()))
+            .withEnv("SPRING_DATASOURCE_USERNAME", postgres.getUsername())
+            .withEnv("SPRING_DATASOURCE_PASSWORD", postgres.getPassword())
+            .withEnv("SPRING_BATCH_JDBC_INITIALIZESCHEMA", "always")
+            // LDES clients need absolute IRIs, on a host name the other local instances resolve
+            .withEnv("LDESSERVER_HOSTNAME", internalUrl(alias).toString())
+            .withEnv("LDESSERVER_FRAGMENTATIONCRON", properties.fragmentationCron())
+            .withEnv("MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,prometheus")
+            .withEnv("MANAGEMENT_TRACING_ENABLED", "false")
+            .dependsOn(postgres)
+            .waitingFor(
+                Wait.forHttp("/actuator/health")
+                    .forStatusCode(200)
+                    .withStartupTimeout(properties.startupTimeout()));
     return start(alias, server, List.of(postgres));
   }
 
   private LocalDeployment startLdio(String alias) {
-    GenericContainer<?> ldio = new GenericContainer<>(properties.ldioImage())
-        .withNetwork(network)
-        .withNetworkAliases(alias)
-        .withExposedPorts(HTTP_PORT)
-        .withEnv("MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,prometheus")
-        .waitingFor(Wait.forHttp("/admin/api/v1/pipeline").forStatusCode(200)
-            .withStartupTimeout(properties.startupTimeout()));
+    GenericContainer<?> ldio =
+        new GenericContainer<>(properties.ldioImage())
+            .withNetwork(network)
+            .withNetworkAliases(alias)
+            .withExposedPorts(HTTP_PORT)
+            .withEnv("MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,prometheus")
+            .waitingFor(
+                Wait.forHttp("/admin/api/v1/pipeline")
+                    .forStatusCode(200)
+                    .withStartupTimeout(properties.startupTimeout()));
     return start(alias, ldio, List.of());
   }
 
-  private static LocalDeployment start(String alias, GenericContainer<?> main,
-      List<Startable> dependencies) {
+  private static LocalDeployment start(
+      String alias, GenericContainer<?> main, List<Startable> dependencies) {
     try {
       main.start();
     } catch (RuntimeException e) {
@@ -163,10 +172,10 @@ public class DockerLocalInstanceRuntime implements LocalInstanceRuntime {
 
   static String slug(String name) {
     String ascii = Normalizer.normalize(name, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-    String slug = ascii.toLowerCase(Locale.ROOT)
-        .replaceAll("[^a-z0-9]+", "-")
-        .replaceAll("^-+|-+$", "");
-    return slug.length() <= MAX_ALIAS_LENGTH ? slug
+    String slug =
+        ascii.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+    return slug.length() <= MAX_ALIAS_LENGTH
+        ? slug
         : slug.substring(0, MAX_ALIAS_LENGTH).replaceAll("-+$", "");
   }
 
@@ -174,8 +183,12 @@ public class DockerLocalInstanceRuntime implements LocalInstanceRuntime {
     return URI.create("http://%s:%d".formatted(alias, HTTP_PORT));
   }
 
-  private record LocalDeployment(String reference, String alias, URI url,
-                                 GenericContainer<?> main, List<Startable> dependencies) {
+  private record LocalDeployment(
+      String reference,
+      String alias,
+      URI url,
+      GenericContainer<?> main,
+      List<Startable> dependencies) {
 
     void stop() {
       main.stop();

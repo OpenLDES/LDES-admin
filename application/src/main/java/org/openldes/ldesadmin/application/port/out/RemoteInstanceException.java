@@ -1,8 +1,6 @@
 package org.openldes.ldesadmin.application.port.out;
 
-/**
- * An LDES server or LDIO could not fulfil a request made by an outbound adapter.
- */
+/** An LDES server or LDIO could not fulfil a request made by an outbound adapter. */
 public class RemoteInstanceException extends RuntimeException {
 
   public enum Reason {

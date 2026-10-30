@@ -46,15 +46,17 @@ public class InstanceMonitorService implements MonitorInstancesUseCase {
   private final ActivityRecorder activity;
   private final Clock clock;
 
-  /**
-   * The health of every instance at the previous check, to notice when it changes.
-   */
+  /** The health of every instance at the previous check, to notice when it changes. */
   private final Map<InstanceId, HealthStatus> lastStatus = new ConcurrentHashMap<>();
 
-  public InstanceMonitorService(InstanceRepository instanceRepository,
-      InstanceHealthProbe instanceHealthProbe, LdesServerClient ldesServerClient,
-      IngestSampleRepository ingestSamples, LocalInstanceRuntime localInstanceRuntime,
-      ActivityRecorder activity, Clock clock) {
+  public InstanceMonitorService(
+      InstanceRepository instanceRepository,
+      InstanceHealthProbe instanceHealthProbe,
+      LdesServerClient ldesServerClient,
+      IngestSampleRepository ingestSamples,
+      LocalInstanceRuntime localInstanceRuntime,
+      ActivityRecorder activity,
+      Clock clock) {
     this.instanceRepository = instanceRepository;
     this.instanceHealthProbe = instanceHealthProbe;
     this.ldesServerClient = ldesServerClient;
@@ -81,7 +83,10 @@ public class InstanceMonitorService implements MonitorInstancesUseCase {
     for (Instance instance : allInstances()) {
       if (instance.isLocal() && hasStopped(instance)) {
         instanceRepository.deleteById(instance.id());
-        activity.record(instance, Severity.INFO, "Local " + instance.type().label() + " removed",
+        activity.record(
+            instance,
+            Severity.INFO,
+            "Local " + instance.type().label() + " removed",
             "It stopped together with the LDES-admin run that started it");
         removed++;
       }
@@ -101,13 +106,14 @@ public class InstanceMonitorService implements MonitorInstancesUseCase {
     }
   }
 
-  /**
-   * Only records changes: an instance that is already down when LDES-admin starts is not news.
-   */
+  /** Only records changes: an instance that is already down when LDES-admin starts is not news. */
   private void recordChange(Instance instance, HealthStatus previous, HealthStatus current) {
     String label = instance.type().label();
     if (previous == HealthStatus.UP && current != HealthStatus.UP) {
-      activity.record(instance, Severity.ERROR, label + " is down",
+      activity.record(
+          instance,
+          Severity.ERROR,
+          label + " is down",
           "It no longer responds healthy on " + instance.url());
     } else if (previous != null && previous != HealthStatus.UP && current == HealthStatus.UP) {
       activity.success(instance, label + " is up again");
@@ -115,9 +121,10 @@ public class InstanceMonitorService implements MonitorInstancesUseCase {
   }
 
   private void sampleIngestedMembers(Instance server) {
-    long ingested = ldesServerClient.getStatistics(server).stream()
-        .mapToLong(StreamStatistics::ingestedMembers)
-        .sum();
+    long ingested =
+        ldesServerClient.getStatistics(server).stream()
+            .mapToLong(StreamStatistics::ingestedMembers)
+            .sum();
     ingestSamples.save(new IngestSample(server.id(), clock.instant(), ingested));
   }
 

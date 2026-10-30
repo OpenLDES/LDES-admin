@@ -27,19 +27,20 @@ import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 @ExtendWith(MockitoExtension.class)
 class UnregisterInstanceServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private LocalInstanceRuntime localInstanceRuntime;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private LocalInstanceRuntime localInstanceRuntime;
+  @Mock private ActivityRecorder activity;
 
   private UnregisterInstanceService service;
 
   @BeforeEach
   void setUp() {
-    service = new UnregisterInstanceService(new InstanceLookup(instanceRepository),
-        instanceRepository, localInstanceRuntime, activity);
+    service =
+        new UnregisterInstanceService(
+            new InstanceLookup(instanceRepository),
+            instanceRepository,
+            localInstanceRuntime,
+            activity);
   }
 
   @Test

@@ -10,8 +10,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Lets LDES-admin keep an eye on the instances while nobody is looking: it samples the
- * throughput of the LDES servers and notices instances going down.
+ * Lets LDES-admin keep an eye on the instances while nobody is looking: it samples the throughput
+ * of the LDES servers and notices instances going down.
  */
 @Component
 @ConditionalOnBooleanProperty(name = "ldes-admin.monitor.enabled", matchIfMissing = true)
@@ -25,9 +25,7 @@ class InstanceMonitorScheduler {
     this.monitorInstancesUseCase = monitorInstancesUseCase;
   }
 
-  /**
-   * Local instances stopped with the previous run of LDES-admin.
-   */
+  /** Local instances stopped with the previous run of LDES-admin. */
   @EventListener(ApplicationReadyEvent.class)
   void removeStoppedLocalInstances() {
     int removed = monitorInstancesUseCase.removeStoppedLocalInstances();
@@ -36,7 +34,8 @@ class InstanceMonitorScheduler {
     }
   }
 
-  @Scheduled(initialDelayString = "${ldes-admin.monitor.initial-delay:PT10S}",
+  @Scheduled(
+      initialDelayString = "${ldes-admin.monitor.initial-delay:PT10S}",
       fixedDelayString = "${ldes-admin.monitor.interval:PT1M}")
   void monitor() {
     try {

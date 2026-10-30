@@ -13,8 +13,8 @@ public class CheckInstanceHealthService implements CheckInstanceHealthUseCase {
   private final InstanceLookup instanceLookup;
   private final InstanceHealthProbe instanceHealthProbe;
 
-  public CheckInstanceHealthService(InstanceLookup instanceLookup,
-      InstanceHealthProbe instanceHealthProbe) {
+  public CheckInstanceHealthService(
+      InstanceLookup instanceLookup, InstanceHealthProbe instanceHealthProbe) {
     this.instanceLookup = instanceLookup;
     this.instanceHealthProbe = instanceHealthProbe;
   }

@@ -29,13 +29,15 @@ class ActuatorHealthProbeTest {
   void setUp() {
     RestClient.Builder builder = RestClient.builder();
     mockServer = MockRestServiceServer.bindTo(builder).build();
-    probe = new ActuatorHealthProbe(new InstanceRestClients(builder),
-        Clock.fixed(AdapterFixtures.NOW, ZoneOffset.UTC));
+    probe =
+        new ActuatorHealthProbe(
+            new InstanceRestClients(builder), Clock.fixed(AdapterFixtures.NOW, ZoneOffset.UTC));
   }
 
   @Test
   void isUpWhenTheActuatorSaysSo() {
-    mockServer.expect(requestTo("http://ldes.example.org/actuator/health"))
+    mockServer
+        .expect(requestTo("http://ldes.example.org/actuator/health"))
         .andRespond(withSuccess("{\"status\":\"UP\"}", MediaType.APPLICATION_JSON));
 
     InstanceHealth health = probe.check(AdapterFixtures.ldesServer());
@@ -45,7 +47,8 @@ class ActuatorHealthProbeTest {
 
   @Test
   void isDownWhenTheActuatorReportsServiceUnavailable() {
-    mockServer.expect(requestTo("http://ldes.example.org/actuator/health"))
+    mockServer
+        .expect(requestTo("http://ldes.example.org/actuator/health"))
         .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
 
     assertThat(probe.check(AdapterFixtures.ldesServer()).status()).isEqualTo(HealthStatus.DOWN);
@@ -53,9 +56,11 @@ class ActuatorHealthProbeTest {
 
   @Test
   void fallsBackToTheAdminApiWithoutActuator() {
-    mockServer.expect(requestTo("http://ldio.example.org/actuator/health"))
+    mockServer
+        .expect(requestTo("http://ldio.example.org/actuator/health"))
         .andRespond(withStatus(HttpStatus.NOT_FOUND));
-    mockServer.expect(requestTo("http://ldio.example.org/admin/api/v1/pipeline"))
+    mockServer
+        .expect(requestTo("http://ldio.example.org/admin/api/v1/pipeline"))
         .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
     assertThat(probe.check(AdapterFixtures.ldio()).status()).isEqualTo(HealthStatus.UP);
@@ -63,7 +68,8 @@ class ActuatorHealthProbeTest {
 
   @Test
   void isDownWhenUnreachable() {
-    mockServer.expect(requestTo("http://ldio.example.org/actuator/health"))
+    mockServer
+        .expect(requestTo("http://ldio.example.org/actuator/health"))
         .andRespond(withException(new ConnectException("Connection refused")));
 
     assertThat(probe.check(AdapterFixtures.ldio()).status()).isEqualTo(HealthStatus.DOWN);

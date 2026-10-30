@@ -6,13 +6,13 @@ import java.util.Objects;
 /**
  * What one component of a pipeline did in a sandbox run.
  *
- * @param index       position among the components of the same kind
- * @param component   e.g. {@code Ldio:VersionObjectCreator}
- * @param summary     what it did, in a sentence
- * @param outputs     what it made: one entry per model (adapters and transformers can make
- *                    several), or the serialisation an output sends; empty when it made nothing
+ * @param index position among the components of the same kind
+ * @param component e.g. {@code Ldio:VersionObjectCreator}
+ * @param summary what it did, in a sentence
+ * @param outputs what it made: one entry per model (adapters and transformers can make several), or
+ *     the serialisation an output sends; empty when it made nothing
  * @param contentType of the outputs, e.g. {@code text/turtle}, so they can be converted
- * @param durationMs  how long it took, for all models together
+ * @param durationMs how long it took, for all models together
  */
 public record StepResult(
     Kind kind,
@@ -26,7 +26,10 @@ public record StepResult(
     long durationMs) {
 
   public enum Kind {
-    INPUT, ADAPTER, TRANSFORMER, OUTPUT
+    INPUT,
+    ADAPTER,
+    TRANSFORMER,
+    OUTPUT
   }
 
   public enum Status {
@@ -39,7 +42,9 @@ public record StepResult(
 
   /** How the outputs are written, so they can be shown with the right highlighting */
   public enum Format {
-    TURTLE, JSON, TEXT
+    TURTLE,
+    JSON,
+    TEXT
   }
 
   public StepResult {

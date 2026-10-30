@@ -11,13 +11,10 @@ import org.apache.jena.riot.RDFParserRegistry;
 import org.apache.jena.riot.RiotException;
 import org.openldes.ldesadmin.application.port.out.sandbox.ComponentException;
 
-/**
- * Models as the steps of a run pass them on: Turtle, with the prefixes of the model.
- */
+/** Models as the steps of a run pass them on: Turtle, with the prefixes of the model. */
 final class Rdf {
 
-  private Rdf() {
-  }
+  private Rdf() {}
 
   static Model fromTurtle(String turtle) {
     return parse(turtle, Lang.TURTLE);
@@ -29,9 +26,7 @@ final class Rdf {
     return writer.toString();
   }
 
-  /**
-   * Linked data in the RDF format of its content type, e.g. a member an LDES client receives.
-   */
+  /** Linked data in the RDF format of its content type, e.g. a member an LDES client receives. */
   static Model parse(String content, String contentType) {
     Lang lang = RDFLanguages.contentTypeToLang(contentType.split(";")[0].strip());
     if (lang == null || !RDFParserRegistry.isRegistered(lang)) {
@@ -44,8 +39,8 @@ final class Rdf {
     try {
       return RDFParser.fromString(content, lang).toModel();
     } catch (RiotException e) {
-      throw new ComponentException("Not valid %s: %s".formatted(lang.getLabel(), e.getMessage()),
-          e);
+      throw new ComponentException(
+          "Not valid %s: %s".formatted(lang.getLabel(), e.getMessage()), e);
     }
   }
 }

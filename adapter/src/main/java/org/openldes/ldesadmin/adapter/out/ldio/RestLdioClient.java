@@ -53,7 +53,9 @@ public class RestLdioClient implements LdioClient {
   private final Clock clock;
   private final Duration deleteTimeout;
 
-  public RestLdioClient(InstanceRestClients restClients, Clock clock,
+  public RestLdioClient(
+      InstanceRestClients restClients,
+      Clock clock,
       @Value("${ldes-admin.ldio.delete-timeout:PT30S}") Duration deleteTimeout) {
     this.restClients = restClients;
     this.clock = clock;
@@ -62,22 +64,40 @@ public class RestLdioClient implements LdioClient {
 
   @Override
   public List<DeployedPipeline> getPipelines(Instance ldio) {
-    List<PipelineTO> pipelines = call(ldio, "list pipelines", () -> rest(ldio).get()
-        .uri(PIPELINES).accept(MediaType.APPLICATION_JSON)
-        .retrieve().body(new ParameterizedTypeReference<List<PipelineTO>>() {
-        }));
-    return pipelines == null ? List.of()
+    List<PipelineTO> pipelines =
+        call(
+            ldio,
+            "list pipelines",
+            () ->
+                rest(ldio)
+                    .get()
+                    .uri(PIPELINES)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<PipelineTO>>() {}));
+    return pipelines == null
+        ? List.of()
         : pipelines.stream().map(LdioPipelineMapper::toModel).toList();
   }
 
   @Override
   public DeployedPipeline createPipeline(Instance ldio, Pipeline pipeline) {
-    PipelineTO created = call(ldio, "create pipeline " + pipeline.name(), () -> rest(ldio).post()
-        .uri(PIPELINES).contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_JSON)
-        .body(LdioPipelineMapper.toConfig(pipeline))
-        .retrieve().body(PipelineTO.class));
+    PipelineTO created =
+        call(
+            ldio,
+            "create pipeline " + pipeline.name(),
+            () ->
+                rest(ldio)
+                    .post()
+                    .uri(PIPELINES)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(LdioPipelineMapper.toConfig(pipeline))
+                    .retrieve()
+                    .body(PipelineTO.class));
     if (created == null) {
-      throw new RemoteInstanceException(Reason.UNAVAILABLE,
+      throw new RemoteInstanceException(
+          Reason.UNAVAILABLE,
           "LDIO '%s' did not return the created pipeline".formatted(ldio.name()));
     }
     return LdioPipelineMapper.toModel(created);
@@ -85,9 +105,11 @@ public class RestLdioClient implements LdioClient {
 
   @Override
   public void deletePipeline(Instance ldio, String pipeline) {
-    ResponseEntity<Void> response = call(ldio, "delete pipeline " + pipeline, () -> rest(ldio)
-        .delete().uri(PIPELINE, pipeline)
-        .retrieve().toBodilessEntity());
+    ResponseEntity<Void> response =
+        call(
+            ldio,
+            "delete pipeline " + pipeline,
+            () -> rest(ldio).delete().uri(PIPELINE, pipeline).retrieve().toBodilessEntity());
     if (response.getStatusCode() == HttpStatus.ACCEPTED) {
       awaitRemoval(ldio, pipeline);
     }
@@ -95,45 +117,64 @@ public class RestLdioClient implements LdioClient {
 
   @Override
   public PipelineStatus getStatus(Instance ldio, String pipeline) {
-    return status(ldio, "get status of " + pipeline, rest(ldio).get()
-        .uri(PIPELINE + "/status", pipeline));
+    return status(
+        ldio, "get status of " + pipeline, rest(ldio).get().uri(PIPELINE + "/status", pipeline));
   }
 
   @Override
   public PipelineStatus halt(Instance ldio, String pipeline) {
-    return status(ldio, "halt pipeline " + pipeline, rest(ldio).post()
-        .uri(PIPELINE + "/halt", pipeline));
+    return status(
+        ldio, "halt pipeline " + pipeline, rest(ldio).post().uri(PIPELINE + "/halt", pipeline));
   }
 
   @Override
   public PipelineStatus resume(Instance ldio, String pipeline) {
-    return status(ldio, "resume pipeline " + pipeline, rest(ldio).post()
-        .uri(PIPELINE + "/resume", pipeline));
+    return status(
+        ldio, "resume pipeline " + pipeline, rest(ldio).post().uri(PIPELINE + "/resume", pipeline));
   }
 
   @Override
   public ComponentCatalog getCatalog(Instance ldio) {
-    CatalogTO catalog = call(ldio, "get component catalog", () -> rest(ldio).get()
-        .uri("/admin/api/v1/catalog").accept(MediaType.APPLICATION_JSON)
-        .retrieve().body(CatalogTO.class));
-    return catalog == null ? new ComponentCatalog(null, null, null, null)
-        : new ComponentCatalog(catalog.inputs(), catalog.adapters(), catalog.transformers(),
-            catalog.outputs());
+    CatalogTO catalog =
+        call(
+            ldio,
+            "get component catalog",
+            () ->
+                rest(ldio)
+                    .get()
+                    .uri("/admin/api/v1/catalog")
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(CatalogTO.class));
+    return catalog == null
+        ? new ComponentCatalog(null, null, null, null)
+        : new ComponentCatalog(
+            catalog.inputs(), catalog.adapters(), catalog.transformers(), catalog.outputs());
   }
 
   @Override
   public List<PipelineStatistics> getStatistics(Instance ldio) {
-    String exposition = call(ldio, "get metrics", () -> rest(ldio).get()
-        .uri("/actuator/prometheus").accept(MediaType.TEXT_PLAIN)
-        .retrieve().body(String.class));
+    String exposition =
+        call(
+            ldio,
+            "get metrics",
+            () ->
+                rest(ldio)
+                    .get()
+                    .uri("/actuator/prometheus")
+                    .accept(MediaType.TEXT_PLAIN)
+                    .retrieve()
+                    .body(String.class));
     PrometheusMetrics metrics = PrometheusMetrics.parse(exposition == null ? "" : exposition);
     Map<String, Long> in = countPerPipeline(metrics, DATA_IN);
     Map<String, Long> out = countPerPipeline(metrics, DATA_OUT);
     TreeSet<String> pipelines = new TreeSet<>(in.keySet());
     pipelines.addAll(out.keySet());
     return pipelines.stream()
-        .map(pipeline -> new PipelineStatistics(pipeline, in.getOrDefault(pipeline, 0L),
-            out.getOrDefault(pipeline, 0L)))
+        .map(
+            pipeline ->
+                new PipelineStatistics(
+                    pipeline, in.getOrDefault(pipeline, 0L), out.getOrDefault(pipeline, 0L)))
         .toList();
   }
 
@@ -141,10 +182,17 @@ public class RestLdioClient implements LdioClient {
   public Map<String, LdesClientStatus> getLdesClientStatuses(Instance ldio) {
     List<LdesClientStatusTO> statuses;
     try {
-      statuses = call(ldio, "get LDES client statuses", () -> rest(ldio).get()
-          .uri(PIPELINES + "/ldes-client").accept(MediaType.APPLICATION_JSON)
-          .retrieve().body(new ParameterizedTypeReference<List<LdesClientStatusTO>>() {
-          }));
+      statuses =
+          call(
+              ldio,
+              "get LDES client statuses",
+              () ->
+                  rest(ldio)
+                      .get()
+                      .uri(PIPELINES + "/ldes-client")
+                      .accept(MediaType.APPLICATION_JSON)
+                      .retrieve()
+                      .body(new ParameterizedTypeReference<List<LdesClientStatusTO>>() {}));
     } catch (RemoteInstanceException e) {
       if (e.reason() == Reason.NOT_FOUND) {
         // LDIOs before 2.x don't report the progress of their LDES clients
@@ -154,19 +202,27 @@ public class RestLdioClient implements LdioClient {
     }
     Map<String, LdesClientStatus> result = new TreeMap<>();
     if (statuses != null) {
-      statuses.forEach(status -> parseClientStatus(status.status())
-          .ifPresent(parsed -> result.put(status.pipeline(), parsed)));
+      statuses.forEach(
+          status ->
+              parseClientStatus(status.status())
+                  .ifPresent(parsed -> result.put(status.pipeline(), parsed)));
     }
     return Collections.unmodifiableMap(result);
   }
 
   @Override
   public void send(Instance ldio, String pipeline, String content, String contentType) {
-    call(ldio, "receive a message in pipeline " + pipeline, () -> rest(ldio).post()
-        .uri("/{pipeline}", pipeline)
-        .contentType(MediaType.parseMediaType(contentType))
-        .body(content)
-        .retrieve().toBodilessEntity());
+    call(
+        ldio,
+        "receive a message in pipeline " + pipeline,
+        () ->
+            rest(ldio)
+                .post()
+                .uri("/{pipeline}", pipeline)
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(content)
+                .retrieve()
+                .toBodilessEntity());
   }
 
   private static Optional<LdesClientStatus> parseClientStatus(String status) {
@@ -179,42 +235,54 @@ public class RestLdioClient implements LdioClient {
     return restClients.forInstance(ldio);
   }
 
-  private static PipelineStatus status(Instance ldio, String action,
-      RestClient.RequestHeadersSpec<?> request) {
-    String status = call(ldio, action, () -> request.accept(MediaType.TEXT_PLAIN,
-        MediaType.APPLICATION_JSON).retrieve().body(String.class));
+  private static PipelineStatus status(
+      Instance ldio, String action, RestClient.RequestHeadersSpec<?> request) {
+    String status =
+        call(
+            ldio,
+            action,
+            () ->
+                request
+                    .accept(MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(String.class));
     try {
       return LdioPipelineMapper.parseStatus(status);
     } catch (IllegalArgumentException e) {
-      throw new RemoteInstanceException(Reason.UNAVAILABLE,
-          "LDIO '%s' returned an unknown pipeline status: %s".formatted(ldio.name(), status), e);
+      throw new RemoteInstanceException(
+          Reason.UNAVAILABLE,
+          "LDIO '%s' returned an unknown pipeline status: %s".formatted(ldio.name(), status),
+          e);
     }
   }
 
   private static Map<String, Long> countPerPipeline(PrometheusMetrics metrics, String name) {
     Map<String, Long> counts = new TreeMap<>();
-    metrics.samples(name).forEach(sample -> counts.merge(sample.label("pipeline_name"),
-        sample.longValue(), Long::sum));
+    metrics
+        .samples(name)
+        .forEach(
+            sample -> counts.merge(sample.label("pipeline_name"), sample.longValue(), Long::sum));
     return counts;
   }
 
-  /**
-   * LDIO stops a pipeline gracefully before deleting it.
-   */
+  /** LDIO stops a pipeline gracefully before deleting it. */
   private void awaitRemoval(Instance ldio, String pipeline) {
     Instant deadline = clock.instant().plus(deleteTimeout);
     while (getPipelines(ldio).stream().anyMatch(deployed -> deployed.name().equals(pipeline))) {
       if (clock.instant().isAfter(deadline)) {
-        throw new RemoteInstanceException(Reason.UNAVAILABLE,
-            "LDIO '%s' did not remove pipeline %s within %s".formatted(ldio.name(), pipeline,
-                deleteTimeout));
+        throw new RemoteInstanceException(
+            Reason.UNAVAILABLE,
+            "LDIO '%s' did not remove pipeline %s within %s"
+                .formatted(ldio.name(), pipeline, deleteTimeout));
       }
       try {
         Thread.sleep(POLL_INTERVAL);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        throw new RemoteInstanceException(Reason.UNAVAILABLE,
-            "Interrupted while waiting for pipeline %s to be removed".formatted(pipeline), e);
+        throw new RemoteInstanceException(
+            Reason.UNAVAILABLE,
+            "Interrupted while waiting for pipeline %s to be removed".formatted(pipeline),
+            e);
       }
     }
   }

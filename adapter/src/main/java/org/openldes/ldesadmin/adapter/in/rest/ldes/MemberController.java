@@ -24,9 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Ingesting members and following how far the server got in processing them.
- */
+/** Ingesting members and following how far the server got in processing them. */
 @RestController
 @RequestMapping("/api/v1/ldes-servers/{serverId}")
 class MemberController {
@@ -35,7 +33,8 @@ class MemberController {
   private final StreamStatisticsUseCase streamStatisticsUseCase;
   private final BackgroundProcessUseCase backgroundProcessUseCase;
 
-  MemberController(IngestMemberUseCase ingestMemberUseCase,
+  MemberController(
+      IngestMemberUseCase ingestMemberUseCase,
       StreamStatisticsUseCase streamStatisticsUseCase,
       BackgroundProcessUseCase backgroundProcessUseCase) {
     this.ingestMemberUseCase = ingestMemberUseCase;
@@ -47,13 +46,17 @@ class MemberController {
    * Ingests a member directly on an event stream. Fragmentation happens asynchronously on the
    * server.
    */
-  @PostMapping(value = "/eventstreams/{collection}/members",
+  @PostMapping(
+      value = "/eventstreams/{collection}/members",
       consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.ACCEPTED)
-  void ingest(@PathVariable UUID serverId, @PathVariable String collection,
-      @RequestBody String member, @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
-    ingestMemberUseCase.ingest(new InstanceId(serverId), collection,
-        RdfMediaTypes.document(member, contentType));
+  void ingest(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
+      @RequestBody String member,
+      @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+    ingestMemberUseCase.ingest(
+        new InstanceId(serverId), collection, RdfMediaTypes.document(member, contentType));
   }
 
   @GetMapping("/statistics")
@@ -63,9 +66,7 @@ class MemberController {
         .toList();
   }
 
-  /**
-   * The steps of the jobs that fragment the members and maintain the event streams.
-   */
+  /** The steps of the jobs that fragment the members and maintain the event streams. */
   @GetMapping("/processes")
   List<BackgroundProcess> processes(@PathVariable UUID serverId) {
     return backgroundProcessUseCase.processes(new InstanceId(serverId));

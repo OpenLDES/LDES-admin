@@ -9,7 +9,7 @@ import org.openldes.ldesadmin.model.rdf.RdfDocument;
  * retained.
  *
  * @param fragmentations fragmentation strategies, applied in order; empty for plain pagination
- * @param definition     the view as returned by the admin API
+ * @param definition the view as returned by the admin API
  */
 public record View(
     String collection,

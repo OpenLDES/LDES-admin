@@ -28,20 +28,17 @@ import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 @ExtendWith(MockitoExtension.class)
 class PipelineLifecycleServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private LdioClient ldioClient;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private LdioClient ldioClient;
+  @Mock private ActivityRecorder activity;
 
   private final Instance ldio = TestFixtures.ldio();
   private PipelineLifecycleService service;
 
   @BeforeEach
   void setUp() {
-    service = new PipelineLifecycleService(new InstanceLookup(instanceRepository), ldioClient,
-        activity);
+    service =
+        new PipelineLifecycleService(new InstanceLookup(instanceRepository), ldioClient, activity);
     when(instanceRepository.findById(ldio.id())).thenReturn(Optional.of(ldio));
   }
 

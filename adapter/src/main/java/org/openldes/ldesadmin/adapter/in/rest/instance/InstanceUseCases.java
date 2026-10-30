@@ -7,15 +7,11 @@ import org.openldes.ldesadmin.application.port.in.instance.StartLocalInstanceUse
 import org.openldes.ldesadmin.application.port.in.instance.UnregisterInstanceUseCase;
 import org.springframework.stereotype.Component;
 
-/**
- * The use cases shared by the LDES server and LDIO controllers.
- */
+/** The use cases shared by the LDES server and LDIO controllers. */
 @Component
 record InstanceUseCases(
     FindInstancesUseCase find,
     RegisterInstanceUseCase register,
     StartLocalInstanceUseCase startLocal,
     UnregisterInstanceUseCase unregister,
-    CheckInstanceHealthUseCase checkHealth) {
-
-}
+    CheckInstanceHealthUseCase checkHealth) {}

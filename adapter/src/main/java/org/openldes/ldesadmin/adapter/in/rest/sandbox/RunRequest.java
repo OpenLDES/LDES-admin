@@ -10,8 +10,8 @@ import org.openldes.ldesadmin.model.sandbox.RunOptions;
 /**
  * A pipeline to run in the sandbox, with what its input receives.
  *
- * @param session        identifies the runs of one pipeline being designed, see
- *                       {@link RunOptions#session()}
+ * @param session identifies the runs of one pipeline being designed, see {@link
+ *     RunOptions#session()}
  * @param executeOutputs optional, {@code false} by default: a dry run
  */
 public record RunRequest(
@@ -23,10 +23,8 @@ public record RunRequest(
   /**
    * @param source optional: the URL it was polled from
    */
-  public record InputRequest(@NotNull String content, @NotBlank String contentType,
-                             String source) {
-
-  }
+  public record InputRequest(
+      @NotNull String content, @NotBlank String contentType, String source) {}
 
   RunInput toInput() {
     return new RunInput(input.content(), input.contentType(), input.source());

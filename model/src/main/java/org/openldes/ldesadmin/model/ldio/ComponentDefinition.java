@@ -5,11 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * A component of a pipeline (adapter, transformer or output) and its configuration, e.g.
- * {@code Ldio:HttpOut} with {@code endpoint: http://localhost:8080/my-ldes}.
+ * A component of a pipeline (adapter, transformer or output) and its configuration, e.g. {@code
+ * Ldio:HttpOut} with {@code endpoint: http://localhost:8080/my-ldes}.
  *
- * @param config component configuration; values are strings or nested maps (e.g.
- *               {@code rdf-writer.content-type}), in the order they were defined
+ * @param config component configuration; values are strings or nested maps (e.g. {@code
+ *     rdf-writer.content-type}), in the order they were defined
  */
 public record ComponentDefinition(String name, Map<String, Object> config) {
 

@@ -68,13 +68,13 @@ ignores unknown predicates.
 
 SHACL datatypes are exact:
 
-| Property | Required form |
-|----------|---------------|
-| `tree:maxZoom` | `xsd:integer`, 0 through 23, not `xsd:int` |
-| `ldes:amount` | `xsd:integer`, at least 1 |
-| `tree:value` in duration policies | `xsd:duration`; `P1W` is rejected |
-| `tree:maxGranularity` | `xsd:string`, year through second |
-| `tree:fragmentationKey` | `xsd:string` |
+| Property                          | Required form                              |
+|-----------------------------------|--------------------------------------------|
+| `tree:maxZoom`                    | `xsd:integer`, 0 through 23, not `xsd:int` |
+| `ldes:amount`                     | `xsd:integer`, at least 1                  |
+| `tree:value` in duration policies | `xsd:duration`; `P1W` is rejected          |
+| `tree:maxGranularity`             | `xsd:string`, year through second          |
+| `tree:fragmentationKey`           | `xsd:string`                               |
 
 Time fragmentation reads `tree:fragmentationSubjectFilter`, despite different spellings in the
 docs/shape. Geospatial fragmentation reads `tree:fragmenterSubjectFilter`. Reference defaults
@@ -99,7 +99,8 @@ it is enforced after `PUT .../shape` or a server restart. SHACL sequence paths s
 * JsonToLdAdapter makes one model per JSON array object. Its inline context must be wrapped as
   `{"@context": {...}}`. JSON-LD numeric coercion to `xsd:double` canonicalizes lexical forms,
   for example `82` to `"8.2E1"`.
-* RmlAdapter makes a model per named graph (`rr:graphMap`), not necessarily one for the entire input.
+* RmlAdapter makes a model per named graph (`rr:graphMap`), not necessarily one for the entire
+  input.
 * GeoJsonToWktTransformer expects geometry in the GeoJSON-LD vocabulary.
 * VersionObjectCreator selects the first subject of a configured member type and requires an
   `xsd:dateTime` observed-time literal. It uses that literal's lexical form in the version IRI;
@@ -117,7 +118,7 @@ token request form body.
 
 `PollUseCase` -> `PollService` -> `HttpPoller` / `RestHttpPoller` makes GET requests without an
 Accept header, with component headers/credentials, a required response Content-Type and a
-5 MB bound. It translates local internal URLs. `PollException` maps to `502`. Arbitrary HTTP(S)
+5 MB bound. It translates local internal URLs. `PollException` maps to `502`. Arbitrary HTTP (S)
 targets are intentional; read [security.md](security.md) before changing this proxy boundary.
 
 `RunPipelineService` fans each model through transformers and outputs like LDIO.

@@ -21,8 +21,7 @@ import org.openldes.ldesadmin.model.instance.InstanceType;
 @NoArgsConstructor
 public class InstanceJpaEntity {
 
-  @Id
-  private UUID id;
+  @Id private UUID id;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)

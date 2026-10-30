@@ -30,21 +30,17 @@ import org.openldes.ldesadmin.model.ldio.PipelineStatus;
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private InstanceHealthProbe instanceHealthProbe;
-  @Mock
-  private LdesServerClient ldesServerClient;
-  @Mock
-  private LdioClient ldioClient;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private InstanceHealthProbe instanceHealthProbe;
+  @Mock private LdesServerClient ldesServerClient;
+  @Mock private LdioClient ldioClient;
 
   private DashboardService service;
 
   @BeforeEach
   void setUp() {
-    service = new DashboardService(instanceRepository, instanceHealthProbe, ldesServerClient,
-        ldioClient);
+    service =
+        new DashboardService(instanceRepository, instanceHealthProbe, ldesServerClient, ldioClient);
   }
 
   @Test
@@ -55,25 +51,33 @@ class DashboardServiceTest {
     when(instanceRepository.findByType(InstanceType.LDIO)).thenReturn(List.of(ldio));
     when(instanceHealthProbe.check(server)).thenReturn(InstanceHealth.up(TestFixtures.NOW));
     when(instanceHealthProbe.check(ldio)).thenReturn(InstanceHealth.up(TestFixtures.NOW));
-    when(ldesServerClient.getStatistics(server)).thenReturn(List.of(
-        new StreamStatistics("parcels", 1_200, List.of()),
-        new StreamStatistics("addresses", 300, List.of())));
-    when(ldioClient.getPipelines(ldio)).thenReturn(List.of(
-        TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
-    when(ldioClient.getStatistics(ldio)).thenReturn(List.of(
-        new PipelineStatistics("parcels", 50, 48)));
+    when(ldesServerClient.getStatistics(server))
+        .thenReturn(
+            List.of(
+                new StreamStatistics("parcels", 1_200, List.of()),
+                new StreamStatistics("addresses", 300, List.of())));
+    when(ldioClient.getPipelines(ldio))
+        .thenReturn(List.of(TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
+    when(ldioClient.getStatistics(ldio))
+        .thenReturn(List.of(new PipelineStatistics("parcels", 50, 48)));
 
     DashboardOverview overview = service.overview();
 
-    assertThat(overview.ldesServers()).singleElement().satisfies(summary -> {
-      assertThat(summary.server()).isEqualTo(server);
-      assertThat(summary.ingestedMembers()).isEqualTo(1_500);
-      assertThat(summary.problems()).isEmpty();
-    });
-    assertThat(overview.ldios()).singleElement().satisfies(summary -> {
-      assertThat(summary.pipelinesByStatus()).containsEntry(PipelineStatus.RUNNING, 1L);
-      assertThat(summary.processedMembers()).isEqualTo(48);
-    });
+    assertThat(overview.ldesServers())
+        .singleElement()
+        .satisfies(
+            summary -> {
+              assertThat(summary.server()).isEqualTo(server);
+              assertThat(summary.ingestedMembers()).isEqualTo(1_500);
+              assertThat(summary.problems()).isEmpty();
+            });
+    assertThat(overview.ldios())
+        .singleElement()
+        .satisfies(
+            summary -> {
+              assertThat(summary.pipelinesByStatus()).containsEntry(PipelineStatus.RUNNING, 1L);
+              assertThat(summary.processedMembers()).isEqualTo(48);
+            });
   }
 
   @Test
@@ -85,7 +89,8 @@ class DashboardServiceTest {
 
     DashboardOverview overview = service.overview();
 
-    assertThat(overview.ldesServers()).singleElement()
+    assertThat(overview.ldesServers())
+        .singleElement()
         .satisfies(summary -> assertThat(summary.health().status()).isEqualTo(HealthStatus.DOWN));
     verifyNoInteractions(ldesServerClient);
   }
@@ -96,10 +101,10 @@ class DashboardServiceTest {
     when(instanceRepository.findByType(InstanceType.LDES_SERVER)).thenReturn(List.of());
     when(instanceRepository.findByType(InstanceType.LDIO)).thenReturn(List.of(ldio));
     when(instanceHealthProbe.check(ldio)).thenReturn(InstanceHealth.up(TestFixtures.NOW));
-    when(ldioClient.getPipelines(ldio)).thenReturn(List.of(
-        TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
-    when(ldioClient.getStatistics(ldio)).thenThrow(new RemoteInstanceException(
-        Reason.NOT_FOUND, "Metrics are not exposed"));
+    when(ldioClient.getPipelines(ldio))
+        .thenReturn(List.of(TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
+    when(ldioClient.getStatistics(ldio))
+        .thenThrow(new RemoteInstanceException(Reason.NOT_FOUND, "Metrics are not exposed"));
 
     LdioSummary summary = service.overview().ldios().getFirst();
 

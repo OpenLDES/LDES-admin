@@ -10,8 +10,7 @@ import org.openldes.ldesadmin.model.instance.InstanceType;
 import org.springframework.stereotype.Repository;
 
 /**
- * Stores instances in Postgres with JPA. The schema is managed by Flyway
- * ({@code db/migration}).
+ * Stores instances in Postgres with JPA. The schema is managed by Flyway ({@code db/migration}).
  */
 @Repository
 public class JpaInstanceRepository implements InstanceRepository {

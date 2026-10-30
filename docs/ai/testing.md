@@ -5,18 +5,18 @@ Cucumber runner, test framework or mocking library to satisfy a documentation te
 
 ## Test at the responsible boundary
 
-| Change | Coverage |
-|--------|----------|
-| Domain values and invariants | Plain JUnit tests in `model` |
-| Use-case orchestration | JUnit, Mockito and AssertJ in `application`; mock output ports |
-| HTTP binding, validation, status or response shape | `@WebMvcTest`, `MockMvcTester`, `@MockitoBean` in `adapter` |
-| Remote request construction/parsing | Focused outbound adapter tests |
-| LDES/LDIO protocol behaviour | `RestLdesServerClientIT`, `RestLdioClientIT` against real container images |
-| Schema/entity/port persistence | Postgres/Testcontainers with Flyway, e.g. `JpaInstanceRepositoryIT` |
-| Wiring, security or SPA serving | Bootstrap tests and applicable `*IT` tests |
-| Cross-ring dependencies | `bootstrap/.../DependencyRuleTest.java` |
-| Vue utilities, stores and components | Jest in `frontend/tests/unit` |
-| Browser workflows and mode parity | Cypress in `frontend/cypress/e2e` |
+| Change                                             | Coverage                                                                   |
+|----------------------------------------------------|----------------------------------------------------------------------------|
+| Domain values and invariants                       | Plain JUnit tests in `model`                                               |
+| Use-case orchestration                             | JUnit, Mockito and AssertJ in `application`; mock output ports             |
+| HTTP binding, validation, status or response shape | `@WebMvcTest`, `MockMvcTester`, `@MockitoBean` in `adapter`                |
+| Remote request construction/parsing                | Focused outbound adapter tests                                             |
+| LDES/LDIO protocol behaviour                       | `RestLdesServerClientIT`, `RestLdioClientIT` against real container images |
+| Schema/entity/port persistence                     | Postgres/Testcontainers with Flyway, e.g. `JpaInstanceRepositoryIT`        |
+| Wiring, security or SPA serving                    | Bootstrap tests and applicable `*IT` tests                                 |
+| Cross-ring dependencies                            | `bootstrap/.../DependencyRuleTest.java`                                    |
+| Vue utilities, stores and components               | Jest in `frontend/tests/unit`                                              |
+| Browser workflows and mode parity                  | Cypress in `frontend/cypress/e2e`                                          |
 
 Tests mirror production packages. Existing Java tests use descriptive camelCase method names,
 explicit local types, fixed clocks and small fixture helpers. Follow them; snake_case names and
@@ -45,8 +45,10 @@ For code changes, the final project gate is:
 ```
 
 It includes Java formatting checks, backend tests, frontend build/unit tests and integration tests.
-Docker and locally installed LDI artifacts are prerequisites; see [README.md](../../README.md). Maven `test` alone
-does not run Failsafe integration tests. `-DskipTests` and `-Dfrontend.skip` are iteration shortcuts,
+Docker and locally installed LDI artifacts are prerequisites; see [README.md](../../README.md).
+Maven `test` alone
+does not run Failsafe integration tests. `-DskipTests` and `-Dfrontend.skip` are iteration
+shortcuts,
 not evidence that the final gate passed.
 
 For frontend changes, also run in `frontend/`:

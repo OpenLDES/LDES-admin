@@ -10,9 +10,9 @@ import java.util.Optional;
 import org.openldes.ldesadmin.application.port.out.sandbox.ComponentException;
 
 /**
- * The configuration of a component, read as LDIO reads it: nested maps become dotted keys and
- * lists numbered ones ({@code rdf-writer.content-type}, {@code url.0}), and keys match ignoring
- * case, {@code -} and {@code _}.
+ * The configuration of a component, read as LDIO reads it: nested maps become dotted keys and lists
+ * numbered ones ({@code rdf-writer.content-type}, {@code url.0}), and keys match ignoring case,
+ * {@code -} and {@code _}.
  *
  * <p>Unlike LDIO, a value is never read from a file when it is a path (LDIO does that for queries
  * and mappings): the sandbox would read files of the LDES-admin host.
@@ -20,6 +20,7 @@ import org.openldes.ldesadmin.application.port.out.sandbox.ComponentException;
 final class LdioConfig {
 
   private final String component;
+
   /** Values by normalised key, as LDIO's ComponentProperties keeps them */
   private final Map<String, String> values;
 
@@ -41,8 +42,8 @@ final class LdioConfig {
   }
 
   String property(String key) {
-    return optional(key).orElseThrow(() ->
-        new ComponentException("%s needs '%s'".formatted(component, key)));
+    return optional(key)
+        .orElseThrow(() -> new ComponentException("%s needs '%s'".formatted(component, key)));
   }
 
   Optional<String> optional(String key) {
@@ -54,19 +55,19 @@ final class LdioConfig {
   }
 
   Optional<Integer> optionalInteger(String key) {
-    return optional(key).map(value -> {
-      try {
-        return Integer.valueOf(value.strip());
-      } catch (NumberFormatException e) {
-        throw new ComponentException(
-            "'%s' of %s must be a whole number, not %s".formatted(key, component, value));
-      }
-    });
+    return optional(key)
+        .map(
+            value -> {
+              try {
+                return Integer.valueOf(value.strip());
+              } catch (NumberFormatException e) {
+                throw new ComponentException(
+                    "'%s' of %s must be a whole number, not %s".formatted(key, component, value));
+              }
+            });
   }
 
-  /**
-   * A single value or a list, as a list.
-   */
+  /** A single value or a list, as a list. */
   List<String> list(String key) {
     List<String> result = new ArrayList<>();
     optional(key).ifPresent(result::add);
@@ -80,17 +81,18 @@ final class LdioConfig {
   }
 
   /**
-   * The properties under a key, e.g. those of {@code rdf-writer}, with normalised keys
-   * ({@code contenttype}), as LDI expects them.
+   * The properties under a key, e.g. those of {@code rdf-writer}, with normalised keys ({@code
+   * contenttype}), as LDI expects them.
    */
   Map<String, String> nested(String key) {
     String prefix = normalise(key) + ".";
     Map<String, String> result = new HashMap<>();
-    values.forEach((name, value) -> {
-      if (name.startsWith(prefix)) {
-        result.put(name.substring(prefix.length()), value);
-      }
-    });
+    values.forEach(
+        (name, value) -> {
+          if (name.startsWith(prefix)) {
+            result.put(name.substring(prefix.length()), value);
+          }
+        });
     return result;
   }
 
@@ -100,8 +102,9 @@ final class LdioConfig {
 
   private static void flatten(String prefix, Object value, Map<String, String> result) {
     if (value instanceof Map<?, ?> map) {
-      map.forEach((key, nested) ->
-          flatten(prefix.isEmpty() ? String.valueOf(key) : prefix + "." + key, nested, result));
+      map.forEach(
+          (key, nested) ->
+              flatten(prefix.isEmpty() ? String.valueOf(key) : prefix + "." + key, nested, result));
     } else if (value instanceof List<?> list) {
       for (int index = 0; index < list.size(); index++) {
         flatten(prefix + "." + index, list.get(index), result);

@@ -30,8 +30,10 @@ public class DashboardService implements GetDashboardUseCase {
   private final LdesServerClient ldesServerClient;
   private final LdioClient ldioClient;
 
-  public DashboardService(InstanceRepository instanceRepository,
-      InstanceHealthProbe instanceHealthProbe, LdesServerClient ldesServerClient,
+  public DashboardService(
+      InstanceRepository instanceRepository,
+      InstanceHealthProbe instanceHealthProbe,
+      LdesServerClient ldesServerClient,
       LdioClient ldioClient) {
     this.instanceRepository = instanceRepository;
     this.instanceHealthProbe = instanceHealthProbe;
@@ -45,12 +47,14 @@ public class DashboardService implements GetDashboardUseCase {
     List<Future<LdioSummary>> ldios;
     // Every instance is queried in parallel, so one slow instance doesn't stall the dashboard
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-      servers = instanceRepository.findByType(InstanceType.LDES_SERVER).stream()
-          .map(server -> executor.submit(() -> summarizeLdesServer(server)))
-          .toList();
-      ldios = instanceRepository.findByType(InstanceType.LDIO).stream()
-          .map(ldio -> executor.submit(() -> summarizeLdio(ldio)))
-          .toList();
+      servers =
+          instanceRepository.findByType(InstanceType.LDES_SERVER).stream()
+              .map(server -> executor.submit(() -> summarizeLdesServer(server)))
+              .toList();
+      ldios =
+          instanceRepository.findByType(InstanceType.LDIO).stream()
+              .map(ldio -> executor.submit(() -> summarizeLdio(ldio)))
+              .toList();
     }
     return new DashboardOverview(
         servers.stream().map(Future::resultNow).toList(),
@@ -63,8 +67,8 @@ public class DashboardService implements GetDashboardUseCase {
       return new LdesServerSummary(server, health, List.of(), List.of());
     }
     List<String> problems = new ArrayList<>();
-    List<StreamStatistics> streams = attempt(() -> ldesServerClient.getStatistics(server),
-        problems);
+    List<StreamStatistics> streams =
+        attempt(() -> ldesServerClient.getStatistics(server), problems);
     return new LdesServerSummary(server, health, streams, problems);
   }
 

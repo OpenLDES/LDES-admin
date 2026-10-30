@@ -21,11 +21,9 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 @WebMvcTest(controllers = PipelineActivityController.class)
 class PipelineActivityControllerTest {
 
-  @Autowired
-  private MockMvcTester mvc;
+  @Autowired private MockMvcTester mvc;
 
-  @MockitoBean
-  private PipelineActivityUseCase pipelineActivityUseCase;
+  @MockitoBean private PipelineActivityUseCase pipelineActivityUseCase;
 
   private final Instance ldio = AdapterFixtures.ldio();
 
@@ -37,7 +35,8 @@ class PipelineActivityControllerTest {
     assertThat(mvc.get().uri("/api/v1/ldios/{id}/ldes-clients", ldio.id()))
         .hasStatusOk()
         .bodyJson()
-        .isLenientlyEqualTo("""
+        .isLenientlyEqualTo(
+            """
             {"replicate": "SYNCHRONISING"}
             """);
   }
@@ -46,23 +45,29 @@ class PipelineActivityControllerTest {
   void sendsAMemberToAPipeline() {
     String member = "<http://example.org/parcel/1> a <http://example.org/Parcel> .";
 
-    assertThat(mvc.post().uri("/api/v1/ldios/{id}/pipelines/sandbox-ingest/members",
-        ldio.id()).contentType("text/turtle").content(member))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldios/{id}/pipelines/sandbox-ingest/members", ldio.id())
+                .contentType("text/turtle")
+                .content(member))
         .hasStatus(HttpStatus.ACCEPTED);
 
-    verify(pipelineActivityUseCase).send(eq(ldio.id()), eq("sandbox-ingest"), eq(member),
-        startsWith("text/turtle"));
+    verify(pipelineActivityUseCase)
+        .send(eq(ldio.id()), eq("sandbox-ingest"), eq(member), startsWith("text/turtle"));
   }
 
   @Test
   void sendsJsonForAPipelineWithAJsonAdapter() {
     String message = "{\"capakey\": \"24504D0693/00B000\"}";
 
-    assertThat(mvc.post().uri("/api/v1/ldios/{id}/pipelines/parcels/members", ldio.id())
-        .contentType("application/json").content(message))
+    assertThat(
+            mvc.post()
+                .uri("/api/v1/ldios/{id}/pipelines/parcels/members", ldio.id())
+                .contentType("application/json")
+                .content(message))
         .hasStatus(HttpStatus.ACCEPTED);
 
-    verify(pipelineActivityUseCase).send(eq(ldio.id()), eq("parcels"), eq(message),
-        startsWith("application/json"));
+    verify(pipelineActivityUseCase)
+        .send(eq(ldio.id()), eq("parcels"), eq(message), startsWith("application/json"));
   }
 }

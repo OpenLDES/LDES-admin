@@ -9,9 +9,7 @@ import org.openldes.ldesadmin.model.ldio.ComponentDefinition;
 import org.openldes.ldesadmin.model.ldio.InputDefinition;
 import org.openldes.ldesadmin.model.ldio.Pipeline;
 
-/**
- * A pipeline definition, in the same JSON structure as the LDIO pipeline API.
- */
+/** A pipeline definition, in the same JSON structure as the LDIO pipeline API. */
 public record PipelineWebModel(
     @NotBlank String name,
     String description,
@@ -20,24 +18,32 @@ public record PipelineWebModel(
     List<@Valid ComponentWebModel> outputs) {
 
   public static PipelineWebModel fromDomain(Pipeline pipeline) {
-    return new PipelineWebModel(pipeline.name(), pipeline.description(),
+    return new PipelineWebModel(
+        pipeline.name(),
+        pipeline.description(),
         InputWebModel.fromDomain(pipeline.input()),
         ComponentWebModel.fromDomain(pipeline.transformers()),
         ComponentWebModel.fromDomain(pipeline.outputs()));
   }
 
   public Pipeline toDomain() {
-    return new Pipeline(name, description, input.toDomain(),
-        transformers == null ? null : transformers.stream().map(ComponentWebModel::toDomain)
-            .toList(),
+    return new Pipeline(
+        name,
+        description,
+        input.toDomain(),
+        transformers == null
+            ? null
+            : transformers.stream().map(ComponentWebModel::toDomain).toList(),
         outputs == null ? null : outputs.stream().map(ComponentWebModel::toDomain).toList());
   }
 
-  public record InputWebModel(@NotBlank String name, Map<String, Object> config,
-                              @Valid ComponentWebModel adapter) {
+  public record InputWebModel(
+      @NotBlank String name, Map<String, Object> config, @Valid ComponentWebModel adapter) {
 
     static InputWebModel fromDomain(InputDefinition input) {
-      return new InputWebModel(input.name(), input.config(),
+      return new InputWebModel(
+          input.name(),
+          input.config(),
           input.optionalAdapter().map(ComponentWebModel::fromDomain).orElse(null));
     }
 

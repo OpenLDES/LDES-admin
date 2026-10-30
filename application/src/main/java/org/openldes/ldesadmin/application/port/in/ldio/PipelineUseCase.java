@@ -8,10 +8,10 @@ import org.openldes.ldesadmin.model.ldio.Pipeline;
 /**
  * Manages the pipelines of an LDIO.
  *
- * <p>All methods throw an
- * {@link org.openldes.ldesadmin.application.port.in.instance.InstanceNotFoundException} if the
- * LDIO is unknown, and a {@link org.openldes.ldesadmin.application.port.out.RemoteInstanceException}
- * if the LDIO cannot fulfil the request.
+ * <p>All methods throw an {@link
+ * org.openldes.ldesadmin.application.port.in.instance.InstanceNotFoundException} if the LDIO is
+ * unknown, and a {@link org.openldes.ldesadmin.application.port.out.RemoteInstanceException} if the
+ * LDIO cannot fulfil the request.
  */
 public interface PipelineUseCase {
 

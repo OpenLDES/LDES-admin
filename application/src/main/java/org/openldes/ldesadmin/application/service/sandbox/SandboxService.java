@@ -35,9 +35,13 @@ public class SandboxService implements SandboxUseCase {
   private final ViewUseCase views;
   private final PipelineUseCase pipelines;
 
-  public SandboxService(InstanceRepository instanceRepository,
-      StartLocalInstanceUseCase startLocalInstance, UnregisterInstanceUseCase unregisterInstance,
-      EventStreamUseCase eventStreams, ViewUseCase views, PipelineUseCase pipelines) {
+  public SandboxService(
+      InstanceRepository instanceRepository,
+      StartLocalInstanceUseCase startLocalInstance,
+      UnregisterInstanceUseCase unregisterInstance,
+      EventStreamUseCase eventStreams,
+      ViewUseCase views,
+      PipelineUseCase pipelines) {
     this.instanceRepository = instanceRepository;
     this.startLocalInstance = startLocalInstance;
     this.unregisterInstance = unregisterInstance;
@@ -60,8 +64,9 @@ public class SandboxService implements SandboxUseCase {
     Future<Instance> ldio;
     // Both take a while to start, so start them side by side
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-      server = executor.submit(running(current.ldesServer(), InstanceType.LDES_SERVER,
-          Sandbox.LDES_SERVER_NAME));
+      server =
+          executor.submit(
+              running(current.ldesServer(), InstanceType.LDES_SERVER, Sandbox.LDES_SERVER_NAME));
       ldio = executor.submit(running(current.ldio(), InstanceType.LDIO, Sandbox.LDIO_NAME));
     }
     Sandbox sandbox = new Sandbox(result(server), result(ldio));
@@ -75,11 +80,14 @@ public class SandboxService implements SandboxUseCase {
     Sandbox current = get();
     List<Future<?>> stopped;
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-      stopped = Stream.of(current.ldesServer(), current.ldio())
-          .filter(Objects::nonNull)
-          .<Future<?>>map(instance -> executor.submit(
-              () -> unregisterInstance.unregister(instance.type(), instance.id())))
-          .toList();
+      stopped =
+          Stream.of(current.ldesServer(), current.ldio())
+              .filter(Objects::nonNull)
+              .<Future<?>>map(
+                  instance ->
+                      executor.submit(
+                          () -> unregisterInstance.unregister(instance.type(), instance.id())))
+              .toList();
     }
     stopped.forEach(SandboxService::result);
   }
@@ -98,30 +106,36 @@ public class SandboxService implements SandboxUseCase {
   }
 
   /**
-   * Creates the event stream with its views, unless it exists already: then it is left as the
-   * user shaped it.
+   * Creates the event stream with its views, unless it exists already: then it is left as the user
+   * shaped it.
    */
   private void prepareEventStream(Instance server) {
-    boolean exists = eventStreams.list(server.id()).stream()
-        .map(EventStream::collection)
-        .anyMatch(Sandbox.EVENT_STREAM::equals);
+    boolean exists =
+        eventStreams.list(server.id()).stream()
+            .map(EventStream::collection)
+            .anyMatch(Sandbox.EVENT_STREAM::equals);
     if (exists) {
       return;
     }
     eventStreams.create(server.id(), SandboxDefinitions.eventStream(server));
-    SandboxDefinitions.VIEWS.keySet().stream().sorted().forEach(view ->
-        views.create(server.id(), Sandbox.EVENT_STREAM, SandboxDefinitions.view(server, view)));
+    SandboxDefinitions.VIEWS.keySet().stream()
+        .sorted()
+        .forEach(
+            view ->
+                views.create(
+                    server.id(), Sandbox.EVENT_STREAM, SandboxDefinitions.view(server, view)));
   }
 
   /**
-   * Deploys the ingest pipeline, or redeploys it when it feeds another LDES server than the
-   * sandbox one, e.g. one that was started before the current one.
+   * Deploys the ingest pipeline, or redeploys it when it feeds another LDES server than the sandbox
+   * one, e.g. one that was started before the current one.
    */
   private void prepareIngestPipeline(Sandbox sandbox) {
     URI eventStream = sandbox.eventStreamUrlForLdio().orElseThrow();
-    Optional<DeployedPipeline> deployed = pipelines.list(sandbox.ldio().id()).stream()
-        .filter(pipeline -> pipeline.name().equals(Sandbox.INGEST_PIPELINE))
-        .findFirst();
+    Optional<DeployedPipeline> deployed =
+        pipelines.list(sandbox.ldio().id()).stream()
+            .filter(pipeline -> pipeline.name().equals(Sandbox.INGEST_PIPELINE))
+            .findFirst();
     if (deployed.isEmpty()) {
       pipelines.create(sandbox.ldio().id(), SandboxDefinitions.ingestPipeline(eventStream));
     } else if (!SandboxDefinitions.feeds(deployed.get().pipeline(), eventStream)) {

@@ -34,10 +34,8 @@ class PipelineActivityServiceTest {
   private static final String MEMBER = "<a> <b> <c> .";
   private static final String TURTLE = "text/turtle";
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private LdioClient ldioClient;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private LdioClient ldioClient;
 
   private final Instance ldio = TestFixtures.ldio();
   private PipelineActivityService service;
@@ -50,8 +48,8 @@ class PipelineActivityServiceTest {
   @Test
   void sendsAMemberToAPipelineWithAnHttpInput() {
     givenLdioExists();
-    when(ldioClient.getPipelines(ldio)).thenReturn(List.of(
-        TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
+    when(ldioClient.getPipelines(ldio))
+        .thenReturn(List.of(TestFixtures.deployed("parcels", PipelineStatus.RUNNING)));
 
     service.send(ldio.id(), "parcels", MEMBER, TURTLE);
 
@@ -61,12 +59,17 @@ class PipelineActivityServiceTest {
   @Test
   void doesNotSendToAPipelineThatReadsFromAnLdes() {
     givenLdioExists();
-    Pipeline client = new Pipeline("replicate", null,
-        new InputDefinition("Ldio:LdesClient", Map.of("urls", "http://ldes.example.org/parcels"),
-            null),
-        null, List.of(ComponentDefinition.of("Ldio:ConsoleOut")));
-    when(ldioClient.getPipelines(ldio)).thenReturn(List.of(
-        new DeployedPipeline(client, PipelineStatus.RUNNING, StatusChangeSource.AUTO)));
+    Pipeline client =
+        new Pipeline(
+            "replicate",
+            null,
+            new InputDefinition(
+                "Ldio:LdesClient", Map.of("urls", "http://ldes.example.org/parcels"), null),
+            null,
+            List.of(ComponentDefinition.of("Ldio:ConsoleOut")));
+    when(ldioClient.getPipelines(ldio))
+        .thenReturn(
+            List.of(new DeployedPipeline(client, PipelineStatus.RUNNING, StatusChangeSource.AUTO)));
     InstanceId ldioId = ldio.id();
 
     assertThatThrownBy(() -> service.send(ldioId, "replicate", MEMBER, TURTLE))

@@ -9,8 +9,8 @@ import java.util.Objects;
  * credentials of the component. The sandbox makes it once, to run what the poller would receive
  * through the pipeline.
  *
- * @param url               absolute http(s) URL, used as it is (a trailing slash matters here)
- * @param headers           headers to send along, e.g. an API key; empty for none
+ * @param url absolute http(s) URL, used as it is (a trailing slash matters here)
+ * @param headers headers to send along, e.g. an API key; empty for none
  * @param clientCredentials to get an OAuth2 access token with first; {@code null} for none
  */
 public record Poll(URI url, Map<String, String> headers, ClientCredentials clientCredentials) {
@@ -18,11 +18,12 @@ public record Poll(URI url, Map<String, String> headers, ClientCredentials clien
   public Poll {
     requireHttpUrl(url, "url");
     headers = headers == null ? Map.of() : headers;
-    headers.forEach((name, value) -> {
-      if (name == null || name.isBlank() || value == null) {
-        throw new IllegalArgumentException("A header needs a name and a value");
-      }
-    });
+    headers.forEach(
+        (name, value) -> {
+          if (name == null || name.isBlank() || value == null) {
+            throw new IllegalArgumentException("A header needs a name and a value");
+          }
+        });
     headers = Map.copyOf(headers);
   }
 
@@ -40,8 +41,8 @@ public record Poll(URI url, Map<String, String> headers, ClientCredentials clien
    *
    * @param scope optional
    */
-  public record ClientCredentials(URI tokenEndpoint, String clientId, String clientSecret,
-                                  String scope) {
+  public record ClientCredentials(
+      URI tokenEndpoint, String clientId, String clientSecret, String scope) {
 
     public ClientCredentials {
       requireHttpUrl(tokenEndpoint, "tokenEndpoint");
@@ -50,9 +51,7 @@ public record Poll(URI url, Map<String, String> headers, ClientCredentials clien
       scope = scope == null || scope.isBlank() ? null : scope.strip();
     }
 
-    /**
-     * Leaves out the secret, should it end up in a log.
-     */
+    /** Leaves out the secret, should it end up in a log. */
     @Override
     public String toString() {
       return "ClientCredentials[tokenEndpoint=%s, clientId=%s, scope=%s]"

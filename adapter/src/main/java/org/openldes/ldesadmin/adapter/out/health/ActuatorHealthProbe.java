@@ -32,9 +32,10 @@ public class ActuatorHealthProbe implements InstanceHealthProbe {
     Instant now = clock.instant();
     try {
       HttpStatus actuatorStatus = statusOf(instance, "/actuator/health");
-      HttpStatus status = actuatorStatus == HttpStatus.NOT_FOUND
-          ? statusOf(instance, adminEndpoint(instance))
-          : actuatorStatus;
+      HttpStatus status =
+          actuatorStatus == HttpStatus.NOT_FOUND
+              ? statusOf(instance, adminEndpoint(instance))
+              : actuatorStatus;
       return status.is2xxSuccessful() ? InstanceHealth.up(now) : InstanceHealth.down(now);
     } catch (RestClientException e) {
       return InstanceHealth.down(now);
@@ -42,7 +43,9 @@ public class ActuatorHealthProbe implements InstanceHealthProbe {
   }
 
   private HttpStatus statusOf(Instance instance, String path) {
-    return restClients.forInstance(instance).get()
+    return restClients
+        .forInstance(instance)
+        .get()
         .uri(path)
         .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
         .exchange((request, response) -> HttpStatus.valueOf(response.getStatusCode().value()));

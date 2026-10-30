@@ -13,12 +13,16 @@ import org.openldes.ldesadmin.model.ldio.PipelineStatus;
 /**
  * Dashboard view of an LDIO.
  *
- * @param pipelines  pipelines deployed on the LDIO; empty when the LDIO could not be queried
+ * @param pipelines pipelines deployed on the LDIO; empty when the LDIO could not be queried
  * @param statistics throughput per pipeline
- * @param problems   what went wrong while querying the LDIO
+ * @param problems what went wrong while querying the LDIO
  */
-public record LdioSummary(Instance ldio, InstanceHealth health, List<DeployedPipeline> pipelines,
-                          List<PipelineStatistics> statistics, List<String> problems) {
+public record LdioSummary(
+    Instance ldio,
+    InstanceHealth health,
+    List<DeployedPipeline> pipelines,
+    List<PipelineStatistics> statistics,
+    List<String> problems) {
 
   public LdioSummary {
     Objects.requireNonNull(ldio, "'ldio' must not be null");

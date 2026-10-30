@@ -28,8 +28,12 @@ public class JpaIngestSampleRepository implements IngestSampleRepository {
   @Override
   public List<IngestSample> findSince(Instant since) {
     return jpaRepository.findBySampledAtGreaterThanEqualOrderBySampledAtAsc(since).stream()
-        .map(entity -> new IngestSample(new InstanceId(entity.getInstanceId()),
-            entity.getSampledAt(), entity.getIngestedMembers()))
+        .map(
+            entity ->
+                new IngestSample(
+                    new InstanceId(entity.getInstanceId()),
+                    entity.getSampledAt(),
+                    entity.getIngestedMembers()))
         .toList();
   }
 

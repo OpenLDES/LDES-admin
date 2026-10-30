@@ -40,27 +40,28 @@ class ViewController {
   }
 
   @GetMapping("/{view}")
-  ViewWebModel get(@PathVariable UUID serverId, @PathVariable String collection,
-      @PathVariable String view) {
+  ViewWebModel get(
+      @PathVariable UUID serverId, @PathVariable String collection, @PathVariable String view) {
     return ViewWebModel.fromDomain(viewUseCase.get(new InstanceId(serverId), collection, view));
   }
 
-  /**
-   * Adds a view from its {@code tree:viewDescription}.
-   */
+  /** Adds a view from its {@code tree:viewDescription}. */
   @PostMapping(consumes = {TURTLE, JSON_LD, N_QUADS, N_TRIPLES})
   @ResponseStatus(HttpStatus.CREATED)
-  ViewWebModel create(@PathVariable UUID serverId, @PathVariable String collection,
+  ViewWebModel create(
+      @PathVariable UUID serverId,
+      @PathVariable String collection,
       @RequestBody String definition,
       @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
-    return ViewWebModel.fromDomain(viewUseCase.create(new InstanceId(serverId), collection,
-        RdfMediaTypes.document(definition, contentType)));
+    return ViewWebModel.fromDomain(
+        viewUseCase.create(
+            new InstanceId(serverId), collection, RdfMediaTypes.document(definition, contentType)));
   }
 
   @DeleteMapping("/{view}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  void delete(@PathVariable UUID serverId, @PathVariable String collection,
-      @PathVariable String view) {
+  void delete(
+      @PathVariable UUID serverId, @PathVariable String collection, @PathVariable String view) {
     viewUseCase.delete(new InstanceId(serverId), collection, view);
   }
 }

@@ -3,15 +3,15 @@
 The module boundary decides where an annotation belongs, not a generic Spring service template.
 See [architecture](layered-architecture.md) before introducing a new bean.
 
-| Location | Existing convention |
-|----------|---------------------|
-| `model` | Plain records/classes with invariants; no framework or Lombok annotations |
-| `application/service` | Plain Java classes marked with the project's `@ApplicationService`, implementing input ports |
-| `application/port` | Framework-free interfaces, commands and exceptions |
-| `adapter/in/rest` | `@RestController`, mapping annotations, Jakarta request validation, request/web model records |
-| `adapter/in/scheduling` | Spring scheduling at the inbound boundary |
-| `adapter/out` | Spring-managed port implementations; JPA, Jena and other integration details |
-| `bootstrap` | `@Configuration`, bean wiring, security and frontend serving |
+| Location                | Existing convention                                                                           |
+|-------------------------|-----------------------------------------------------------------------------------------------|
+| `model`                 | Plain records/classes with invariants; no framework or Lombok annotations                     |
+| `application/service`   | Plain Java classes marked with the project's `@ApplicationService`, implementing input ports  |
+| `application/port`      | Framework-free interfaces, commands and exceptions                                            |
+| `adapter/in/rest`       | `@RestController`, mapping annotations, Jakarta request validation, request/web model records |
+| `adapter/in/scheduling` | Spring scheduling at the inbound boundary                                                     |
+| `adapter/out`           | Spring-managed port implementations; JPA, Jena and other integration details                  |
+| `bootstrap`             | `@Configuration`, bean wiring, security and frontend serving                                  |
 
 `ApplicationServiceConfig` scans the custom marker annotation. Do not replace it with `@Service`
 or add Spring transaction annotations to the application ring. Production dependencies use

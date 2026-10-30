@@ -14,8 +14,7 @@ public final class RdfMediaTypes {
   public static final String N_QUADS = "application/n-quads";
   public static final String N_TRIPLES = "application/n-triples";
 
-  private RdfMediaTypes() {
-  }
+  private RdfMediaTypes() {}
 
   public static RdfDocument document(String body, String contentType) {
     return new RdfDocument(body, RdfFormat.fromMediaType(contentType));

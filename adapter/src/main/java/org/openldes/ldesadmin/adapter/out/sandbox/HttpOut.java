@@ -15,8 +15,7 @@ import org.openldes.ldi.requestexecutor.valueobjects.Response;
 
 /**
  * The HTTP output of LDIO ({@code LdioHttpOut}): posts every model to its endpoint, in the format
- * of its RDF writer. Like LDIO, it writes JSON-LD without applying a frame, and skips empty
- * models.
+ * of its RDF writer. Like LDIO, it writes JSON-LD without applying a frame, and skips empty models.
  */
 final class HttpOut implements Output {
 
@@ -26,6 +25,7 @@ final class HttpOut implements Output {
   private final String endpoint;
   private final String contentType;
   private final LdiRdfWriter writer;
+
   /** Only made when the output is executed: a dry run needs no credentials */
   private RequestExecutor requestExecutor;
 
@@ -46,20 +46,29 @@ final class HttpOut implements Output {
     writer.writeToOutputStream(model, body);
     String serialisation = body.toString(StandardCharsets.UTF_8);
     if (!execute) {
-      return new OutputResult(serialisation, contentType,
-          "Would POST %s to %s".formatted(contentType, endpoint));
+      return new OutputResult(
+          serialisation, contentType, "Would POST %s to %s".formatted(contentType, endpoint));
     }
-    Response response = requestExecutor().execute(new PostRequest(endpoint,
-        new RequestHeaders(List.of(new RequestHeader("Content-Type", contentType))),
-        body.toByteArray()));
+    Response response =
+        requestExecutor()
+            .execute(
+                new PostRequest(
+                    endpoint,
+                    new RequestHeaders(List.of(new RequestHeader("Content-Type", contentType))),
+                    body.toByteArray()));
     if (!response.isSuccess()) {
       String answer = response.getBodyAsString().orElse("").strip();
-      throw new ComponentException("POST %s answered %d%s".formatted(endpoint,
-          response.getHttpStatus(), answer.isEmpty() ? ""
-              : " - " + answer.substring(0, Math.min(answer.length(), MAX_ERROR_LENGTH))));
+      throw new ComponentException(
+          "POST %s answered %d%s"
+              .formatted(
+                  endpoint,
+                  response.getHttpStatus(),
+                  answer.isEmpty()
+                      ? ""
+                      : " - " + answer.substring(0, Math.min(answer.length(), MAX_ERROR_LENGTH))));
     }
-    return new OutputResult(serialisation, contentType,
-        "POST %s: %d".formatted(endpoint, response.getHttpStatus()));
+    return new OutputResult(
+        serialisation, contentType, "POST %s: %d".formatted(endpoint, response.getHttpStatus()));
   }
 
   private synchronized RequestExecutor requestExecutor() {

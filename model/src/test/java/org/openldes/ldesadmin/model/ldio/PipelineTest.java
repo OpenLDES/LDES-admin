@@ -23,16 +23,17 @@ class PipelineTest {
     assertThat(pipeline.description()).isEmpty();
     assertThat(pipeline.transformers()).isEmpty();
     assertThat(pipeline.outputs()).isEmpty();
-    assertThat(pipeline.input().optionalAdapter()).contains(ComponentDefinition.of(
-        "Ldio:RdfAdapter"));
+    assertThat(pipeline.input().optionalAdapter())
+        .contains(ComponentDefinition.of("Ldio:RdfAdapter"));
   }
 
   @Test
   void keepsTheOrderOfComponentConfig() {
-    ComponentDefinition output = new ComponentDefinition("Ldio:HttpOut", Map.of(
-        "endpoint", "http://localhost:8080/parcels"));
-    Pipeline pipeline = new Pipeline("parcels", "Parcels to LDES", HTTP_IN, List.of(),
-        List.of(output));
+    ComponentDefinition output =
+        new ComponentDefinition(
+            "Ldio:HttpOut", Map.of("endpoint", "http://localhost:8080/parcels"));
+    Pipeline pipeline =
+        new Pipeline("parcels", "Parcels to LDES", HTTP_IN, List.of(), List.of(output));
 
     assertThat(pipeline.outputs()).containsExactly(output);
     assertThatThrownBy(() -> pipeline.outputs().getFirst().config().put("foo", "bar"))

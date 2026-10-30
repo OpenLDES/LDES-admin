@@ -10,16 +10,14 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Translates the errors of HTTP calls to an instance into
- * {@link RemoteInstanceException RemoteInstanceExceptions}, so they don't leak Spring types into
- * the application ring.
+ * Translates the errors of HTTP calls to an instance into {@link RemoteInstanceException
+ * RemoteInstanceExceptions}, so they don't leak Spring types into the application ring.
  */
 public final class RemoteCalls {
 
   private static final int MAX_BODY_LENGTH = 500;
 
-  private RemoteCalls() {
-  }
+  private RemoteCalls() {}
 
   /**
    * @param action what the call does, e.g. {@code "create event stream"}; used in error messages
@@ -34,30 +32,35 @@ public final class RemoteCalls {
     } catch (RestClientResponseException e) {
       throw new RemoteInstanceException(Reason.UNAVAILABLE, describe(instance, action, e), e);
     } catch (ResourceAccessException e) {
-      throw new RemoteInstanceException(Reason.UNAVAILABLE,
+      throw new RemoteInstanceException(
+          Reason.UNAVAILABLE,
           "%s could not %s: %s is unreachable".formatted(label(instance), action, instance.url()),
           e);
     } catch (RestClientException e) {
-      throw new RemoteInstanceException(Reason.UNAVAILABLE,
-          "%s could not %s: %s".formatted(label(instance), action, e.getMessage()), e);
+      throw new RemoteInstanceException(
+          Reason.UNAVAILABLE,
+          "%s could not %s: %s".formatted(label(instance), action, e.getMessage()),
+          e);
     }
   }
 
   public static void run(Instance instance, String action, Runnable call) {
-    call(instance, action, () -> {
-      call.run();
-      return null;
-    });
+    call(
+        instance,
+        action,
+        () -> {
+          call.run();
+          return null;
+        });
   }
 
-  private static String describe(Instance instance, String action,
-      RestClientResponseException e) {
+  private static String describe(Instance instance, String action, RestClientResponseException e) {
     String body = e.getResponseBodyAsString().strip();
     if (body.length() > MAX_BODY_LENGTH) {
       body = body.substring(0, MAX_BODY_LENGTH) + "…";
     }
-    return "%s could not %s: %s%s".formatted(label(instance), action, e.getStatusCode(),
-        body.isEmpty() ? "" : " - " + body);
+    return "%s could not %s: %s%s"
+        .formatted(label(instance), action, e.getStatusCode(), body.isEmpty() ? "" : " - " + body);
   }
 
   private static String label(Instance instance) {

@@ -19,9 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-/**
- * Registry endpoints shared by LDES servers and LDIOs; subclasses bind them to a path and type.
- */
+/** Registry endpoints shared by LDES servers and LDIOs; subclasses bind them to a path and type. */
 abstract class InstanceController {
 
   private final InstanceType type;
@@ -44,30 +42,30 @@ abstract class InstanceController {
     return InstanceWebModel.fromDomain(useCases.find().get(type, new InstanceId(id)));
   }
 
-  /**
-   * Adds an instance that already runs somewhere.
-   */
+  /** Adds an instance that already runs somewhere. */
   @PostMapping
   ResponseEntity<InstanceWebModel> register(@Valid @RequestBody RegisterInstanceRequest request) {
-    Instance instance = useCases.register().register(new RegisterInstanceCommand(type,
-        request.name(), request.url(), request.isSandbox()));
+    Instance instance =
+        useCases
+            .register()
+            .register(
+                new RegisterInstanceCommand(
+                    type, request.name(), request.url(), request.isSandbox()));
     return created(instance);
   }
 
-  /**
-   * Starts a new instance locally. Returns once it accepts requests, which takes a while.
-   */
+  /** Starts a new instance locally. Returns once it accepts requests, which takes a while. */
   @PostMapping("/local")
   ResponseEntity<InstanceWebModel> startLocal(
       @Valid @RequestBody StartLocalInstanceRequest request) {
-    Instance instance = useCases.startLocal().start(new StartLocalInstanceCommand(type,
-        request.name(), request.isSandbox()));
+    Instance instance =
+        useCases
+            .startLocal()
+            .start(new StartLocalInstanceCommand(type, request.name(), request.isSandbox()));
     return created(instance);
   }
 
-  /**
-   * Removes an instance; a local instance is stopped as well.
-   */
+  /** Removes an instance; a local instance is stopped as well. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void unregister(@PathVariable UUID id) {
@@ -76,16 +74,17 @@ abstract class InstanceController {
 
   @GetMapping("/{id}/health")
   InstanceHealthWebModel health(@PathVariable UUID id) {
-    return InstanceHealthWebModel.fromDomain(useCases.checkHealth().check(type,
-        new InstanceId(id)));
+    return InstanceHealthWebModel.fromDomain(
+        useCases.checkHealth().check(type, new InstanceId(id)));
   }
 
   private ResponseEntity<InstanceWebModel> created(Instance instance) {
-    URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-        .path(basePath)
-        .pathSegment(instance.id().toString())
-        .build()
-        .toUri();
+    URI location =
+        ServletUriComponentsBuilder.fromCurrentContextPath()
+            .path(basePath)
+            .pathSegment(instance.id().toString())
+            .build()
+            .toUri();
     return ResponseEntity.created(location).body(InstanceWebModel.fromDomain(instance));
   }
 }

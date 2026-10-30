@@ -15,8 +15,12 @@ public record EventStreamWebModel(
     String definition) {
 
   public static EventStreamWebModel fromDomain(EventStream stream) {
-    return new EventStreamWebModel(stream.collection(), stream.timestampPath(),
-        stream.versionOfPath(), stream.createVersions(), stream.views(),
+    return new EventStreamWebModel(
+        stream.collection(),
+        stream.timestampPath(),
+        stream.versionOfPath(),
+        stream.createVersions(),
+        stream.views(),
         stream.definition().content());
   }
 }

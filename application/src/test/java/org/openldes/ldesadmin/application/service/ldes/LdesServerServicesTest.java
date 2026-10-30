@@ -35,12 +35,9 @@ class LdesServerServicesTest {
 
   private static final RdfDocument TURTLE = RdfDocument.turtle("<a> <b> <c> .");
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private LdesServerClient ldesServerClient;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private LdesServerClient ldesServerClient;
+  @Mock private ActivityRecorder activity;
 
   private final Instance server = TestFixtures.ldesServer();
   private InstanceLookup instanceLookup;
@@ -155,8 +152,12 @@ class LdesServerServicesTest {
     givenServerExists();
     givenParcelsStream();
     Fragment root = new Fragment("http://ldes.example.org/parcels/by-page", false, null, null);
-    when(ldesServerClient.getFragment(server, URI.create("http://ldes.example.org/parcels/by-page"),
-        "prov:generatedAtTime", "dcterms:isVersionOf")).thenReturn(root);
+    when(ldesServerClient.getFragment(
+            server,
+            URI.create("http://ldes.example.org/parcels/by-page"),
+            "prov:generatedAtTime",
+            "dcterms:isVersionOf"))
+        .thenReturn(root);
 
     assertThat(fragmentService().fetch(server.id(), "parcels", "by-page", null)).isEqualTo(root);
   }
@@ -167,12 +168,19 @@ class LdesServerServicesTest {
     when(instanceRepository.findById(local.id())).thenReturn(Optional.of(local));
     when(ldesServerClient.getEventStream(local, "parcels")).thenReturn(parcelsStream());
 
-    fragmentService().fetch(local.id(), "parcels", "by-page",
-        "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=2");
+    fragmentService()
+        .fetch(
+            local.id(),
+            "parcels",
+            "by-page",
+            "http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=2");
 
-    verify(ldesServerClient).getFragment(local,
-        URI.create("http://localhost:32769/parcels/by-page?pageNumber=2"),
-        "prov:generatedAtTime", "dcterms:isVersionOf");
+    verify(ldesServerClient)
+        .getFragment(
+            local,
+            URI.create("http://localhost:32769/parcels/by-page?pageNumber=2"),
+            "prov:generatedAtTime",
+            "dcterms:isVersionOf");
   }
 
   @Test
@@ -182,8 +190,13 @@ class LdesServerServicesTest {
     InstanceId serverId = server.id();
     FragmentService service = fragmentService();
 
-    assertThatThrownBy(() -> service.fetch(serverId, "parcels", "by-page",
-        "http://ldes.example.org.evil.com/parcels/by-page"))
+    assertThatThrownBy(
+            () ->
+                service.fetch(
+                    serverId,
+                    "parcels",
+                    "by-page",
+                    "http://ldes.example.org.evil.com/parcels/by-page"))
         .isInstanceOf(IllegalArgumentException.class);
     verify(ldesServerClient, never()).getFragment(any(), any(), any(), any());
   }
@@ -197,8 +210,13 @@ class LdesServerServicesTest {
   }
 
   private static EventStream parcelsStream() {
-    return new EventStream("parcels", "prov:generatedAtTime", "dcterms:isVersionOf", false,
-        List.of("by-page"), TURTLE);
+    return new EventStream(
+        "parcels",
+        "prov:generatedAtTime",
+        "dcterms:isVersionOf",
+        false,
+        List.of("by-page"),
+        TURTLE);
   }
 
   private void givenServerExists() {

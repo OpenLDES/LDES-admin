@@ -5,8 +5,8 @@ import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceType;
 
 /**
- * Starts a new LDES server or LDIO on the machine running LDES-admin. Stopping it is done by
- * {@link UnregisterInstanceUseCase unregistering} it.
+ * Starts a new LDES server or LDIO on the machine running LDES-admin. Stopping it is done by {@link
+ * UnregisterInstanceUseCase unregistering} it.
  */
 public interface StartLocalInstanceUseCase {
 

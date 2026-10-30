@@ -6,13 +6,13 @@ is [_analysis/architecture.md](../../_analysis/architecture.md).
 
 ## Module and package contract
 
-| Module | Owns | Dependency direction |
-|--------|------|----------------------|
-| `model` | Domain records, identifiers, invariants and domain behaviour | JDK only |
-| `application` | `port.in` use cases/exceptions, `port.out` integration contracts, `service` orchestration | `model` |
-| `adapter` | `in.rest`, `in.scheduling`, `out.persistence.jpa`, `out.ldes`, `out.ldio`, `out.health`, `out.runtime`, `out.sandbox`, shared `out.http` helpers | `application`, domain types and integration libraries |
-| `frontend` | Vue application packaged as static resources in a jar | REST contract, not Java internals |
-| `bootstrap` | Spring Boot entry point, bean wiring, security, scheduling and SPA serving | Backend adapters and frontend jar |
+| Module        | Owns                                                                                                                                             | Dependency direction                                  |
+|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
+| `model`       | Domain records, identifiers, invariants and domain behaviour                                                                                     | JDK only                                              |
+| `application` | `port.in` use cases/exceptions, `port.out` integration contracts, `service` orchestration                                                        | `model`                                               |
+| `adapter`     | `in.rest`, `in.scheduling`, `out.persistence.jpa`, `out.ldes`, `out.ldio`, `out.health`, `out.runtime`, `out.sandbox`, shared `out.http` helpers | `application`, domain types and integration libraries |
+| `frontend`    | Vue application packaged as static resources in a jar                                                                                            | REST contract, not Java internals                     |
+| `bootstrap`   | Spring Boot entry point, bean wiring, security, scheduling and SPA serving                                                                       | Backend adapters and frontend jar                     |
 
 Packages start at `org.openldes.ldesadmin`; the domain areas are `instance`, `ldes`, `ldio`,
 `sandbox`, `monitoring` and `dashboard`. Extend the appropriate area rather than creating a

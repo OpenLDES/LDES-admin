@@ -6,8 +6,7 @@ import org.openldes.ldesadmin.model.instance.InstanceId;
 
 final class InstanceMapper {
 
-  private InstanceMapper() {
-  }
+  private InstanceMapper() {}
 
   static InstanceJpaEntity toJpaEntity(Instance instance) {
     InstanceJpaEntity entity = new InstanceJpaEntity();
@@ -15,7 +14,8 @@ final class InstanceMapper {
     entity.setType(instance.type());
     entity.setName(instance.name());
     entity.setUrl(instance.url().toString());
-    entity.setInternalUrl(instance.internalUrl() == null ? null : instance.internalUrl().toString());
+    entity.setInternalUrl(
+        instance.internalUrl() == null ? null : instance.internalUrl().toString());
     entity.setOrigin(instance.origin());
     entity.setSandbox(instance.sandbox());
     entity.setRuntimeReference(instance.runtimeReference());

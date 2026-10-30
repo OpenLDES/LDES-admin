@@ -15,30 +15,36 @@ import org.openldes.ldesadmin.model.ldio.StatusChangeSource;
 
 final class LdioPipelineMapper {
 
-  private LdioPipelineMapper() {
-  }
+  private LdioPipelineMapper() {}
 
   static DeployedPipeline toModel(PipelineTO pipeline) {
     return new DeployedPipeline(
-        new Pipeline(pipeline.name(), pipeline.description(), toModel(pipeline.input()),
-            toModel(pipeline.transformers()), toModel(pipeline.outputs())),
+        new Pipeline(
+            pipeline.name(),
+            pipeline.description(),
+            toModel(pipeline.input()),
+            toModel(pipeline.transformers()),
+            toModel(pipeline.outputs())),
         parseStatus(pipeline.status()),
-        pipeline.updateSource() == null ? null
+        pipeline.updateSource() == null
+            ? null
             : StatusChangeSource.valueOf(pipeline.updateSource().toUpperCase(Locale.ROOT)));
   }
 
   static PipelineConfigTO toConfig(Pipeline pipeline) {
     InputDefinition input = pipeline.input();
-    return new PipelineConfigTO(pipeline.name(), pipeline.description(),
-        new InputComponentTO(input.name(), input.config(),
+    return new PipelineConfigTO(
+        pipeline.name(),
+        pipeline.description(),
+        new InputComponentTO(
+            input.name(),
+            input.config(),
             input.optionalAdapter().map(LdioPipelineMapper::toTransferObject).orElse(null)),
         pipeline.transformers().stream().map(LdioPipelineMapper::toTransferObject).toList(),
         pipeline.outputs().stream().map(LdioPipelineMapper::toTransferObject).toList());
   }
 
-  /**
-   * Status endpoints answer with a bare enum value, sometimes quoted.
-   */
+  /** Status endpoints answer with a bare enum value, sometimes quoted. */
   static PipelineStatus parseStatus(String status) {
     if (status == null) {
       return PipelineStatus.INIT;
@@ -47,12 +53,13 @@ final class LdioPipelineMapper {
   }
 
   private static InputDefinition toModel(InputComponentTO input) {
-    return new InputDefinition(input.name(), input.config(),
-        input.adapter() == null ? null : toModel(input.adapter()));
+    return new InputDefinition(
+        input.name(), input.config(), input.adapter() == null ? null : toModel(input.adapter()));
   }
 
   private static List<ComponentDefinition> toModel(List<ComponentTO> components) {
-    return components == null ? List.of()
+    return components == null
+        ? List.of()
         : components.stream().map(LdioPipelineMapper::toModel).toList();
   }
 

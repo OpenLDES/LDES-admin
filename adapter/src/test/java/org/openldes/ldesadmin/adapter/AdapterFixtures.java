@@ -9,16 +9,15 @@ public final class AdapterFixtures {
 
   public static final Instant NOW = Instant.parse("2026-10-23T10:15:30Z");
 
-  private AdapterFixtures() {
-  }
+  private AdapterFixtures() {}
 
   public static Instance ldesServer() {
-    return Instance.register(InstanceType.LDES_SERVER, "Production",
-        URI.create("http://ldes.example.org"), false, NOW);
+    return Instance.register(
+        InstanceType.LDES_SERVER, "Production", URI.create("http://ldes.example.org"), false, NOW);
   }
 
   public static Instance ldio() {
-    return Instance.register(InstanceType.LDIO, "Ingest LDIO",
-        URI.create("http://ldio.example.org"), false, NOW);
+    return Instance.register(
+        InstanceType.LDIO, "Ingest LDIO", URI.create("http://ldio.example.org"), false, NOW);
   }
 }

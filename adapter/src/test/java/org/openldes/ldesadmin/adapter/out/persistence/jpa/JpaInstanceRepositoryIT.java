@@ -35,24 +35,25 @@ class JpaInstanceRepositoryIT {
 
   private static final Instant NOW = Instant.parse("2026-10-23T10:15:30Z");
 
-  @Container
-  @ServiceConnection
+  @Container @ServiceConnection
   static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-  @Autowired
-  private JpaInstanceRepository repository;
-  @Autowired
-  private InstanceJpaRepository jpaRepository;
-  @Autowired
-  private JpaActivityLog activityLog;
-  @Autowired
-  private JpaIngestSampleRepository ingestSamples;
+  @Autowired private JpaInstanceRepository repository;
+  @Autowired private InstanceJpaRepository jpaRepository;
+  @Autowired private JpaActivityLog activityLog;
+  @Autowired private JpaIngestSampleRepository ingestSamples;
 
   @Test
   void storesAndRestoresInstances() {
-    Instance local = Instance.local(InstanceType.LDIO, "Sandbox LDIO",
-        URI.create("http://localhost:32768"), URI.create("http://sandbox-ldio:8080"),
-        "container-42", true, NOW);
+    Instance local =
+        Instance.local(
+            InstanceType.LDIO,
+            "Sandbox LDIO",
+            URI.create("http://localhost:32768"),
+            URI.create("http://sandbox-ldio:8080"),
+            "container-42",
+            true,
+            NOW);
 
     repository.save(local);
 
@@ -72,22 +73,28 @@ class JpaInstanceRepositoryIT {
   void knowsWhetherAUrlIsRegistered() {
     register(InstanceType.LDES_SERVER, "Production", "http://ldes.example.org");
 
-    assertThat(repository.existsByTypeAndUrl(InstanceType.LDES_SERVER,
-        URI.create("http://ldes.example.org"))).isTrue();
-    assertThat(repository.existsByTypeAndUrl(InstanceType.LDIO,
-        URI.create("http://ldes.example.org"))).isFalse();
+    assertThat(
+            repository.existsByTypeAndUrl(
+                InstanceType.LDES_SERVER, URI.create("http://ldes.example.org")))
+        .isTrue();
+    assertThat(
+            repository.existsByTypeAndUrl(InstanceType.LDIO, URI.create("http://ldes.example.org")))
+        .isFalse();
   }
 
   @Test
   void theDatabaseRefusesDuplicateUrls() {
     register(InstanceType.LDES_SERVER, "Production", "http://ldes.example.org");
-    Instance duplicate = Instance.register(InstanceType.LDES_SERVER, "Again",
-        URI.create("http://ldes.example.org"), false, NOW);
+    Instance duplicate =
+        Instance.register(
+            InstanceType.LDES_SERVER, "Again", URI.create("http://ldes.example.org"), false, NOW);
 
-    assertThatThrownBy(() -> {
-      repository.save(duplicate);
-      jpaRepository.flush();
-    }).isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(
+            () -> {
+              repository.save(duplicate);
+              jpaRepository.flush();
+            })
+        .isInstanceOf(DataIntegrityViolationException.class);
   }
 
   @Test
@@ -103,17 +110,24 @@ class JpaInstanceRepositoryIT {
   void keepsTheActivityNewestFirst() {
     Instance ldio = register(InstanceType.LDIO, "LDIO", "http://ldio.example.org");
     ActivityEvent added = ActivityEvent.of(ldio, Severity.INFO, "LDIO added", null, NOW);
-    ActivityEvent deployed = ActivityEvent.of(ldio, Severity.SUCCESS, "Pipeline parcels deployed",
-        "x".repeat(3_000), NOW.plusSeconds(60));
-    ActivityEvent halted = ActivityEvent.of(ldio, Severity.WARN, "Pipeline parcels halted", null,
-        NOW.plusSeconds(120));
+    ActivityEvent deployed =
+        ActivityEvent.of(
+            ldio,
+            Severity.SUCCESS,
+            "Pipeline parcels deployed",
+            "x".repeat(3_000),
+            NOW.plusSeconds(60));
+    ActivityEvent halted =
+        ActivityEvent.of(
+            ldio, Severity.WARN, "Pipeline parcels halted", null, NOW.plusSeconds(120));
     activityLog.record(added);
     activityLog.record(halted);
     activityLog.record(deployed);
 
     List<ActivityEvent> recent = activityLog.findRecent(2);
 
-    assertThat(recent).extracting(ActivityEvent::title)
+    assertThat(recent)
+        .extracting(ActivityEvent::title)
         .containsExactly("Pipeline parcels halted", "Pipeline parcels deployed");
     assertThat(recent.getLast().detail()).hasSize(2_048);
   }
@@ -126,8 +140,7 @@ class JpaInstanceRepositoryIT {
     ingestSamples.save(recent);
     ingestSamples.save(old);
 
-    assertThat(ingestSamples.findSince(NOW.minus(Duration.ofDays(3))))
-        .containsExactly(old, recent);
+    assertThat(ingestSamples.findSince(NOW.minus(Duration.ofDays(3)))).containsExactly(old, recent);
 
     ingestSamples.deleteBefore(NOW.minus(Duration.ofHours(48)));
 

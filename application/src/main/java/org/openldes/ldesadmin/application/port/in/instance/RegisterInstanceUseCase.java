@@ -5,14 +5,12 @@ import java.util.Objects;
 import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceType;
 
-/**
- * Registers an LDES server or LDIO that already runs somewhere.
- */
+/** Registers an LDES server or LDIO that already runs somewhere. */
 public interface RegisterInstanceUseCase {
 
   /**
-   * @throws InstanceAlreadyRegisteredException if an instance of the same type with the same URL
-   *                                            is already registered
+   * @throws InstanceAlreadyRegisteredException if an instance of the same type with the same URL is
+   *     already registered
    */
   Instance register(RegisterInstanceCommand command);
 

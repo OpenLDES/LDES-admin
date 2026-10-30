@@ -24,7 +24,9 @@ class SandboxController {
   private final PollUseCase pollUseCase;
   private final RunPipelineUseCase runPipelineUseCase;
 
-  SandboxController(SandboxUseCase sandboxUseCase, PollUseCase pollUseCase,
+  SandboxController(
+      SandboxUseCase sandboxUseCase,
+      PollUseCase pollUseCase,
       RunPipelineUseCase runPipelineUseCase) {
     this.sandboxUseCase = sandboxUseCase;
     this.pollUseCase = pollUseCase;
@@ -37,8 +39,8 @@ class SandboxController {
   }
 
   /**
-   * Starts what does not run yet, and returns once both instances are ready. The first start
-   * pulls the Docker images, which takes a few minutes.
+   * Starts what does not run yet, and returns once both instances are ready. The first start pulls
+   * the Docker images, which takes a few minutes.
    */
   @PostMapping
   SandboxWebModel start() {
@@ -53,8 +55,8 @@ class SandboxController {
 
   /**
    * Fetches what an HTTP In Poller would receive, for the simulation. LDES-admin fetches it, not
-   * the browser, which most APIs don't allow to read their responses (CORS). A POST, as the
-   * request carries credentials.
+   * the browser, which most APIs don't allow to read their responses (CORS). A POST, as the request
+   * carries credentials.
    */
   @PostMapping("/poll")
   PolledContentWebModel poll(@Valid @RequestBody PollRequest request) {
@@ -67,7 +69,8 @@ class SandboxController {
    */
   @PostMapping("/runs")
   PipelineRunWebModel run(@Valid @RequestBody RunRequest request) {
-    return PipelineRunWebModel.fromDomain(runPipelineUseCase.run(request.pipeline().toDomain(),
-        request.toInput(), request.toOptions()));
+    return PipelineRunWebModel.fromDomain(
+        runPipelineUseCase.run(
+            request.pipeline().toDomain(), request.toInput(), request.toOptions()));
   }
 }

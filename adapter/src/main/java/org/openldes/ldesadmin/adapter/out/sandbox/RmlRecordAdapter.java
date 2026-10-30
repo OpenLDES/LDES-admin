@@ -49,9 +49,9 @@ import org.openldes.ldi.functions.WktFunctions;
 import org.openldes.ldi.types.LdiAdapter;
 
 /**
- * The RML adapter of LDI ({@code org.openldes.ldi.RmlAdapter}), with two differences, both
- * because LDI runs on Jena 5 and LDES-admin on Jena 6: JSON is handed to carml as a parsed record
- * rather than a stream, and the triples carml makes are converted to Jena here.
+ * The RML adapter of LDI ({@code org.openldes.ldi.RmlAdapter}), with two differences, both because
+ * LDI runs on Jena 5 and LDES-admin on Jena 6: JSON is handed to carml as a parsed record rather
+ * than a stream, and the triples carml makes are converted to Jena here.
  *
  * <p>For a stream, carml finds the records with JsurferJ, whose JSONPath parser was generated with
  * ANTLR 4.7. The ANTLR runtime of Hibernate and Spring Data (4.13) cannot read it. For a record,
@@ -64,28 +64,33 @@ final class RmlRecordAdapter implements LdiAdapter {
   private static final ObjectMapper JSON = new ObjectMapper();
 
   private final RdfRmlMapper rmlMapper;
+
   /** Whether every logical source is JSON, so the input can be handed over as a record */
   private final boolean json;
 
   RmlRecordAdapter(String mapping) {
     Set<TriplesMap> triplesMaps = RmlMappingLoader.build().load(carmlMapping(mapping));
-    this.json = triplesMaps.stream()
-        .map(triplesMap -> triplesMap.getLogicalSource().getReferenceFormulation())
-        .allMatch(io.carml.vocab.Rdf.Ql.JsonPath::equals);
-    this.rmlMapper = RdfRmlMapper.builder()
-        .triplesMaps(triplesMaps)
-        .setLogicalSourceResolver(io.carml.vocab.Rdf.Ql.JsonPath, JsonPathResolver::getInstance)
-        .setLogicalSourceResolver(io.carml.vocab.Rdf.Ql.XPath, XPathResolver::getInstance)
-        .setLogicalSourceResolver(io.carml.vocab.Rdf.Ql.Csv, CsvResolver::getInstance)
-        .addFunctions(new WktFunctions(), new ReplaceFunctions(), new TimeFunctions())
-        .build();
+    this.json =
+        triplesMaps.stream()
+            .map(triplesMap -> triplesMap.getLogicalSource().getReferenceFormulation())
+            .allMatch(io.carml.vocab.Rdf.Ql.JsonPath::equals);
+    this.rmlMapper =
+        RdfRmlMapper.builder()
+            .triplesMaps(triplesMaps)
+            .setLogicalSourceResolver(io.carml.vocab.Rdf.Ql.JsonPath, JsonPathResolver::getInstance)
+            .setLogicalSourceResolver(io.carml.vocab.Rdf.Ql.XPath, XPathResolver::getInstance)
+            .setLogicalSourceResolver(io.carml.vocab.Rdf.Ql.Csv, CsvResolver::getInstance)
+            .addFunctions(new WktFunctions(), new ReplaceFunctions(), new TimeFunctions())
+            .build();
   }
 
   @Override
   public Stream<Model> apply(Content content) {
-    var statements = json
-        ? rmlMapper.mapRecord(readJson(content.content()), JsonNode.class)
-        : rmlMapper.map(new ByteArrayInputStream(content.content().getBytes(StandardCharsets.UTF_8)));
+    var statements =
+        json
+            ? rmlMapper.mapRecord(readJson(content.content()), JsonNode.class)
+            : rmlMapper.map(
+                new ByteArrayInputStream(content.content().getBytes(StandardCharsets.UTF_8)));
     Dataset dataset = DatasetFactory.create();
     Objects.requireNonNull(statements.collect(ModelCollector.toModel()).share().block())
         .forEach(statement -> dataset.asDatasetGraph().add(quad(statement)));
@@ -93,18 +98,20 @@ final class RmlRecordAdapter implements LdiAdapter {
     if (!dataset.listNames().hasNext()) {
       return Stream.of(dataset.getDefaultModel());
     }
-    return stream(Spliterators.spliteratorUnknownSize(dataset.listNames(), Spliterator.ORDERED),
-        false)
+    return stream(
+            Spliterators.spliteratorUnknownSize(dataset.listNames(), Spliterator.ORDERED), false)
         .map(dataset::getNamedModel)
         .map(model -> enrichModel(model, dataset));
   }
 
-  /**
-   * carml's own converter (JenaConverters) calls a method Jena 6 no longer has.
-   */
+  /** carml's own converter (JenaConverters) calls a method Jena 6 no longer has. */
   private static Quad quad(org.eclipse.rdf4j.model.Statement statement) {
-    Node graph = statement.getContext() == null ? Quad.defaultGraphIRI : node(statement.getContext());
-    return Quad.create(graph, node(statement.getSubject()), node(statement.getPredicate()),
+    Node graph =
+        statement.getContext() == null ? Quad.defaultGraphIRI : node(statement.getContext());
+    return Quad.create(
+        graph,
+        node(statement.getSubject()),
+        node(statement.getPredicate()),
         node(statement.getObject()));
   }
 
@@ -116,10 +123,15 @@ final class RmlRecordAdapter implements LdiAdapter {
       return NodeFactory.createBlankNode(bnode.getID());
     }
     Literal literal = (Literal) value;
-    return literal.getLanguage()
+    return literal
+        .getLanguage()
         .map(language -> NodeFactory.createLiteralLang(literal.getLabel(), language))
-        .orElseGet(() -> NodeFactory.createLiteralDT(literal.getLabel(),
-            TypeMapper.getInstance().getSafeTypeByName(literal.getDatatype().stringValue())));
+        .orElseGet(
+            () ->
+                NodeFactory.createLiteralDT(
+                    literal.getLabel(),
+                    TypeMapper.getInstance()
+                        .getSafeTypeByName(literal.getDatatype().stringValue())));
   }
 
   private static JsonNode readJson(String content) {
@@ -130,9 +142,7 @@ final class RmlRecordAdapter implements LdiAdapter {
     }
   }
 
-  /**
-   * As LDI does: every logical source reads the input, never a file or URL of the mapping.
-   */
+  /** As LDI does: every logical source reads the input, never a file or URL of the mapping. */
   private static org.eclipse.rdf4j.model.Model carmlMapping(String mapping) {
     org.eclipse.rdf4j.model.Model model;
     try {
@@ -143,26 +153,26 @@ final class RmlRecordAdapter implements LdiAdapter {
     ValueFactory factory = SimpleValueFactory.getInstance();
     List<Resource> sources = new ArrayList<>();
     List<org.eclipse.rdf4j.model.Statement> added = new ArrayList<>();
-    for (var statement : model.getStatements(null, RDF.TYPE,
-        factory.createIRI(RML, "LogicalSource"))) {
+    for (var statement :
+        model.getStatements(null, RDF.TYPE, factory.createIRI(RML, "LogicalSource"))) {
       Resource source = statement.getSubject();
       sources.add(source);
       var stream = factory.createBNode();
       added.add(factory.createStatement(source, factory.createIRI(RML, "source"), stream));
-      added.add(factory.createStatement(stream, RDF.TYPE,
-          factory.createIRI("http://carml.taxonic.com/carml/", "Stream")));
+      added.add(
+          factory.createStatement(
+              stream, RDF.TYPE, factory.createIRI("http://carml.taxonic.com/carml/", "Stream")));
     }
-    sources.forEach(source -> {
-      model.remove(source, RDF.TYPE, factory.createIRI(RML, "LogicalSource"));
-      model.remove(source, factory.createIRI(RML, "source"), null);
-    });
+    sources.forEach(
+        source -> {
+          model.remove(source, RDF.TYPE, factory.createIRI(RML, "LogicalSource"));
+          model.remove(source, factory.createIRI(RML, "source"), null);
+        });
     model.addAll(added);
     return model;
   }
 
-  /**
-   * Adds what the subjects of a named graph refer to in the default graph, as LDI does.
-   */
+  /** Adds what the subjects of a named graph refer to in the default graph, as LDI does. */
   private static Model enrichModel(Model input, Dataset dataset) {
     Deque<Statement> toProcess = new ArrayDeque<>();
     List<Statement> added = new ArrayList<>();
@@ -170,14 +180,16 @@ final class RmlRecordAdapter implements LdiAdapter {
     while (!toProcess.isEmpty()) {
       Statement statement = toProcess.pop();
       if (statement.getObject().isResource()) {
-        dataset.getDefaultModel()
+        dataset
+            .getDefaultModel()
             .listStatements(statement.getResource(), null, (RDFNode) null)
-            .forEach(referred -> {
-              added.add(referred);
-              if (!referred.getObject().isLiteral()) {
-                toProcess.add(referred);
-              }
-            });
+            .forEach(
+                referred -> {
+                  added.add(referred);
+                  if (!referred.getObject().isLiteral()) {
+                    toProcess.add(referred);
+                  }
+                });
       }
     }
     input.add(added);

@@ -25,8 +25,11 @@ public class ActivityService implements ActivityUseCase {
   private final ActivityLog activityLog;
   private final Clock clock;
 
-  public ActivityService(InstanceRepository instanceRepository,
-      IngestSampleRepository ingestSamples, ActivityLog activityLog, Clock clock) {
+  public ActivityService(
+      InstanceRepository instanceRepository,
+      IngestSampleRepository ingestSamples,
+      ActivityLog activityLog,
+      Clock clock) {
     this.instanceRepository = instanceRepository;
     this.ingestSamples = ingestSamples;
     this.activityLog = activityLog;
@@ -37,11 +40,13 @@ public class ActivityService implements ActivityUseCase {
   public List<ThroughputSeries> throughput() {
     Instant now = clock.instant();
     // One hour extra, to know the total at the start of the first hour
-    List<IngestSample> samples = ingestSamples.findSince(
-        now.minus(Duration.ofHours(THROUGHPUT_HOURS + 1L)));
+    List<IngestSample> samples =
+        ingestSamples.findSince(now.minus(Duration.ofHours(THROUGHPUT_HOURS + 1L)));
     return instanceRepository.findByType(InstanceType.LDES_SERVER).stream()
-        .map(server -> ThroughputSeries.fromSamples(server.id(), server.name(), samples, now,
-            THROUGHPUT_HOURS))
+        .map(
+            server ->
+                ThroughputSeries.fromSamples(
+                    server.id(), server.name(), samples, now, THROUGHPUT_HOURS))
         .filter(series -> !series.points().isEmpty())
         .toList();
   }

@@ -2,13 +2,13 @@
 
 Keep conversion where the external representation enters or leaves the hexagon.
 
-| Boundary | Existing pattern | Must not leak inward |
-|----------|------------------|----------------------|
-| HTTP to use case | Request records to input-port command records in controllers | Servlet, Spring HTTP and validation types |
-| Domain to HTTP | `*WebModel.fromDomain(...)` factories | JPA entities or framework response wrappers |
-| JPA to domain | Package-local mapping helpers such as `InstanceMapper` | Entities, lazy proxies and persistence annotations |
-| Remote RDF/JSON to domain | LDES/LDIO outbound client parsing helpers | Jena models, Jackson nodes and remote wire quirks |
-| Frontend wire data | Typed API implementation to shared frontend models | Transport-specific logic in Vue components |
+| Boundary                  | Existing pattern                                             | Must not leak inward                               |
+|---------------------------|--------------------------------------------------------------|----------------------------------------------------|
+| HTTP to use case          | Request records to input-port command records in controllers | Servlet, Spring HTTP and validation types          |
+| Domain to HTTP            | `*WebModel.fromDomain(...)` factories                        | JPA entities or framework response wrappers        |
+| JPA to domain             | Package-local mapping helpers such as `InstanceMapper`       | Entities, lazy proxies and persistence annotations |
+| Remote RDF/JSON to domain | LDES/LDIO outbound client parsing helpers                    | Jena models, Jackson nodes and remote wire quirks  |
+| Frontend wire data        | Typed API implementation to shared frontend models           | Transport-specific logic in Vue components         |
 
 `JpaInstanceRepository` demonstrates `InstanceMapper.toJpaEntity` and `toModel`.
 `InstanceController` demonstrates `InstanceWebModel.fromDomain`. Follow those conventions; do not
