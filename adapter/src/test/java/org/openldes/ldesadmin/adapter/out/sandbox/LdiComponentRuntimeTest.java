@@ -322,7 +322,7 @@ class LdiComponentRuntimeTest {
 
   @Test
   void stopsAComponentThatTakesTooLong() {
-    var impatient = new LdiComponentRuntime(Duration.ofMillis(1), Clock.systemUTC());
+    var impatient = new LdiComponentRuntime(Duration.ofNanos(1), Clock.systemUTC());
     var adapter = new ComponentDefinition("Ldio:RmlAdapter", Map.of("mapping", RML_MAPPING));
     try {
       assertThatThrownBy(
@@ -332,7 +332,7 @@ class LdiComponentRuntimeTest {
                       adapter,
                       RunInput.of("[{\"id\": \"a\", \"name\": \"A\"}]", "application/json")))
           .isInstanceOf(ComponentException.class)
-          .hasMessage("Took longer than 1 ms, the limit of the sandbox");
+          .hasMessage("Took longer than 0 ms, the limit of the sandbox");
     } finally {
       impatient.destroy();
     }

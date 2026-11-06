@@ -53,7 +53,7 @@
       of local instances. LDI is built on Jena 5; Jena is aligned to the version of LDES-admin.
       (BOMs of Jena and rdf4j are not imported: they manage Spring 5.)
     -->
-    <ldi.version>3.1.1</ldi.version>
+    <ldi.version>3.2.2</ldi.version>
     <commons-text.version>1.15.0</commons-text.version>
     <archunit.version>1.5.1</archunit.version>
     <!-- Only the bootstrap module contains a runnable application -->
