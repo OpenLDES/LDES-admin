@@ -11,6 +11,66 @@ describe('the sandbox', () => {
       .and('contain', 'Ldio:VersionObjectCreator')
   })
 
+  it('resizes and collapses the side panels and simulation', () => {
+    cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '236')
+      .trigger('mousedown', { button: 0, clientX: 236, clientY: 100 })
+    cy.window().trigger('mousemove', { clientX: 280, clientY: 100 })
+    cy.window().trigger('mouseup')
+    cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '280')
+
+    cy.get('[data-cy=toggle-components-panel]').click().should('have.attr', 'aria-expanded', 'false')
+    cy.get('[data-cy=palette-search]').should('not.exist')
+    cy.get('[data-cy=toggle-components-panel]').click().should('have.attr', 'aria-expanded', 'true')
+
+    cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '330')
+      .trigger('mousedown', { button: 0, clientX: 600, clientY: 100 })
+    cy.window().trigger('mousemove', { clientX: 550, clientY: 100 })
+    cy.window().trigger('mouseup')
+    cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '380')
+    cy.get('[data-cy=toggle-inspector-panel]').click().should('have.attr', 'aria-expanded', 'false')
+    cy.get('[data-cy=inspector]').should('not.exist')
+    cy.get('[data-cy=toggle-inspector-panel]').click().should('have.attr', 'aria-expanded', 'true')
+
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', '44')
+      .then(($separator) => {
+        const top = $separator[0].getBoundingClientRect().top
+        cy.wrap($separator).trigger('mousedown', { button: 0, clientY: top })
+        cy.wrap($separator).trigger('mousemove', { clientX: 100, clientY: top - 60 })
+        cy.window().trigger('mouseup')
+      })
+    cy.get('[data-cy=resize-simulation]').invoke('attr', 'aria-valuenow').then(Number).should('not.equal', 44)
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=sample-input]').should('not.exist')
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=sample-input]').should('exist')
+  })
+
+  it('lets the configuration panel grow to 66% of the screen width', () => {
+    for (const viewportWidth of [1440, 1920, 1280]) {
+      cy.viewport(viewportWidth, 900)
+      const maximum = Math.floor(viewportWidth * 0.66)
+      cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuemax', String(maximum))
+        .trigger('mousedown', { button: 0, clientX: 1000, clientY: 100 })
+      cy.window().trigger('mousemove', { clientX: -2000, clientY: 100 })
+      cy.window().trigger('mouseup')
+      cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', String(maximum))
+      cy.get('.inspector-side').should(($panel) => {
+        expect($panel[0].getBoundingClientRect().width).to.be.closeTo(maximum, 1)
+      })
+      cy.get('[data-cy=resize-inspector]').trigger('keydown', { key: 'ArrowLeft' })
+        .should('have.attr', 'aria-valuenow', String(maximum))
+        .trigger('keydown', { key: 'ArrowRight' })
+        .should('have.attr', 'aria-valuenow', String(maximum - 24))
+    }
+
+    cy.viewport(1000, 900)
+    cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '660')
+    cy.get('.inspector-side').should(($panel) => {
+      expect($panel[0].getBoundingClientRect().width).to.be.closeTo(660, 1)
+    })
+  })
+
   it('shows and edits the YAML of the component you click', () => {
     cy.get('[data-cy="node-Ldio:HttpOut"]').click()
     cy.get('[data-cy=inspector]').should('contain', 'HTTP Out')
