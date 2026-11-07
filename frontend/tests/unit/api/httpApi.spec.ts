@@ -38,6 +38,32 @@ describe('HTTP LDES-admin API', () => {
     expect(calls[0]).toMatchObject({ url: '/api/v1/ldes-servers', method: 'GET', headers: { Accept: 'application/json' } })
   })
 
+  it('uses the live lifecycle, HTTP ingress, and raw connector callback endpoints', async () => {
+    const request = {
+      pipeline: { name: 'live', input: { name: 'Ldio:HttpIn', adapter: { name: 'Ldio:RdfAdapter' } } },
+      session: 'browser session', executeOutputs: false,
+    }
+    next = answer(200, { active: true, received: 0, latest: null, error: null })
+    await api.startLivePipeline(request)
+    await api.getLivePipeline(request.session)
+    next = answer(202)
+    await api.sendLiveInput(request.session, { content: '<a> <b> <c> .', contentType: 'text/turtle' })
+    next = answer(200, '{}')
+    await api.liveConnector(request.session, 'token', '{"authKey":"Authorization","authCode":"test"}')
+    next = answer(204)
+    await api.stopLivePipeline(request.session)
+
+    expect(calls.map(({ method, url }) => [method, url])).toEqual([
+      ['POST', '/api/v1/sandbox/live'],
+      ['GET', '/api/v1/sandbox/live/browser%20session'],
+      ['POST', '/api/v1/sandbox/live/browser%20session/input'],
+      ['POST', '/api/v1/sandbox/live/browser%20session/connector/token'],
+      ['DELETE', '/api/v1/sandbox/live/browser%20session'],
+    ])
+    expect(JSON.parse(calls[0].body!)).toEqual(request)
+    expect(calls[3].body).toBe('{"authKey":"Authorization","authCode":"test"}')
+  })
+
   it('sends RDF as it is', async () => {
     next = answer(201, { collection: 'parcels' })
 

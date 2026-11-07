@@ -4,7 +4,7 @@ import { api } from '@/api'
 import { errorMessage } from '@/composables/useAsync'
 import type { ComponentConfig, Pipeline } from '@/domain/ldio'
 import type { RdfFormat } from '@/domain/ldes'
-import type { SimulationInput, SimulationResult } from '@/domain/sandbox'
+import type { LivePipelineRun, SimulationInput, SimulationResult } from '@/domain/sandbox'
 import { convertRdf, isRdfFormat } from '@/ldes/formats'
 import {
   autoLayout,
@@ -69,6 +69,21 @@ export const useSandboxStore = defineStore('sandbox', () => {
   /** Renewed with every pipeline loaded: the change detection filter forgets what it saw then */
   const session = ref(newSession())
   let currentRun: Promise<void> = Promise.resolve()
+  const live = ref<LivePipelineRun>()
+  const liveBusy = ref(false)
+  const liveAttached = ref(false)
+  const liveId = ref<string>()
+  const liveError = ref<string>()
+  let liveTimer: ReturnType<typeof setTimeout> | undefined
+  let liveConnection: {
+    id: string
+    cancelled: boolean
+    started: Promise<LivePipelineRun>
+    stopping?: Promise<void>
+    get: typeof api.getLivePipeline
+    stop: typeof api.stopLivePipeline
+    send: typeof api.sendLiveInput
+  } | undefined
 
   const polling = ref(false)
   /** Successful polls since polling started */
@@ -96,6 +111,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
   }
 
   function load(pipeline: Pipeline, input?: SimulationInput, from: PipelineOrigin = { kind: 'scratch' }) {
+    void stopLive()
     stopPolling()
     lastPoll.value = undefined
     const graph = pipelineToGraph(pipeline)
@@ -116,6 +132,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
   }
 
   function clear() {
+    void stopLive()
     stopPolling()
     lastPoll.value = undefined
     nodes.value = []
@@ -190,7 +207,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
 
   /** Runs the input through the pipeline; while a run is in progress, answers that one */
   function run(): Promise<void> {
-    if (!running.value) currentRun = simulate()
+    if (!running.value && !live.value?.active && !liveBusy.value) currentRun = simulate()
     return currentRun
   }
 
@@ -273,7 +290,7 @@ export const useSandboxStore = defineStore('sandbox', () => {
   /** Polls on the schedule of the component, and runs every response through the pipeline */
   function startPolling() {
     const schedule = poller.value?.schedule
-    if (!schedule || polling.value) return
+    if (!schedule || polling.value || live.value?.active || liveBusy.value) return
     polling.value = true
     polls.value = 0
     pollSession++
@@ -341,6 +358,117 @@ export const useSandboxStore = defineStore('sandbox', () => {
   watch(() => pollerKey(poller.value), (key) => {
     if (polling.value && !pollInProgress && key !== scheduledFor) schedulePoll()
   })
+
+  async function startLive() {
+    const pipeline = conversion.value.pipeline
+    if (!pipeline || !conversion.value.valid || running.value || liveBusy.value || liveAttached.value) return
+    stopPolling()
+    resetSimulation()
+    liveError.value = undefined
+    liveBusy.value = true
+    liveAttached.value = true
+    const id = newSession()
+    liveId.value = id
+    // Capture bound methods before a mode switch replaces the API behind the proxy.
+    const connection = {
+      id,
+      cancelled: false,
+      get: api.getLivePipeline,
+      stop: api.stopLivePipeline,
+      send: api.sendLiveInput,
+      started: api.startLivePipeline({ pipeline, session: id, executeOutputs: executeOutputs.value }),
+    }
+    liveConnection = connection
+    try {
+      const state = await connection.started
+      if (connection.cancelled || liveConnection !== connection) return
+      showLive(state)
+      monitorLive(connection)
+    } catch (e) {
+      liveError.value = errorMessage(e)
+      if (liveConnection === connection && !connection.cancelled) await stopLive()
+    } finally {
+      if (!connection.cancelled) liveBusy.value = false
+    }
+  }
+
+  function showLive(state: LivePipelineRun) {
+    live.value = state
+    liveError.value = state.error ?? undefined
+    if (state.latest) {
+      result.value = state.latest
+      const ids = nodeIdsInOrder()
+      stepNodeIds.value = state.latest.steps.map((step) => ids[step.kind][step.index])
+      for (const step of state.latest.steps) {
+        setRunStatus(ids[step.kind][step.index], step.status === 'ok' ? 'done' : step.status)
+      }
+    }
+  }
+
+  function monitorLive(connection: NonNullable<typeof liveConnection>) {
+    clearTimeout(liveTimer)
+    if (connection.cancelled || !live.value?.active) return
+    liveTimer = setTimeout(async () => {
+      try {
+        const state = await connection.get(connection.id)
+        if (connection.cancelled || liveConnection !== connection) return
+        showLive(state)
+        if (state.active) monitorLive(connection)
+        else await stopLive()
+      } catch (e) {
+        if (connection.cancelled || liveConnection !== connection) return
+        liveError.value = errorMessage(e)
+        await stopLive()
+      }
+    }, 1000)
+  }
+
+  async function sendLiveInput() {
+    const connection = liveConnection
+    if (!connection || !live.value?.active || liveBusy.value) return
+    liveBusy.value = true
+    try {
+      await connection.send(connection.id, { ...sample.value })
+    } catch (e) {
+      liveError.value = errorMessage(e)
+    } finally {
+      liveBusy.value = false
+    }
+  }
+
+  async function stopLive() {
+    const connection = liveConnection
+    if (!connection) return
+    if (connection.stopping) return connection.stopping
+    connection.cancelled = true
+    clearTimeout(liveTimer)
+    connection.stopping = closeLive(connection)
+    return connection.stopping
+  }
+
+  async function closeLive(connection: NonNullable<typeof liveConnection>) {
+    liveBusy.value = true
+    try {
+      try {
+        await connection.started
+      } catch (e) {
+        liveError.value = errorMessage(e)
+      }
+      await connection.stop(connection.id)
+      if (liveConnection === connection) {
+        liveConnection = undefined
+        liveAttached.value = false
+        if (live.value) live.value = { ...live.value, active: false }
+      }
+    } catch (e) {
+      liveError.value = `Could not stop the live source: ${errorMessage(e)}. Retry Stop live.`
+    } finally {
+      connection.stopping = undefined
+      liveBusy.value = false
+    }
+  }
+
+  watch([yaml, executeOutputs], () => { void stopLive() })
 
   function resetSimulation() {
     if (running.value) return
@@ -429,6 +557,14 @@ export const useSandboxStore = defineStore('sandbox', () => {
     fetchInput,
     startPolling,
     stopPolling,
+    live,
+    liveBusy,
+    liveAttached,
+    liveId,
+    liveError,
+    startLive,
+    stopLive,
+    sendLiveInput,
   }
 })
 

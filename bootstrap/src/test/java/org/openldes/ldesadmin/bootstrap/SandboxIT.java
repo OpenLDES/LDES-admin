@@ -6,13 +6,16 @@ import static org.awaitility.Awaitility.await;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 /**
@@ -43,6 +46,15 @@ class SandboxIT {
       """;
 
   @Autowired private RestTestClient client;
+  @LocalServerPort private int port;
+
+  @BeforeEach
+  void allowContainerStartupToComplete() {
+    SimpleClientHttpRequestFactory requests = new SimpleClientHttpRequestFactory();
+    requests.setConnectTimeout(Duration.ofSeconds(10));
+    requests.setReadTimeout(Duration.ofMinutes(5));
+    client = RestTestClient.bindToServer(requests).baseUrl("http://localhost:" + port).build();
+  }
 
   @Test
   void startsALdesServerAndLdioThatWorkTogether() {
@@ -289,7 +301,7 @@ class SandboxIT {
             "summary",
             summary ->
                 assertThat((String) summary)
-                    .matches("POST http://localhost:\\d+/sandbox-parcels: 201"));
+                    .matches("Sent the model to http://localhost:\\d+/sandbox-parcels"));
     await()
         .atMost(Duration.ofSeconds(30))
         .untilAsserted(
@@ -303,6 +315,65 @@ class SandboxIT {
                     .expectBody()
                     .jsonPath("$[0].ingestedMembers")
                     .isEqualTo(2));
+
+    client
+        .post()
+        .uri("/api/v1/sandbox/live")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(
+            Map.of(
+                "session",
+                "live-it",
+                "pipeline",
+                Map.of(
+                    "name",
+                    "live-http",
+                    "input",
+                    Map.of("name", "Ldio:HttpIn", "adapter", Map.of("name", "Ldio:RdfAdapter")),
+                    "outputs",
+                    List.of(Map.of("name", "Ldio:NoopOut")))))
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.active")
+        .isEqualTo(true);
+    try {
+      client
+          .post()
+          .uri("/api/v1/sandbox/live/live-it/input")
+          .contentType(MediaType.APPLICATION_JSON)
+          .body(Map.of("content", MEMBER, "contentType", "text/turtle"))
+          .exchange()
+          .expectStatus()
+          .isAccepted();
+      await()
+          .atMost(Duration.ofSeconds(20))
+          .untilAsserted(
+              () ->
+                  client
+                      .get()
+                      .uri("/api/v1/sandbox/live/live-it")
+                      .exchange()
+                      .expectStatus()
+                      .isOk()
+                      .expectBody()
+                      .jsonPath("$.received")
+                      .isEqualTo(1)
+                      .jsonPath("$.latest.delivered")
+                      .isEqualTo(true));
+    } finally {
+      client.delete().uri("/api/v1/sandbox/live/live-it").exchange().expectStatus().isNoContent();
+    }
+    client
+        .get()
+        .uri("/api/v1/sandbox/live/live-it")
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.active")
+        .isEqualTo(false);
 
     // Starting again changes nothing
     assertThat(object(startSandbox(), "ldesServer")).containsEntry("id", serverId);

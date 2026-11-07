@@ -59,6 +59,9 @@ Data Interaction Orchestrator (LDIO) pipelines.
   an HTTP poller can fetch its input from the URL it polls, once or on its schedule.
 * **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
   LDIO in Docker that work together out of the box.
+* **Live inputs**: start and stop real LDIO HTTP, AMQP, Kafka and LDES sources, with the latest
+  result shown step by step. Outputs stay dry unless explicitly enabled; broker/database outputs
+  always stay dry.
 
 | [![Designing a pipeline in the sandbox](docs/screenshots/sandbox.png)](docs/screenshots/sandbox.png) | [![Simulating a pipeline step by step](docs/screenshots/simulation.png)](docs/screenshots/simulation.png) |
 |:----------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|
@@ -114,9 +117,10 @@ bundle exec jekyll serve   # http://localhost:4000
 ## Requirements
 
 * JDK 25
-* The [LDI](https://github.com/OpenLDES/Linked-Data-Interactions) 3.1.1 libraries
-  (`org.openldes.ldi`), which the sandbox runs pipelines on. Until they are on Maven Central,
-  install them from their sources: `mvn install -DskipTests` in a clone of the 3.1.1 tag.
+* The [LDI/LDIO](https://github.com/OpenLDES/Linked-Data-Interactions) 3.2.2 libraries
+  (`org.openldes.ldi` and `org.openldes.ldio`), including the sandbox's real component
+  auto-configurators. If they are unavailable from your configured Maven repositories,
+  install the matching tag from source with `mvn install -DskipTests`.
 * Docker, for the database during development, the integration tests and local LDES servers/LDIOs
 * pnpm 9, only to run the frontend on its own (see [below](#2-backend-and-frontend-separately)).
   The frontend needs Node.js 22.12 or later (Vite 8); pnpm downloads and uses Node.js 24.21.0 for

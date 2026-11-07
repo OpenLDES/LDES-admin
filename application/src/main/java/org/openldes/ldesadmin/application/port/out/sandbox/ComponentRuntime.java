@@ -40,4 +40,7 @@ public interface ComponentRuntime {
    */
   OutputResult write(
       String session, int position, ComponentDefinition output, RdfDocument model, boolean execute);
+
+  /** Releases a completed live session and any resources owned by its components. */
+  void release(String session);
 }

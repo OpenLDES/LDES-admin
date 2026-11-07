@@ -11,6 +11,22 @@ describe('the sandbox', () => {
       .and('contain', 'Ldio:VersionObjectCreator')
   })
 
+  it('starts a live HTTP source, processes a member, and stops it', () => {
+    cy.get('[data-cy=templates]').click()
+    cy.contains('.p-menu-item', 'HTTP in → console').click()
+    cy.contains('.p-confirmdialog button', 'Replace').click()
+
+    cy.get('[data-cy=start-live]').click()
+    cy.get('[data-cy=live-status]').should('contain', 'Live source running')
+    cy.get('[data-cy=run-simulation]').should('be.disabled')
+    cy.get('[data-cy=send-live-input]').click()
+    cy.get('[data-cy=live-status]').should('contain', '1 members received')
+    cy.get('[data-cy=simulation-step]').should('have.length', 3)
+    cy.get('[data-cy=stop-live]').click()
+    cy.get('[data-cy=live-status]').should('contain', 'Live source stopped')
+    cy.get('[data-cy=run-simulation]').should('not.be.disabled')
+  })
+
   it('resizes and collapses the side panels and simulation', () => {
     cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '236')
       .trigger('mousedown', { button: 0, clientX: 236, clientY: 100 })

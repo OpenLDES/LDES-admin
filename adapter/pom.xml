@@ -16,6 +16,16 @@
 
   <dependencies>
     <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-kafka</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.openldes</groupId>
       <artifactId>ldes-admin-application</artifactId>
     </dependency>
@@ -66,6 +76,140 @@
     </dependency>
 
     <!-- Outbound: the sandbox runtime, which runs the LDI components of LDIO pipelines -->
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-rdf-adapter</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-json-to-ld-adapter</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-rml-adapter</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-ngsiv2-to-ld-adapter</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-version-object-creator</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-version-materialiser</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-sparql-construct</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-geojson-to-wkt</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-skolemisation-transformer</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-change-detection-filter</artifactId>
+      <version>${ldi.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.openldes.ldi</groupId>
+          <artifactId>ldi-infra-sql</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-http-enricher</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-console-out</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-http-out</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-http-sparql-out</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-repository-sink</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-kafka</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-amqp</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-rdb-out</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-noop-out</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-http-in</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-http-in-poller</artifactId>
+      <version>${ldi.version}</version>
+    </dependency>
+    <!-- Sources force MEMORY; the legacy SQLite extension is incompatible with admin Hibernate. -->
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-ldes-client</artifactId>
+      <version>${ldi.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.github.gwenn</groupId>
+          <artifactId>sqlite-dialect</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes.ldio</groupId>
+      <artifactId>ldio-ldes-client-connector</artifactId>
+      <version>${ldi.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.github.gwenn</groupId>
+          <artifactId>sqlite-dialect</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
     <dependency>
       <groupId>org.openldes.ldi</groupId>
       <artifactId>ldi-common</artifactId>

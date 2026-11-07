@@ -50,7 +50,7 @@ public class RunPipelineService implements RunPipelineUseCase {
 
   @Override
   public PipelineRun run(Pipeline pipeline, RunInput input, RunOptions options) {
-    return new Run(reachable(pipeline), input, options).execute();
+    return new Run(reachable(pipeline, instanceRepository), input, options).execute();
   }
 
   private final class Run {
@@ -343,7 +343,7 @@ public class RunPipelineService implements RunPipelineUseCase {
    * e.g. {@code http://sandbox-ldes-server:8080/sandbox-parcels}, which only resolves in their
    * Docker network: the sandbox reaches them on the URL of LDES-admin.
    */
-  private Pipeline reachable(Pipeline pipeline) {
+  static Pipeline reachable(Pipeline pipeline, InstanceRepository instanceRepository) {
     List<Instance> locals =
         Arrays.stream(InstanceType.values())
             .flatMap(type -> instanceRepository.findByType(type).stream())

@@ -41,6 +41,10 @@ final class LdioConfig {
     return component;
   }
 
+  Map<String, String> values() {
+    return new HashMap<>(values);
+  }
+
   String property(String key) {
     return optional(key)
         .orElseThrow(() -> new ComponentException("%s needs '%s'".formatted(component, key)));

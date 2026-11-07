@@ -36,9 +36,25 @@ Preserve these distinctions when changing parsers and runtime configuration.
 
 ## Outputs and Docker
 
+**Start live** explicitly authorizes real input activity, even when outputs remain dry: polling,
+LDES traversal, broker consumption/acknowledgements and EDC transfer/token requests. An explicit
+Kafka group can advance existing offsets; use disposable topics, queues and groups for experiments.
+The default group includes a fresh source identity. These sources have the backend's network
+access, not a browser's CORS restrictions.
+
+Each source runs in an owned JVM (256 MB heap), with at most eight active sources, a 16-member
+pending queue, accepted members of at most 5 MB and a 30-minute lifetime. Stop, parent-pipe loss
+and application shutdown terminate that JVM, including upstream connector threads. This bounds
+source lifetime; it is not an OS security sandbox. LDIO may buffer a remote response before its
+accepted-member size is checked.
+
 Sandbox outputs run dry unless `executeOutputs` is explicitly enabled; Kafka, AMQP and RDB
 outputs remain dry. Never enable real output execution merely to make a demonstration pass.
 Use disposable targets and explicit authorization for external side effects.
+RDB configuration uses an isolated disposable H2 metadata connection, never the administration
+database or a configured remote database. Executed RepositorySink uses upstream LDIO batching
+and failure handling: failures are surfaced, but upstream may also spool uncommitted RDF under
+`materialisation/` in the backend working directory. Protect that directory as application data.
 
 Local instances use Testcontainers and a shared Docker network. Access to the Docker socket is
 powerful host access, not an isolation boundary. Do not expose it, change host permissions

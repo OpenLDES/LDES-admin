@@ -11,6 +11,27 @@ describe('mock LDES-admin API', () => {
     api = new MockLdesAdminApi({ latency: 0, startupDelay: 0 })
   })
 
+  it('runs and stops a live HTTP input without pretending to connect demo broker sources', async () => {
+    const request = {
+      pipeline: { name: 'live', input: { name: 'Ldio:HttpIn', adapter: { name: 'Ldio:RdfAdapter' } },
+        outputs: [{ name: 'Ldio:ConsoleOut' }] },
+      session: 'live-session', executeOutputs: false,
+    }
+    const input = { content: '<http://example.org/a> <http://example.org/b> "c" .', contentType: 'text/turtle' }
+
+    expect(await api.startLivePipeline(request)).toMatchObject({ active: true, received: 0 })
+    await api.sendLiveInput(request.session, input)
+    expect(await api.getLivePipeline(request.session)).toMatchObject({
+      active: true, received: 1, latest: { delivered: true },
+    })
+    await api.stopLivePipeline(request.session)
+    expect(await api.getLivePipeline(request.session)).toMatchObject({ active: false, received: 1 })
+    await expect(api.sendLiveInput(request.session, input)).rejects.toMatchObject({ status: 400 })
+    await expect(api.startLivePipeline({
+      ...request, pipeline: { ...request.pipeline, input: { name: 'Ldio:KafkaIn' } },
+    })).rejects.toMatchObject({ status: 400, detail: expect.stringContaining('production mode') })
+  })
+
   it('summarises every instance on the dashboard', async () => {
     const overview = await api.getDashboard()
 

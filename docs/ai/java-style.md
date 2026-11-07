@@ -52,7 +52,7 @@ Use Spring `RestClient`, not a new HTTP library, for integration code. Framework
 and transaction placement are covered in [annotations.md](annotations.md).
 
 Before adding a dependency, inspect the relevant module POM and dependency management.
-LDI 3.1.1 libraries currently require a local Maven installation (see the root README);
+LDI/LDIO libraries may require a local Maven installation (see the root README);
 do not mask missing dependencies by disabling the sandbox or silently changing versions.
 Do not import `jena-bom` or `rdf4j-bom` without resolving their Spring 5 management conflict.
 

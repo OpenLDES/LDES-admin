@@ -26,6 +26,9 @@ import type {
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
 import type {
   PipelineRunRequest,
+  LivePipelineRequest,
+  LivePipelineRun,
+  SimulationInput,
   PolledContent,
   PollRequest,
   Sandbox,
@@ -61,6 +64,16 @@ export interface LdesAdminApi {
    * every component did
    */
   runPipeline(request: PipelineRunRequest): Promise<SimulationResult>
+  /** POST /api/v1/sandbox/live: starts the actual configured source in production */
+  startLivePipeline(request: LivePipelineRequest): Promise<LivePipelineRun>
+  /** GET /api/v1/sandbox/live/{session}: latest result and source status */
+  getLivePipeline(session: string): Promise<LivePipelineRun>
+  /** POST /api/v1/sandbox/live/{session}/input: feeds a running HTTP In */
+  sendLiveInput(session: string, input: SimulationInput): Promise<void>
+  /** DELETE /api/v1/sandbox/live/{session}: terminates the source */
+  stopLivePipeline(session: string): Promise<void>
+  /** POST /api/v1/sandbox/live/{session}/connector/{action}: raw EDC callback JSON */
+  liveConnector(session: string, action: 'token' | 'transfer', content: string): Promise<string>
 
   /** GET /api/v1/ldes-servers | /api/v1/ldios */
   listInstances(type: InstanceType): Promise<Instance[]>

@@ -100,3 +100,12 @@ export interface PipelineRunRequest {
   /** Whether outputs really send what they make; otherwise a dry run shows what they would send */
   executeOutputs: boolean
 }
+
+export type LivePipelineRequest = Omit<PipelineRunRequest, 'input'>
+
+export interface LivePipelineRun {
+  active: boolean
+  received: number
+  latest: SimulationResult | null
+  error: string | null
+}

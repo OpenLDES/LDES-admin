@@ -218,7 +218,10 @@ function togglePolling() {
 }
 
 // Polling is for the pipeline on the canvas, while it is in view
-onBeforeUnmount(() => sandbox.stopPolling())
+onBeforeUnmount(() => {
+  sandbox.stopPolling()
+  void sandbox.stopLive()
+})
 
 function clock(time: Date): string {
   return time.toLocaleTimeString('en-GB')
@@ -309,7 +312,8 @@ const statusIcon: Record<SimulationStep['status'], string> = {
       <span class="spacer" />
       <label class="execute" for="execute-outputs" data-cy="execute-outputs"
         v-tooltip.top="'On: outputs really send what they make (HTTP Out posts, SPARQL Out updates its store, …). Off: a dry run shows what they would send.'">
-        <ToggleSwitch v-model="sandbox.executeOutputs" input-id="execute-outputs" />
+        <ToggleSwitch v-model="sandbox.executeOutputs" input-id="execute-outputs"
+          :disabled="sandbox.live?.active || sandbox.liveBusy" />
         <span>Execute outputs</span>
       </label>
       <Button v-if="sandbox.polling" label="Stop polling" icon="pi pi-stop-circle" severity="secondary" text
@@ -317,10 +321,29 @@ const statusIcon: Record<SimulationStep['status'], string> = {
       <Button v-if="sandbox.result && !sandbox.running" label="Reset" severity="secondary" text size="small"
         @click="sandbox.resetSimulation()" />
       <span v-tooltip.top="blocked">
-        <Button label="Run" icon="pi pi-play" size="small" :loading="sandbox.running" :disabled="!!blocked"
+        <Button label="Run" icon="pi pi-play" size="small" :loading="sandbox.running"
+          :disabled="!!blocked || sandbox.live?.active || sandbox.liveBusy"
           data-cy="run-simulation" @click="runPipeline" />
       </span>
+      <Button v-if="sandbox.liveAttached" label="Stop live" icon="pi pi-stop" severity="danger"
+        size="small" :loading="sandbox.liveBusy" data-cy="stop-live" @click="sandbox.stopLive()" />
+      <Button v-else label="Start live" icon="pi pi-bolt" severity="secondary" size="small"
+        :loading="sandbox.liveBusy" :disabled="!sandbox.conversion.valid || sandbox.running"
+        v-tooltip.top="'Start the configured source. Production runs real LDIO components; demo approximates HTTP inputs. Changes stop the live source.'"
+        data-cy="start-live" @click="open = true; sandbox.startLive()" />
     </header>
+
+    <div v-if="sandbox.live || sandbox.liveError" class="poll-status" :class="{ error: sandbox.liveError }" data-cy="live-status">
+      <i :class="sandbox.live?.active ? 'pi pi-bolt' : 'pi pi-stop-circle'" />
+      <span>{{ sandbox.liveError ?? `${sandbox.live?.active ? 'Live source running' : 'Live source stopped'} · ${sandbox.live?.received ?? 0} members received` }}</span>
+      <Button v-if="sandbox.live?.active && sandbox.conversion.pipeline?.input.name === 'Ldio:HttpIn'"
+        label="Send input to live source" icon="pi pi-send" severity="secondary" size="small" text
+        :disabled="!sandbox.sample.content.trim()" :loading="sandbox.liveBusy"
+        data-cy="send-live-input" @click="sandbox.sendLiveInput()" />
+      <code v-if="sandbox.liveAttached && sandbox.conversion.pipeline?.input.name === 'Ldio:LdesClientConnector'">
+        EDC callbacks: POST /api/v1/sandbox/live/{{ sandbox.liveId }}/connector/{token|transfer}
+      </code>
+    </div>
 
     <div v-if="open" class="body">
       <section class="column">

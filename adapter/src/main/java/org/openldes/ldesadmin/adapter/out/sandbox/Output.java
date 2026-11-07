@@ -1,19 +1,13 @@
 package org.openldes.ldesadmin.adapter.out.sandbox;
 
-import java.util.List;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.riot.Lang;
 import org.openldes.ldesadmin.application.port.out.sandbox.ComponentException;
 import org.openldes.ldesadmin.model.sandbox.OutputResult;
-import org.openldes.ldi.RepositorySink;
 import org.openldes.ldi.rdf.formatter.LdiRdfWriter;
 import org.openldes.ldi.rdf.formatter.LdiRdfWriterProperties;
 
-/**
- * The outputs of LDIO, configured as their LDIO configurators do it. In a dry run an output shows
- * what it would send; executed, it sends it. Outputs whose client LDES-admin does not have (Kafka,
- * AMQP, a database) always run dry.
- */
+/** Side-effect-free output previews. Execution belongs to {@link ConfiguredOutput}. */
 @FunctionalInterface
 interface Output {
 
@@ -50,25 +44,12 @@ interface Output {
   private static Output repositorySink(LdioConfig config) {
     String host = config.property("sparql-host");
     String repository = config.property("repository-id");
-    String namedGraph = config.optional("named-graph").orElse("");
     return (model, execute) -> {
       String turtle = Rdf.toTurtle(model);
-      if (!execute) {
-        return new OutputResult(
-            turtle,
-            Lang.TURTLE.getHeaderString(),
-            "Would add the model to repository %s of %s".formatted(repository, host));
-      }
-      var sink = new RepositorySink(host, repository, namedGraph);
-      try {
-        sink.process(List.of(model));
-      } finally {
-        sink.shutdown();
-      }
       return new OutputResult(
           turtle,
           Lang.TURTLE.getHeaderString(),
-          "Added the model to repository %s of %s".formatted(repository, host));
+          "Would add the model to repository %s of %s".formatted(repository, host));
     };
   }
 

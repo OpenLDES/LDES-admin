@@ -1,6 +1,7 @@
 # OpenLDES integration and verified behaviour
 
-These observations were verified for **LDES server 4.2.1 and LDIO/LDI 3.1.1**, or read in their
+These observations were verified for **LDES server 4.2.1 and deployed LDIO 3.1.1**;
+the embedded sandbox uses **LDI/LDIO 3.2.2**. They were verified in tests or read in their
 matching upstream sources where noted. They are compatibility evidence, not promises about
 future releases. Recheck against real servers when changing integration behaviour; mocks and
 the browser simulator alone cannot establish compatibility.
@@ -122,7 +123,8 @@ Accept header, with component headers/credentials, a required response Content-T
 targets are intentional; read [security.md](security.md) before changing this proxy boundary.
 
 `RunPipelineService` fans each model through transformers and outputs like LDIO.
-`ComponentRuntime` / `LdiComponentRuntime` runs LDI's core libraries, not Boot 3 LDIO connectors.
+`ComponentRuntime` / `LdiComponentRuntime` uses actual LDIO auto-configurators and components
+through `LdioComponents`, in a small isolated Spring context rather than the application scan.
 Components are configured per session and position, preserving change-detection state; every call
 is bounded by `ldes-admin.sandbox.component-timeout`. Step outputs contain at most 100 models.
 
@@ -132,11 +134,24 @@ Outputs are dry unless `executeOutputs`; Kafka, AMQP and RDB always remain dry.
 HTTP Out serializes JSON-LD without the frame (`writeToOutputStream`); console/Kafka/AMQP use it.
 A failed HTTP enricher request passes the model on.
 
-LDI was built on Jena 5. Under this project's Jena 6, its `SparqlConstructTransformer` and carml
-`JenaConverters` call removed methods; carml's streaming JSONPath parser (jsurfer/ANTLR 4.7)
-conflicts with ANTLR 4.13 used by Hibernate/Spring Data. The sandbox adapter therefore has its
-own `SparqlConstruct` (registering LDI functions) and `RmlRecordAdapter` (JSON record and
-rdf4j-to-Jena conversion). Do not remove these compatibility shims without real runtime coverage.
+The former SPARQL, RML and HTTP-enrichment recreations have been removed: runtime tests exercise
+the actual 3.2.2 components on this project's Jena version, including geospatial functions,
+named-graph RML, NGSI contexts and nested enrichment adapters.
 
-The sandbox does not yet execute inputs such as an LDES client following a live event stream.
-Do not describe the existing single-input execution as a full running LDIO deployment.
+`LivePipelineUseCase` / `LivePipelineService` runs received members through the same pipeline
+use case with isolated component sessions. `LiveSourceRuntime` / `LdioSourceRuntime` starts an
+owned worker JVM using the actual HttpIn, HttpInPoller, AMQP, Kafka, LdesClient or
+LdesClientConnector auto-configurator. Kafka's upstream shutdown only pauses its listener, and
+the LDES client retains its executor; killing the owned worker makes Stop reliable without
+reflection into upstream private state. Workers run from development classpaths and packaged
+Boot jars. Only the latest result and a received count are retained.
+
+EDC token and transfer callbacks go to
+`POST /api/v1/sandbox/live/{session}/connector/{token|transfer}` as raw JSON and are forwarded to
+the real connector API. Readiness is announced before that connector waits for its first token.
+
+Initial configuration URLs are translated for locally owned instances. Native LDES traversal
+still follows the absolute URLs in returned TREE documents; **all those URLs must be reachable
+from the backend JVM**. Translating just the initial URL does not make Docker-only hostnames
+reachable from a host-run backend. Use a publicly reachable server base URL or deploy the
+pipeline to the sandbox LDIO on the same Docker network. No RDF member identities are rewritten.

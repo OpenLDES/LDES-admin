@@ -162,7 +162,8 @@ it again or *Reset* clears it. Click the bar to fold the simulation away while y
 Outputs run dry: they show what they would send (*Would POST text/turtle to …*) without sending
 it. Switch on **Execute outputs** in the bar to have them really send it: HTTP Out posts the
 member, HTTP SPARQL Out updates its triple store, the repository sink adds it to its repository.
-Kafka Out, AMQP Out and the database output always run dry: LDES-admin has no clients for them.
+Kafka Out, AMQP Out and the database output always run dry as a sandbox safety policy.
+Their real configurators validate configuration; they never publish messages or write rows.
 
 An output pointing to the sandbox LDES server on its host name
 (`http://sandbox-ldes-server:8080/…`) reaches it when executed: the member is ingested.
@@ -211,6 +212,33 @@ detection filter remembers the members it saw while you design the pipeline, as 
 does; it forgets them when you load another pipeline or change its configuration. A component gets
 30 seconds at most. To see what LDIO itself makes of a member, deploy the pipeline on the sandbox
 LDIO and [send the member to it](#send-the-member-to-a-real-pipeline).
+
+### Run a live source
+
+**Start live** starts the configured input using its actual LDIO auto-configurator: HTTP In,
+HTTP In Poller, AMQP In, Kafka In, LDES Client or LDES Client Connector. For HTTP In, **Send input
+to live source** feeds the editor's member through that input. Other sources receive their data
+from the configured endpoint or broker. The panel shows the received count and the latest
+member's steps, not an unbounded history.
+
+**Stop live** terminates the source, including its polling and broker threads. Editing the
+pipeline, changing output permissions or leaving the sandbox stops it too. Outputs remain dry
+unless **Execute outputs** was enabled before starting. Starting a source still performs real
+input activity, including broker acknowledgements and Kafka group offsets: use test queues,
+topics and consumer groups.
+
+An EDC connector shows its token and transfer callback paths in the panel. POST the connector's
+raw JSON to `/api/v1/sandbox/live/{session}/connector/token` or `.../transfer`. Token JSON uses
+`authKey` and `authCode`, as in LDIO.
+
+Live sources are limited to eight at a time, 30 minutes per source and 16 queued members.
+Accepted members must fit in 5 MB. Configuration/startup and runtime failures show in the panel.
+Live LDES clients must be able to reach **every absolute TREE URL published by the server**;
+the Docker-only names of a locally prepared sandbox are not reachable from a host-run JVM.
+For that setup, deploy the pipeline on the sandbox LDIO instead.
+
+In demo mode, live HTTP In and HTTP In Poller are browser approximations (subject to CORS);
+AMQP, Kafka, LDES and EDC callbacks explicitly require production mode.
 
 ### Ingest the result
 

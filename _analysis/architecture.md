@@ -135,6 +135,7 @@ URL cannot be reached or answers with an error, `503` when a local instance cann
 | Sandbox                           | `GET, POST, DELETE /sandbox` (state, start and prepare, stop)                    |
 | Poll a URL for the simulation     | `POST /sandbox/poll` (`{url, headers, clientCredentials}` → `{contentType, body}`) |
 | Run a pipeline in the sandbox     | `POST /sandbox/runs` (`{pipeline, input, session, executeOutputs}` → `{steps, delivered, members}`) |
+| Live sandbox source               | `POST /sandbox/live`, `GET, DELETE /sandbox/live/{session}`, `POST …/{session}/input`, `POST …/{session}/connector/{token,transfer}` |
 | Event streams                     | `GET, POST /ldes-servers/{id}/eventstreams`, `GET, DELETE …/eventstreams/{collection}` |
 | Views                             | `GET, POST …/eventstreams/{collection}/views`, `GET, DELETE …/views/{view}`      |
 | Fragments                         | `GET …/views/{view}/fragment?url=` (the root of the view without `url`)          |
@@ -200,6 +201,7 @@ sandbox LDES server. Outputs run dry unless the run says otherwise.
 | `InstanceHealthProbe`    | `ActuatorHealthProbe`         | `/actuator/health`, falling back to the admin API                 |
 | `HttpPoller`             | `RestHttpPoller`              | Any http(s) URL the simulation polls, and the token endpoint of its OAuth2 client credentials |
 | `ComponentRuntime`       | `LdiComponentRuntime`         | Nothing itself: it runs the LDI components of LDIO in LDES-admin; what they fetch (JSON-LD contexts, SPARQL `SERVICE`, the HTTP enricher) and what executed outputs send |
+| `LiveSourceRuntime`      | `LdioSourceRuntime`           | Actual LDIO source auto-configurators in owned worker JVMs; polling, brokers, LDES traversal and EDC callbacks |
 | `LocalInstanceRuntime`   | `DockerLocalInstanceRuntime`  | Docker, through the Testcontainers API: `openldes/ldes-server` with its own Postgres, or `openldes/ldi-orchestrator` |
 
 HTTP errors are translated into a `RemoteInstanceException` with a reason (`NOT_FOUND`, `REJECTED`,
@@ -208,19 +210,19 @@ HTTP errors are translated into a `RemoteInstanceException` with a reason (`NOT_
 
 ### The sandbox runtime
 
-`adapter.out.sandbox` runs separate components of LDIO pipelines on the LDI 3.1.1 libraries LDIO
-is built on (`org.openldes.ldi:*`, the core components, not the LDIO connectors, which need Spring
-Boot 3). Every component is configured the way its LDIO configurator does it: `LdioConfig` flattens
+`adapter.out.sandbox` runs actual LDI/LDIO 3.2.2 components through their corresponding
+auto-configurators. `LdioComponents` owns a small context for nested adapter lookup rather than
+adding LDIO components to the administration application's bean scan. `LdioConfig` flattens
 the configuration as LDIO does (nested maps to dotted keys, lists to `key.0`) and matches keys
 ignoring case, `-` and `_`. Unlike LDIO it never reads a query or mapping from a file whose path is
 the value. Models travel between the steps as Turtle.
 
 | Kind        | Components | Notes |
 |-------------|------------|-------|
-| Input       | all | The input member is what the input receives; an input without adapter (LDES client) reads it as RDF in its content type |
-| Adapter     | RDF, JSON to JSON-LD, RML, NGSI-v2 | RML: LDI's adapter, but JSON goes to carml as a parsed record (carml's streaming JSONPath parser needs ANTLR 4.7; Hibernate and Spring Data need 4.13) and carml's triples are converted to Jena here (its converter calls a method Jena 6 dropped) |
-| Transformer | SPARQL construct, version object creator, version materialiser, GeoJSON to WKT, skolemisation, change detection filter (in memory), HTTP enricher | SPARQL construct: LDI's transformation, with LDI's geospatial functions registered through the Jena 6 API (LDI's own class uses a removed method); HTTP enricher: ported from LDIO |
-| Output      | console, HTTP, HTTP SPARQL, repository sink, Kafka, AMQP, RDB, no-op | A dry run shows what an output would send (its serialisation with the `rdf-writer`, the SPARQL update, the rows); executed, HTTP Out posts, SPARQL Out updates, the repository sink adds. Kafka, AMQP and RDB always run dry: LDES-admin has no such clients |
+| Input       | HTTP In, HTTP In Poller, AMQP, Kafka, LDES Client, LDES Client Connector | Manual simulation accepts one sample; live mode runs the actual source and feeds received members through the pipeline |
+| Adapter     | RDF, JSON to JSON-LD, RML, NGSI-v2 | Actual LDIO configurators; RML produces one model per named graph |
+| Transformer | SPARQL construct, version object creator, version materialiser, GeoJSON to WKT, skolemisation, change detection filter (in memory), HTTP enricher | Actual LDIO transformer chain, with a terminal collector to preserve filtering and fan-out |
+| Output      | console, HTTP, HTTP SPARQL, repository sink, Kafka, AMQP, RDB, no-op | Previews remain side-effect free. Explicit execution calls actual LDIO outputs. Kafka, AMQP and RDB remain dry by policy; RDB configuration gets isolated disposable H2 metadata, never a remote database |
 
 Components are kept per session and position: the change detection filter remembers what it saw
 across the runs of a session, and a mapping or query is parsed once. A changed definition makes a
@@ -228,8 +230,21 @@ new component, as a redeployed pipeline would. Sessions are forgotten after 30 m
 run, or beyond 100. Every call runs on a virtual thread, at most
 `ldes-admin.sandbox.component-timeout` (30 s).
 
-LDI is built on Jena 5; LDES-admin aligns the Jena artifacts to its own version (one by one: the
-Jena BOM also manages Spring 5 through its parent). The rest of LDI runs on Jena 6 as it is.
+`LivePipelineService` implements the framework-free `LivePipelineUseCase` using the
+`LiveSourceRuntime` output port and the existing run use case. Each live source owns a separate
+component session; stop/failure releases it. State contains only the latest `PipelineRun`, a
+received count, activity and an error. At most eight sources may run concurrently.
+
+`LdioSourceRuntime` starts `LdioSourceWorker` in an owned JVM (256 MB heap), with length-prefixed
+JSON over its pipes, a bounded 16-member queue and a 30-minute expiry. Raw sources capture input
+before the configured adapter; LDES sources return RDF models. Stop, parent loss and bean disposal
+terminate the process, avoiding retained Kafka/LDES threads in upstream shutdown implementations.
+EDC callbacks are correlated commands to the real connector API, available while startup waits
+for its first token. Development classpaths and executable Boot jars use the same worker.
+
+Native LDES traversal requires all published TREE URLs to be reachable from the backend.
+Initial URL translation alone cannot resolve Docker-only names in subsequent documents.
+Use a server with reachable published URLs or deploy to the sandbox LDIO on its Docker network.
 
 ### Local instances
 

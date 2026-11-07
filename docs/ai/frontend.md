@@ -35,10 +35,16 @@ compatibility. Test both modes where behaviour differs.
 * `pipeline/poller.ts` and `cron.ts` handle URLs, requests and Spring cron. Cron wins over interval;
   interval polls immediately. URLs run in order, then the store runs the pipeline.
 
-`SimulationPanel` stops polling on unmount. Loading/clearing renews the session. A run sends
+`SimulationPanel` stops polling and live sources on unmount. Loading/clearing renews the session. A run sends
 `{pipeline, input, session, executeOutputs}`; step `outputs` and result `members` are arrays of
 serialized models, not a single combined graph. Keep the output pager and dry-run semantics.
 Demo polling uses browser `fetch` and remains subject to CORS.
+
+Live execution uses the shared start/get/send/stop API and retains only the latest member's result.
+Editing the pipeline or output permissions stops the source; mode changes stop the captured API
+connection, not the replacement implementation. Failed stops stay visible and retryable. Production
+runs all six actual LDIO sources. Demo approximates HTTP In and HTTP In Poller only; broker, LDES
+and EDC callback operations explicitly explain that production mode is required.
 
 ## RDF forms and examples
 

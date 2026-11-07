@@ -59,6 +59,7 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
   private final Duration componentTimeout;
   private final Clock clock;
   private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+  private final LdioComponents components = new LdioComponents();
 
   /** Least recently used first */
   private final Map<String, Session> sessions = new LinkedHashMap<>(16, 0.75f, true);
@@ -79,7 +80,7 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
   public List<RdfDocument> adapt(String session, ComponentDefinition adapter, RunInput input) {
     return call(
         () -> {
-          LdiAdapter component = component(session, "adapter", 0, adapter, Adapters::create);
+          LdiAdapter component = component(session, "adapter", 0, adapter, components::adapter);
           return component
               .apply(LdiAdapter.Content.of(input.content(), input.contentType()))
               .map(LdiComponentRuntime::turtle)
@@ -93,7 +94,7 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
     return call(
         () -> {
           Transformer component =
-              component(session, "transformer", position, transformer, Transformer::create);
+              component(session, "transformer", position, transformer, components::transformer);
           return component.transform(Rdf.fromTurtle(model.content())).stream()
               .map(LdiComponentRuntime::turtle)
               .toList();
@@ -109,13 +110,29 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
       boolean execute) {
     return call(
         () ->
-            component(session, "output", position, output, Output::create)
+            component(
+                    session,
+                    "output",
+                    position,
+                    output,
+                    (name, config) -> new ConfiguredOutput(components, name, config))
                 .write(Rdf.fromTurtle(model.content()), execute));
   }
 
   @Override
-  public void destroy() {
+  public synchronized void release(String id) {
+    Session session = sessions.remove(id);
+    if (session != null) {
+      session.close();
+    }
+  }
+
+  @Override
+  public synchronized void destroy() {
     executor.shutdownNow();
+    sessions.values().forEach(Session::close);
+    sessions.clear();
+    components.close();
   }
 
   private <T> T component(
@@ -129,6 +146,10 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
       String slot = kind + "/" + position;
       Kept kept = session.components.get(slot);
       if (kept == null || !kept.definition().equals(definition)) {
+        if (kept != null) {
+          kept.close();
+          session.components.remove(slot);
+        }
         kept =
             new Kept(
                 definition,
@@ -150,12 +171,13 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
       if (session.lastUsed.plus(SESSION_IDLE_TIMEOUT).isAfter(now)) {
         break;
       }
+      session.close();
       least.remove();
     }
     Session session = sessions.computeIfAbsent(id, key -> new Session());
     session.lastUsed = now;
     if (sessions.size() > MAX_SESSIONS) {
-      sessions.remove(sessions.keySet().iterator().next());
+      release(sessions.keySet().iterator().next());
     }
     return session;
   }
@@ -177,6 +199,7 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
           ? failure
           : new ComponentException(messageOf(e.getCause()), e.getCause());
     } catch (InterruptedException e) {
+      future.cancel(true);
       Thread.currentThread().interrupt();
       throw new ComponentException("Interrupted", e);
     }
@@ -200,7 +223,18 @@ public class LdiComponentRuntime implements ComponentRuntime, DisposableBean {
 
     private final Map<String, Kept> components = new HashMap<>();
     private Instant lastUsed;
+
+    synchronized void close() {
+      components.values().forEach(Kept::close);
+      components.clear();
+    }
   }
 
-  private record Kept(ComponentDefinition definition, Object component) {}
+  private record Kept(ComponentDefinition definition, Object component) {
+    void close() {
+      if (component instanceof ConfiguredOutput output) {
+        output.close();
+      }
+    }
+  }
 }

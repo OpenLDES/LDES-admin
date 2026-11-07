@@ -56,7 +56,7 @@
   simulation with the changed data. The user should also have the possibility to fetch the data
   constantly, and use the cron expression that was configured for the component.
 * [x] Make an output adapter, `sandbox`, where you can run LDIO input, adapter, transformer and
-  output components. So, this will be a local runtime engine to run separate LDIO components. 
+  output components. So, this will be a local runtime engine to run separate LDIO components.
 * [x] The sparql construct component in the sandbox should do a sparql construct transformation, so
   the output of this component should be the transformation of the input with the
   `Ldio:SparqlConstructTransformer` transformer. Make use of this component to do the transformation
@@ -68,5 +68,45 @@
 * [x] When you run a test in the sandbox environment, and you select a component in the canvas, then
   the step of the selected component should be selected in the "steps" panel. You leave the steps as
   long as the user doesn't run or resets the simulation
-* [x] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also in
-  demo mode). Now, when I run the 
+* [x] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also
+  in
+  demo mode). Now, when I run the
+* [x] Change the sandbox screen, so that you can change the size of the side panels (the panel with
+  components, the panel on the right with the configuration of the selected item, and the panel of
+  the simulation). You should be able to make them bigger and smaller, and even to hide and expand
+  them with a small button. The right configuration panel can grow to 66% of the screen width.
+* [x] Make the sandbox runtime instantiate and use real LDIO components with their corresponding
+  auto-configuration classes, rather than recreating their behaviour in the sandbox. Cover every
+  input, adapter, transformer, and output currently supported by the sandbox runtime.
+    * Inputs:
+        * [x] `Ldio:HttpInPoller`
+        * [x] `Ldio:HttpIn`
+        * [x] `Ldio:AmqpIn`
+        * [x] `Ldio:KafkaIn`
+        * [x] `Ldio:LdesClient`
+        * [x] `Ldio:LdesClientConnector`
+    * Adapters:
+        * [x] `Ldio:RdfAdapter`
+        * [x] `Ldio:JsonToLdAdapter`
+        * [x] `Ldio:RmlAdapter`
+        * [x] `Ldio:NgsiV2ToLdAdapter`
+    * Transformers:
+        * [x] `Ldio:VersionObjectCreator`
+        * [x] `Ldio:VersionMaterialiser`
+        * [x] `Ldio:SparqlConstructTransformer`
+        * [x] `Ldio:GeoJsonToWktTransformer`
+        * [x] `Ldio:SkolemisationTransformer`
+        * [x] `Ldio:ChangeDetectionFilter`
+        * [x] `Ldio:HttpEnricher`
+    * Outputs:
+        * [x] `Ldio:ConsoleOut`
+        * [x] `Ldio:HttpOut`
+        * [x] `Ldio:HttpSparqlOut`
+        * [x] `Ldio:RepositorySink`
+        * [x] `Ldio:KafkaOut`
+        * [x] `Ldio:AmqpOut`
+        * [x] `Ldio:LdioRdbOut`
+        * [x] `Ldio:NoopOut`
+* [ ] Separate the different adapters in different maven modules. Add the dependencies between the
+  modules in the archunit test. Make sure that you end up with a clean architecture, according to
+  the hexagonal architecture pattern.

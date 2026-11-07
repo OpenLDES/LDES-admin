@@ -252,7 +252,7 @@ class LdiComponentRuntimeTest {
 
     OutputResult result = runtime.write(SESSION, 0, httpOut, PARCEL, true);
 
-    assertThat(result.summary()).isEqualTo("POST %s: 202".formatted(endpoint));
+    assertThat(result.summary()).isEqualTo("Sent the model to " + endpoint);
     assertThat(received.get())
         .startsWith("application/n-quads ")
         .contains("<http://example.org/parcel1> <http://example.org/area> ");
@@ -267,7 +267,7 @@ class LdiComponentRuntimeTest {
 
     assertThatThrownBy(() -> runtime.write(SESSION, 0, httpOut, PARCEL, true))
         .isInstanceOf(ComponentException.class)
-        .hasMessage("POST %s answered 400 - Not a member".formatted(endpoint));
+        .hasMessageContaining(endpoint, "400", "Not a member");
   }
 
   @Test
@@ -306,6 +306,162 @@ class LdiComponentRuntimeTest {
     OutputResult rows = runtime.write(SESSION, 1, rdbOut, PARCEL, false);
     assertThat(rows.summary()).isEqualTo("Would insert 1 row into table parcels");
     assertThat(rows.serialisation()).contains("\"area\" : \"512.4\"");
+  }
+
+  @Test
+  void runsTheNgsiAdapterWithItsRealContextLoader() throws IOException {
+    server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          byte[] context =
+              "{\"@context\":{\"@vocab\":\"http://example.org/\"}}"
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().set("Content-Type", "application/ld+json");
+          exchange.sendResponseHeaders(200, context.length);
+          exchange.getResponseBody().write(context);
+          exchange.close();
+        });
+    server.start();
+    var adapter =
+        new ComponentDefinition(
+            "Ldio:NgsiV2ToLdAdapter",
+            Map.of(
+                "data-identifier",
+                "data",
+                "core-context",
+                "http://localhost:" + server.getAddress().getPort() + "/context"));
+
+    assertThat(
+            runtime.adapt(
+                SESSION,
+                adapter,
+                RunInput.of(
+                    "{\"data\":{\"id\":\"http://example.org/sensor\",\"type\":\"Sensor\"}}",
+                    "application/json")))
+        .singleElement()
+        .satisfies(model -> assertThat(model.content()).contains("sensor", "Sensor"));
+  }
+
+  @Test
+  void materialisesARealVersionObject() {
+    RdfDocument version =
+        RdfDocument.turtle(
+            """
+        @prefix ex: <http://example.org/> .
+        @prefix dcterms: <http://purl.org/dc/terms/> .
+        ex:version dcterms:isVersionOf ex:state ; ex:name "Current" .
+        """);
+
+    assertThat(
+            runtime.transform(
+                SESSION, 0, ComponentDefinition.of("Ldio:VersionMaterialiser"), version))
+        .singleElement()
+        .satisfies(
+            model ->
+                assertThat(model.content())
+                    .contains("http://example.org/state", "\"Current\"")
+                    .doesNotContain("ex:version", "isVersionOf"));
+  }
+
+  @Test
+  void convertsGeoJsonLdGeometryWithTheRealTransformer() {
+    RdfDocument geometry =
+        RdfDocument.turtle(
+            """
+        @prefix geojson: <https://purl.org/geojson/vocab#> .
+        <http://example.org/location> geojson:geometry [
+            a geojson:Point ; geojson:coordinates (4.0 50.0)
+        ] .
+        """);
+
+    assertThat(
+            runtime.transform(
+                SESSION, 0, ComponentDefinition.of("Ldio:GeoJsonToWktTransformer"), geometry))
+        .singleElement()
+        .satisfies(model -> assertThat(model.content()).contains("POINT", "4", "50", "wktLiteral"));
+  }
+
+  @Test
+  void theRealEnricherUsesItsConfiguredAdapter() throws IOException {
+    server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          byte[] body =
+              "{\"@id\":\"http://example.org/a\",\"value\":\"enriched\"}"
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().set("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    server.start();
+    var enricher =
+        new ComponentDefinition(
+            "Ldio:HttpEnricher",
+            Map.of(
+                "url-property-path",
+                "<http://example.org/url>",
+                "adapter",
+                Map.of(
+                    "name",
+                    "Ldio:JsonToLdAdapter",
+                    "config",
+                    Map.of("context", "{\"@context\":{\"@vocab\":\"http://example.org/\"}}"))));
+    RdfDocument member =
+        RdfDocument.turtle(
+            "<http://example.org/a> <http://example.org/url> <http://localhost:"
+                + server.getAddress().getPort()
+                + "/data> .");
+
+    assertThat(runtime.transform(SESSION, 0, enricher, member))
+        .singleElement()
+        .satisfies(model -> assertThat(model.content()).contains("enriched", "value"));
+  }
+
+  @Test
+  void executesTheRealSparqlConsoleAndNoopOutputs() throws IOException {
+    AtomicReference<String> received = new AtomicReference<>();
+    var output =
+        new ComponentDefinition("Ldio:HttpSparqlOut", Map.of("endpoint", serve(204, received)));
+    runtime.write(SESSION, 0, output, PARCEL, true);
+    assertThat(received.get()).contains("application/sparql-update", "INSERT DATA", "parcel1");
+    assertThat(
+            runtime
+                .write(SESSION, 1, ComponentDefinition.of("Ldio:ConsoleOut"), PARCEL, true)
+                .serialisation())
+        .contains("parcel1");
+    assertThat(
+            runtime
+                .write(SESSION, 2, ComponentDefinition.of("Ldio:NoopOut"), PARCEL, true)
+                .serialisation())
+        .isNotNull();
+  }
+
+  @Test
+  void validatesAmqpWithoutConnectingEvenWhenExecutionIsRequested() {
+    var output =
+        new ComponentDefinition(
+            "Ldio:AmqpOut",
+            Map.of(
+                "remote-url",
+                "amqp://localhost:1",
+                "username",
+                "unused",
+                "password",
+                "unused",
+                "queue",
+                "sandbox-members"));
+    assertThat(runtime.write(SESSION, 0, output, PARCEL, true).summary()).contains("only runs dry");
+  }
+
+  @Test
+  void releasingASessionAlsoReleasesItsChangeDetectionState() {
+    var filter = ComponentDefinition.of("Ldio:ChangeDetectionFilter");
+    assertThat(runtime.transform(SESSION, 0, filter, PARCEL)).hasSize(1);
+    runtime.release(SESSION);
+    assertThat(runtime.transform(SESSION, 0, filter, PARCEL)).hasSize(1);
   }
 
   @Test

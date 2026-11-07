@@ -34,6 +34,9 @@ import { canBeHalted, canBeResumed } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
 import {
   type ClientCredentials,
+  type LivePipelineRequest,
+  type LivePipelineRun,
+  type SimulationInput,
   type PipelineRunRequest,
   type PolledContent,
   type PollRequest,
@@ -46,6 +49,7 @@ import {
 import { componentsOfKind } from '@/pipeline/catalog'
 import { PIPELINE_NAME } from '@/pipeline/graph'
 import { PipelineSimulator } from '@/pipeline/simulator'
+import { nextPoll, pollerOf } from '@/pipeline/poller'
 import { PREFIXES, prefixLines as prefixLinesFor } from '@/domain/rdf'
 import { localName } from '@/ldes/definition'
 import { streamOf } from '@/ldes/eventStream'
@@ -82,6 +86,11 @@ export class MockLdesAdminApi implements LdesAdminApi {
   private state: SampleState
   /** The simulation of every session of the sandbox, which remembers what its change detection filters saw */
   private readonly simulators = new Map<string, PipelineSimulator>()
+  private readonly liveSources = new Map<string, {
+    request: LivePipelineRequest
+    status: LivePipelineRun
+    next?: Date
+  }>()
   private localPorts = 32772
   private readonly startedAt: number
 
@@ -225,6 +234,92 @@ export class MockLdesAdminApi implements LdesAdminApi {
       const delivered = steps.some((step) => step.kind === 'output' && step.status === 'ok')
       return { steps, delivered, members: delivered ? result.members : [] }
     })
+  }
+
+  startLivePipeline(request: LivePipelineRequest): Promise<LivePipelineRun> {
+    return this.respond(() => {
+      if (!['Ldio:HttpIn', 'Ldio:HttpInPoller'].includes(request.pipeline.input.name)) {
+        throw new ApiError(400, 'Demo mode only runs live HTTP inputs. Use production mode for broker and LDES sources.')
+      }
+      for (const [id, source] of this.liveSources) {
+        if (!source.status.active) this.liveSources.delete(id)
+      }
+      if (!this.liveSources.has(request.session) && this.liveSources.size >= 8) {
+        throw new ApiError(400, 'At most 8 live sandbox sources may run')
+      }
+      const poller = pollerOf(request.pipeline)
+      if (poller && (!poller.schedule || !poller.urls.length)) {
+        throw new ApiError(400, poller.scheduleProblem ?? 'Configure at least one poller URL')
+      }
+      const now = this.now()
+      const source = {
+        request: JSON.parse(JSON.stringify(request)) as LivePipelineRequest,
+        status: { active: true, received: 0, latest: null, error: null },
+        next: poller?.schedule
+          ? poller.schedule.kind === 'interval' ? now : nextPoll(poller.schedule, now)
+          : undefined,
+      }
+      this.liveSources.set(request.session, source)
+      this.simulators.delete(request.session)
+      return source.status
+    })
+  }
+
+  async getLivePipeline(session: string): Promise<LivePipelineRun> {
+    const source = this.liveSource(session)
+    if (source.status.active && source.next && source.next <= this.now()) {
+      const poller = pollerOf(source.request.pipeline)!
+      source.next = undefined
+      try {
+        for (const url of poller.urls) {
+          const response = await this.poll({ url, ...poller.request })
+          if (!source.status.active) break
+          await this.receiveLiveInput(source, { content: response.body, contentType: response.contentType, source: url })
+        }
+        source.next = poller.schedule && nextPoll(poller.schedule, this.now())
+      } catch (e) {
+        source.status.active = false
+        source.status.error = e instanceof Error ? e.message : String(e)
+      }
+    }
+    return this.respond(() => ({ ...source.status }))
+  }
+
+  async sendLiveInput(session: string, input: SimulationInput): Promise<void> {
+    const source = this.liveSource(session)
+    if (!source.status.active) throw new ApiError(400, 'The live sandbox source is stopped')
+    if (source.request.pipeline.input.name !== 'Ldio:HttpIn') {
+      throw new ApiError(400, 'Only a live HTTP In accepts manually sent members')
+    }
+    await this.receiveLiveInput(source, input)
+  }
+
+  stopLivePipeline(session: string): Promise<void> {
+    return this.respond(() => {
+      const source = this.liveSources.get(session)
+      if (source) source.status.active = false
+    })
+  }
+
+  private liveSource(session: string) {
+    const source = this.liveSources.get(session)
+    if (!source) throw new ApiError(400, 'No live sandbox source for this session')
+    return source
+  }
+
+  liveConnector(session: string, _action: 'token' | 'transfer', _content: string): Promise<string> {
+    return this.respond(() => {
+      this.liveSource(session)
+      throw new ApiError(400, 'EDC connector callbacks require production mode')
+    })
+  }
+
+  private async receiveLiveInput(source: { request: LivePipelineRequest; status: LivePipelineRun }, input: SimulationInput) {
+    const result = await this.runPipeline({ ...source.request, input })
+    if (source.status.active) {
+      source.status.received++
+      source.status.latest = result
+    }
   }
 
   // Instances ----------------------------------------------------------------------------------

@@ -61,7 +61,7 @@ pnpm test:e2e
 
 `build` includes `vue-tsc`; `test:e2e` builds with Vite and manages a preview server on port 4173.
 Do not leave a second preview server occupying that port. To iterate on one Jest file,
-`pnpm test --runTestsByPath tests/unit/<file>.spec.ts` selects a test after replacing the path
+`pnpm run test --runTestsByPath tests/unit/<file>.spec.ts` selects a test after replacing the path
 with a real file.
 
 Cypress uses `data-cy` selectors and `cy.dialogOpened(dataCy)` before editing PrimeVue dialogs.
