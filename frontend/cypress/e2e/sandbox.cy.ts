@@ -1,6 +1,9 @@
 describe('the sandbox', () => {
   beforeEach(() => {
-    cy.visit('/sandbox', { onBeforeLoad: (win) => win.localStorage.setItem('ldes-admin.dark', 'false') })
+    cy.visit('/sandbox', { onBeforeLoad: (win) => {
+      win.localStorage.setItem('ldes-admin.dark', 'false')
+      win.localStorage.removeItem('ldes-admin.sandbox-panels')
+    } })
     cy.get('[data-cy=canvas] .vue-flow__node').should('have.length', 6)
   })
 
@@ -60,6 +63,18 @@ describe('the sandbox', () => {
     cy.get('[data-cy=sample-input]').should('not.exist')
     cy.get('[data-cy=toggle-simulation]').click()
     cy.get('[data-cy=sample-input]').should('exist')
+
+    cy.get('[data-cy=resize-simulation]').invoke('attr', 'aria-valuenow').then((height) => {
+      cy.get('[data-cy=toggle-components-panel]').click()
+      cy.get('[data-cy=toggle-inspector-panel]').click()
+      cy.reload()
+      cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '280')
+      cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '380')
+      cy.get('[data-cy=toggle-components-panel]').should('have.attr', 'aria-expanded', 'false')
+      cy.get('[data-cy=toggle-inspector-panel]').should('have.attr', 'aria-expanded', 'false')
+      cy.get('[data-cy=toggle-simulation]').click()
+      cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', height)
+    })
   })
 
   it('lets the configuration panel grow to 66% of the screen width', () => {

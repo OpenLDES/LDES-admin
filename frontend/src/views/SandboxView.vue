@@ -54,18 +54,67 @@ const templateMenu = ref<InstanceType<typeof Menu>>()
 const showYaml = ref(false)
 const showDeploy = ref(false)
 const simulationOpen = ref(false)
-const paletteWidth = ref(236)
-const inspectorWidth = ref(330)
+const PANEL_SETTINGS_KEY = 'ldes-admin.sandbox-panels'
+
+interface PanelSettings {
+  paletteWidth: number
+  inspectorWidth: number
+  paletteCollapsed: boolean
+  inspectorCollapsed: boolean
+  simulationHeight: number
+}
+
+function readPanelSettings(): Partial<PanelSettings> {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(PANEL_SETTINGS_KEY) ?? 'null')
+    if (typeof stored !== 'object' || stored === null) return {}
+    const settings: Partial<PanelSettings> = {}
+    if ('paletteWidth' in stored && typeof stored.paletteWidth === 'number') settings.paletteWidth = stored.paletteWidth
+    if ('inspectorWidth' in stored && typeof stored.inspectorWidth === 'number') settings.inspectorWidth = stored.inspectorWidth
+    if ('paletteCollapsed' in stored && typeof stored.paletteCollapsed === 'boolean') {
+      settings.paletteCollapsed = stored.paletteCollapsed
+    }
+    if ('inspectorCollapsed' in stored && typeof stored.inspectorCollapsed === 'boolean') {
+      settings.inspectorCollapsed = stored.inspectorCollapsed
+    }
+    if ('simulationHeight' in stored && typeof stored.simulationHeight === 'number') {
+      settings.simulationHeight = stored.simulationHeight
+    }
+    return settings
+  } catch {
+    return {}
+  }
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value)) : fallback
+}
+
+const panelSettings = readPanelSettings()
+const paletteWidth = ref(boundedNumber(panelSettings.paletteWidth, 236, 180, 460))
+const inspectorWidth = ref(boundedNumber(panelSettings.inspectorWidth, 330, 240, Math.floor(window.innerWidth * 0.66)))
 const viewportWidth = ref(window.innerWidth)
 const inspectorMaxWidth = computed(() => Math.floor(viewportWidth.value * 0.66))
-const paletteCollapsed = ref(false)
-const inspectorCollapsed = ref(false)
-const simulationHeight = ref(44)
+const paletteCollapsed = ref(panelSettings.paletteCollapsed === true)
+const inspectorCollapsed = ref(panelSettings.inspectorCollapsed === true)
+const simulationHeight = ref(boundedNumber(panelSettings.simulationHeight, 44, 30, 72))
 const workspace = ref<HTMLElement>()
 const panelStyle = computed(() => ({
   '--palette-width': paletteCollapsed.value ? '0px' : `${paletteWidth.value}px`,
   '--inspector-width': inspectorCollapsed.value ? '0px' : `${inspectorWidth.value}px`,
 }))
+
+watch([paletteWidth, inspectorWidth, paletteCollapsed, inspectorCollapsed, simulationHeight], () => {
+  localStorage.setItem(PANEL_SETTINGS_KEY, JSON.stringify({
+    paletteWidth: paletteWidth.value,
+    inspectorWidth: inspectorWidth.value,
+    paletteCollapsed: paletteCollapsed.value,
+    inspectorCollapsed: inspectorCollapsed.value,
+    simulationHeight: simulationHeight.value,
+  }))
+}, { flush: 'post' })
+
 let fitPending = true
 // The canvas needs the room: the navigation collapses while in the sandbox
 let sidebarWasCollapsed = false
