@@ -62,6 +62,7 @@ const links = [
   { label: 'OpenLDES', href: 'https://openldes.org/' },
   { label: 'LDES Server docs', href: 'https://openldes.github.io/LDESServer/4.2.1/' },
   { label: 'LDIO docs', href: 'https://openldes.github.io/Linked-Data-Interactions/3.2.0-SNAPSHOT/' },
+  { label: 'LDES-admin docs', href: 'https://openldes.github.io/LDES-admin/' },
 ]
 </script>
 
