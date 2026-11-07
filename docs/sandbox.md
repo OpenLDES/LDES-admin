@@ -68,6 +68,9 @@ The sandbox has three columns:
   minimap shows where you are.
 * **The inspector** (right): the selected component, or the whole pipeline when nothing is selected.
 
+The browser remembers panel sizes and whether panels are open or collapsed, including the
+simulation panel, when you navigate away or reload.
+
 ### Start from a template
 
 *Templates* in the toolbar replaces the canvas with an example, or an empty canvas. Each comes with
@@ -146,7 +149,8 @@ The simulation has three columns:
   HTTP In Poller has buttons to [fetch and poll its URL](#input-from-an-http-poller) instead.
 * **Steps**: every component the member went through, with how long it took and what it did:
   passed on, filtered out, or stopped with an error. Components it did not reach are listed as such.
-  Click a component on the canvas to select its step.
+  Click a component on the canvas to select its step, or a step to select its component and open
+  its configuration.
 * **After …**: what the step you select made, in Turtle; for an output, what it sends. A step can
   make several models: an adapter makes one per object of a JSON array, or per named graph of an
   RML mapping. Page through them with the arrows (*Model 2 of 14*). What the JSON to JSON-LD
@@ -164,6 +168,8 @@ it. Switch on **Execute outputs** in the bar to have them really send it: HTTP O
 member, HTTP SPARQL Out updates its triple store, the repository sink adds it to its repository.
 Kafka Out, AMQP Out and the database output always run dry as a sandbox safety policy.
 Their real configurators validate configuration; they never publish messages or write rows.
+The first time you enable output execution, LDES-admin asks you to confirm because outputs can
+affect real systems. You can choose not to see that warning again.
 
 An output pointing to the sandbox LDES server on its host name
 (`http://sandbox-ldes-server:8080/…`) reaches it when executed: the member is ingested.
@@ -179,8 +185,8 @@ When the pipeline starts with an `Ldio:HttpInPoller`, the input member can be wh
 right now, as the poller would receive it:
 
 * **Fetch** (the cloud button above the input member) gets the URL once and puts the response
-  body in the input, with its content type. Change it if you like, then **Run**. With several URLs,
-  pick one.
+  body in the input, with its content type. A successful fetch is shown for three seconds. Change
+  the member if you like, then **Run**. With several URLs, pick one.
 * **Poll** (the button next to it) fetches on the schedule of the component and runs every
   response through the pipeline, the way the deployed pipeline would: on its `cron` expression (a
   Spring cron expression, in the time zone of your browser), or right away and then every

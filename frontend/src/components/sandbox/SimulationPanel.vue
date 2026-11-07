@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
+import Dialog from 'primevue/dialog'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import Select from 'primevue/select'
@@ -31,6 +33,45 @@ const toast = useToast()
 const instances = useInstancesStore()
 const { run: act, busy: ingesting } = useAction()
 const { run: sendAction, busy: sending } = useAction()
+const EXECUTE_OUTPUTS_WARNING_KEY = 'ldes-admin.sandbox-execute-outputs-warning-dismissed'
+const executeOutputsWarningOpen = ref(false)
+const skipExecuteOutputsWarning = ref(false)
+const executeOutputsToggle = ref(sandbox.executeOutputs)
+
+watch(() => sandbox.executeOutputs, (enabled) => {
+  executeOutputsToggle.value = enabled
+})
+
+function requestExecuteOutputs(enabled: boolean) {
+  executeOutputsToggle.value = enabled
+  if (!enabled) {
+    sandbox.executeOutputs = false
+    return
+  }
+  if (localStorage.getItem(EXECUTE_OUTPUTS_WARNING_KEY) === 'true') {
+    sandbox.executeOutputs = true
+    return
+  }
+  skipExecuteOutputsWarning.value = false
+  executeOutputsWarningOpen.value = true
+}
+
+function confirmExecuteOutputs() {
+  if (skipExecuteOutputsWarning.value) {
+    localStorage.setItem(EXECUTE_OUTPUTS_WARNING_KEY, 'true')
+  }
+  sandbox.executeOutputs = true
+  executeOutputsWarningOpen.value = false
+}
+
+function cancelExecuteOutputs() {
+  executeOutputsToggle.value = false
+  executeOutputsWarningOpen.value = false
+}
+
+watch(executeOutputsWarningOpen, (open) => {
+  if (!open && !sandbox.executeOutputs) executeOutputsToggle.value = false
+})
 
 const contentTypes = [
   { label: 'JSON', value: 'application/json' },
@@ -120,6 +161,12 @@ watch(() => sandbox.selectedId, (id) => {
   if (index >= 0 && index < steps.value.length) selectedStep.value = index
 })
 
+function selectStep(index: number) {
+  selectedStep.value = index
+  const nodeId = sandbox.stepNodeIds[index]
+  if (nodeId) sandbox.selectedId = nodeId
+}
+
 const targetServer = ref<string>()
 const targetCollection = ref<string>()
 const streams = ref<EventStream[]>([])
@@ -159,6 +206,9 @@ function useTemplateSample() {
 
 const fetchMenu = ref<InstanceType<typeof Menu>>()
 const fetching = ref(false)
+const fetchNotice = ref<string>()
+const manualFetchOutcome = ref<{ url: string; at: number }>()
+let fetchNoticeTimer: ReturnType<typeof setTimeout> | undefined
 const fetchItems = computed(() => (sandbox.poller?.urls ?? [])
   .map((url) => ({ label: shortUrl(url), command: () => fetchFrom(url) })))
 const fetchTooltip = computed(() => {
@@ -190,9 +240,11 @@ const pollStatus = computed(() => {
     }
   }
   if (!last) return undefined
-  return last.error
-    ? { icon: 'pi pi-exclamation-triangle', text: `Could not fetch ${shortUrl(last.url)}`, tone, detail: last.error }
-    : { icon: 'pi pi-cloud-download', text: `Fetched ${shortUrl(last.url)} at ${clock(last.at)}`, tone, detail: undefined }
+  if (last.error) {
+    return { icon: 'pi pi-exclamation-triangle', text: `Could not fetch ${shortUrl(last.url)}`, tone, detail: last.error }
+  }
+  if (manualFetchOutcome.value?.url === last.url && manualFetchOutcome.value.at === last.at.getTime()) return undefined
+  return { icon: 'pi pi-cloud-download', text: `Fetched ${shortUrl(last.url)} at ${clock(last.at)}`, tone, detail: undefined }
 })
 
 function fetchInput(event: Event) {
@@ -202,9 +254,16 @@ function fetchInput(event: Event) {
 }
 
 async function fetchFrom(url: string) {
+  clearTimeout(fetchNoticeTimer)
+  fetchNotice.value = undefined
   fetching.value = true
   try {
     await sandbox.fetchInput(url)
+    if (sandbox.lastPoll) {
+      manualFetchOutcome.value = { url: sandbox.lastPoll.url, at: sandbox.lastPoll.at.getTime() }
+    }
+    fetchNotice.value = `Fetched ${shortUrl(url)}`
+    fetchNoticeTimer = setTimeout(() => { fetchNotice.value = undefined }, 3000)
   } catch {
     // The poll status tells what went wrong
   } finally {
@@ -219,6 +278,7 @@ function togglePolling() {
 
 // Polling is for the pipeline on the canvas, while it is in view
 onBeforeUnmount(() => {
+  clearTimeout(fetchNoticeTimer)
   sandbox.stopPolling()
   void sandbox.stopLive()
 })
@@ -312,8 +372,8 @@ const statusIcon: Record<SimulationStep['status'], string> = {
       <span class="spacer" />
       <label class="execute" for="execute-outputs" data-cy="execute-outputs"
         v-tooltip.top="'On: outputs really send what they make (HTTP Out posts, SPARQL Out updates its store, …). Off: a dry run shows what they would send.'">
-        <ToggleSwitch v-model="sandbox.executeOutputs" input-id="execute-outputs"
-          :disabled="sandbox.live?.active || sandbox.liveBusy" />
+        <ToggleSwitch :model-value="executeOutputsToggle" input-id="execute-outputs"
+          :disabled="sandbox.live?.active || sandbox.liveBusy" @update:model-value="requestExecuteOutputs" />
         <span>Execute outputs</span>
       </label>
       <Button v-if="sandbox.polling" label="Stop polling" icon="pi pi-stop-circle" severity="secondary" text
@@ -396,6 +456,10 @@ const statusIcon: Record<SimulationStep['status'], string> = {
             <span v-if="pollStatus.detail" class="poll-detail">{{ pollStatus.detail }}</span>
           </span>
         </div>
+        <div v-if="fetchNotice" class="poll-status" data-cy="fetch-notice">
+          <i class="pi pi-cloud-download" />
+          <span>{{ fetchNotice }}</span>
+        </div>
         <CodeEditor v-model="sandbox.sample.content"
           :language="sandbox.sample.contentType.includes('json') ? 'json' : sandbox.sample.contentType.includes('csv') ? 'text' : 'turtle'"
           min-height="100%" class="editor" data-cy="sample-input" />
@@ -408,7 +472,7 @@ const statusIcon: Record<SimulationStep['status'], string> = {
         <ol v-if="steps.length" class="step-list">
           <li v-for="(step, index) in steps" :key="index">
             <button type="button" class="step" :class="[step.status, { selected: index === selectedStep }]"
-              :style="{ '--kind': kinds[step.kind].color }" data-cy="simulation-step" @click="selectedStep = index">
+              :style="{ '--kind': kinds[step.kind].color }" data-cy="simulation-step" @click="selectStep(index)">
               <span class="step-marker"><i :class="statusIcon[step.status]" /></span>
               <span class="step-text">
                 <span class="step-title">{{ stepLabel(step) }} <span class="muted small">{{ step.durationMs }} ms</span></span>
@@ -472,6 +536,23 @@ const statusIcon: Record<SimulationStep['status'], string> = {
         </Popover>
       </section>
     </div>
+    <Dialog v-model:visible="executeOutputsWarningOpen" modal header="Execute outputs?" :closable="false"
+      :style="{ width: '440px', maxWidth: 'calc(100vw - 32px)' }" data-cy="execute-outputs-warning">
+      <p class="warning-copy">
+        The next simulation will execute the configured outputs. This may add members or modify remote
+        systems, and those real side effects cannot necessarily be undone.
+      </p>
+      <div class="warning-choice">
+        <Checkbox v-model="skipExecuteOutputsWarning" input-id="skip-execute-outputs-warning" binary
+          data-cy="skip-execute-outputs-warning" />
+        <label for="skip-execute-outputs-warning">Don't show this message again</label>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" text data-cy="cancel-execute-outputs"
+          @click="cancelExecuteOutputs" />
+        <Button label="Execute outputs" data-cy="confirm-execute-outputs" @click="confirmExecuteOutputs" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -623,6 +704,19 @@ const statusIcon: Record<SimulationStep['status'], string> = {
   margin: 0;
   max-width: 260px;
   line-height: 1.45;
+}
+
+.warning-copy {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.warning-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
 }
 
 .poll-status {

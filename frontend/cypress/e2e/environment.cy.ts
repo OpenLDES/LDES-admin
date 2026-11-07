@@ -150,6 +150,8 @@ describe('demo and production mode', () => {
     cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
 
     cy.get('[data-cy=execute-outputs]').click()
+    cy.dialogOpened('execute-outputs-warning')
+    cy.get('[data-cy=confirm-execute-outputs]').click()
     cy.get('[data-cy=run-simulation]').click()
     cy.wait('@run').its('request.body').should((body) => {
       expect(body.pipeline.name).to.equal('parcels-to-ldes')

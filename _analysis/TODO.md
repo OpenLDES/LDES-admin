@@ -123,7 +123,8 @@
   /adapter/out/http
   /adapter/out/ldes
   ...
-  The adapter, adapter/in and adapter/out should also contain a pom.xml, however they are packaging=pom.
+  The adapter, adapter/in and adapter/out should also contain a pom.xml, however they are packaging=
+  pom.
 * [x] Add documentation to the site: add a walkthrough tutorial, where you first start a local
   server, then add the parking occupancy stream. You then start a local LDIO, and add the parking
   occupancy pipeline. You open the pipeline in the sandbox, and experiment with it: you change the
@@ -131,3 +132,13 @@
   result to the stream on the local server. Then, you navigate the stream and the view on the
   server. You create another view, and walk through this view when it's popupated, ...
   Make this tutorial appealing, with screenshots.
+* [x] When you select the steps after a simulation run, then the according step in the pipeline
+  overview should be selected, and the inspector panel should show the configuration of that
+  component. When you select a component in the pipeline overview, then the according step in the
+  steps panel should be selected, and the inspector panel should show the configuration of that
+  component.
+* [x] When you fetch the input member in the simulation, then you get a text "Fetched <url>". Let
+  this message disappear after 3 seconds
+* [x] When you select "execute outputs" in the sandbox, then open an alert panel, which says that
+  you are going to add members to the configured outputs. Add a checkbox to stop displaying this
+  message again.

@@ -3,6 +3,7 @@ describe('the sandbox', () => {
     cy.visit('/sandbox', { onBeforeLoad: (win) => {
       win.localStorage.setItem('ldes-admin.dark', 'false')
       win.localStorage.removeItem('ldes-admin.sandbox-panels')
+      win.localStorage.removeItem('ldes-admin.sandbox-execute-outputs-warning-dismissed')
     } })
     cy.get('[data-cy=canvas] .vue-flow__node').should('have.length', 6)
   })
@@ -72,9 +73,38 @@ describe('the sandbox', () => {
       cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '380')
       cy.get('[data-cy=toggle-components-panel]').should('have.attr', 'aria-expanded', 'false')
       cy.get('[data-cy=toggle-inspector-panel]').should('have.attr', 'aria-expanded', 'false')
-      cy.get('[data-cy=toggle-simulation]').click()
+      cy.get('[data-cy=sample-input]').should('exist')
       cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', height)
     })
+  })
+
+  it('remembers whether the simulation is open across navigation and reloads', () => {
+    cy.get('[data-cy=sample-input]').should('not.exist')
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=resize-simulation]').trigger('keydown', { key: 'ArrowUp' })
+      .should('have.attr', 'aria-valuenow', '48')
+
+    for (const path of ['/ldes-servers', '/ldios']) {
+      cy.get(`[data-cy=sidebar] a[href="${path}"]`).click()
+      cy.location('pathname').should('eq', path)
+      cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
+      cy.get('[data-cy=sample-input]').should('exist')
+      cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', '48')
+    }
+
+    cy.get('[data-cy=toggle-simulation]').click()
+    for (const path of ['/ldes-servers', '/ldios']) {
+      cy.get(`[data-cy=sidebar] a[href="${path}"]`).click()
+      cy.location('pathname').should('eq', path)
+      cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
+      cy.get('[data-cy=sample-input]').should('not.exist')
+      cy.get('[data-cy=resize-simulation]').should('not.exist')
+    }
+
+    cy.reload()
+    cy.get('[data-cy=sample-input]').should('not.exist')
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', '48')
   })
 
   it('lets the configuration panel grow to 66% of the screen width', () => {
@@ -217,9 +247,14 @@ describe('the sandbox', () => {
     cy.get('[data-cy=run-simulation]').click()
     cy.get('[data-cy=simulation-step]', { timeout: 8000 }).should('have.length', 6)
 
+    cy.contains('[data-cy=simulation-step]', 'Version Object Creator').click()
+    cy.get('[data-cy="node-Ldio:VersionObjectCreator"]').should('have.class', 'selected')
+    cy.get('[data-cy=inspector] h2').should('contain', 'Version Object Creator')
+
     cy.get('[data-cy="node-Ldio:GeoJsonToWktTransformer"]').click()
     cy.contains('[data-cy=simulation-step]', 'GeoJSON to WKT').should('have.class', 'selected')
     cy.get('[data-cy=step-output] .cm-content').should('contain', 'geo:asWKT')
+    cy.get('[data-cy=inspector] h2').should('contain', 'GeoJSON to WKT')
 
     // Editing the pipeline keeps the steps
     cy.get('[data-cy="node-Ldio:HttpOut"]').click()
@@ -230,6 +265,22 @@ describe('the sandbox', () => {
 
     cy.contains('[data-cy=simulation] button', 'Reset').click()
     cy.get('[data-cy=simulation-step]').should('not.exist')
+  })
+
+  it('confirms output execution and remembers when the warning is dismissed', () => {
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.dialogOpened('execute-outputs-warning').should('contain', 'may add members or modify remote systems')
+    cy.get('[data-cy=cancel-execute-outputs]').click()
+    cy.get('[data-cy=execute-outputs-warning]').should('not.exist')
+
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.get('[data-cy=skip-execute-outputs-warning]').click()
+    cy.get('[data-cy=confirm-execute-outputs]').click()
+    cy.get('[data-cy=execute-outputs-warning]').should('not.exist')
+
+    cy.reload()
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.get('[data-cy=execute-outputs-warning]').should('not.exist')
   })
 
   it('fetches the input of an HTTP poller, and polls on its schedule', () => {
@@ -256,9 +307,11 @@ describe('the sandbox', () => {
       .and('contain', '503').and('contain', 'Down for maintenance')
 
     cy.get('[data-cy=fetch-input]').click()
-    cy.get('[data-cy=poll-status]').should('contain', 'Fetched api.example.org/changes')
+    cy.get('[data-cy=fetch-notice]').should('contain', 'Fetched api.example.org/changes')
     cy.get('[data-cy=sample-input] .cm-content').should('contain', '<http://example.org/area> "512.4"')
     cy.get('[data-cy=sample-content-type]').should('contain', 'Turtle')
+    cy.wait(3100)
+    cy.get('[data-cy=fetch-notice]').should('not.exist')
 
     // Polling runs every response through the pipeline
     cy.get('[data-cy=toggle-polling]').click()

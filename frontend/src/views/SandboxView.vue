@@ -53,7 +53,6 @@ provide('selectedNodeId', computed(() => sandbox.selectedId))
 const templateMenu = ref<InstanceType<typeof Menu>>()
 const showYaml = ref(false)
 const showDeploy = ref(false)
-const simulationOpen = ref(false)
 const PANEL_SETTINGS_KEY = 'ldes-admin.sandbox-panels'
 
 interface PanelSettings {
@@ -62,6 +61,7 @@ interface PanelSettings {
   paletteCollapsed: boolean
   inspectorCollapsed: boolean
   simulationHeight: number
+  simulationOpen: boolean
 }
 
 function readPanelSettings(): Partial<PanelSettings> {
@@ -79,6 +79,9 @@ function readPanelSettings(): Partial<PanelSettings> {
     }
     if ('simulationHeight' in stored && typeof stored.simulationHeight === 'number') {
       settings.simulationHeight = stored.simulationHeight
+    }
+    if ('simulationOpen' in stored && typeof stored.simulationOpen === 'boolean') {
+      settings.simulationOpen = stored.simulationOpen
     }
     return settings
   } catch {
@@ -99,19 +102,21 @@ const inspectorMaxWidth = computed(() => Math.floor(viewportWidth.value * 0.66))
 const paletteCollapsed = ref(panelSettings.paletteCollapsed === true)
 const inspectorCollapsed = ref(panelSettings.inspectorCollapsed === true)
 const simulationHeight = ref(boundedNumber(panelSettings.simulationHeight, 44, 30, 72))
+const simulationOpen = ref(panelSettings.simulationOpen === true)
 const workspace = ref<HTMLElement>()
 const panelStyle = computed(() => ({
   '--palette-width': paletteCollapsed.value ? '0px' : `${paletteWidth.value}px`,
   '--inspector-width': inspectorCollapsed.value ? '0px' : `${inspectorWidth.value}px`,
 }))
 
-watch([paletteWidth, inspectorWidth, paletteCollapsed, inspectorCollapsed, simulationHeight], () => {
+watch([paletteWidth, inspectorWidth, paletteCollapsed, inspectorCollapsed, simulationHeight, simulationOpen], () => {
   localStorage.setItem(PANEL_SETTINGS_KEY, JSON.stringify({
     paletteWidth: paletteWidth.value,
     inspectorWidth: inspectorWidth.value,
     paletteCollapsed: paletteCollapsed.value,
     inspectorCollapsed: inspectorCollapsed.value,
     simulationHeight: simulationHeight.value,
+    simulationOpen: simulationOpen.value,
   }))
 }, { flush: 'post' })
 
