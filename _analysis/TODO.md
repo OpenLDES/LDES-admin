@@ -107,6 +107,27 @@
         * [x] `Ldio:AmqpOut`
         * [x] `Ldio:LdioRdbOut`
         * [x] `Ldio:NoopOut`
-* [ ] Separate the different adapters in different maven modules. Add the dependencies between the
-  modules in the archunit test. Make sure that you end up with a clean architecture, according to
-  the hexagonal architecture pattern.
+* [x] Remember the last size of the panels in the sandbox view.
+* [x] Add a link to the documentation of LDES-admin on the dashboard (add it to the place where you
+  can find the links to openldes, ...)
+* [x] Separate the different adapters in different maven modules. Add those modules to the archunit
+  test. Make sure that you end up with a clean architecture, according to the hexagonal architecture
+  pattern.
+  You'll have a folder structure like this:
+  /adapter
+  /adapter/in
+  /adapter/in/rest
+  /adapter/in/scheduling
+  /adapter/out
+  /adapter/out/health
+  /adapter/out/http
+  /adapter/out/ldes
+  ...
+  The adapter, adapter/in and adapter/out should also contain a pom.xml, however they are packaging=pom.
+* [x] Add documentation to the site: add a walkthrough tutorial, where you first start a local
+  server, then add the parking occupancy stream. You then start a local LDIO, and add the parking
+  occupancy pipeline. You open the pipeline in the sandbox, and experiment with it: you change the
+  interval of the httpInPoller to a cron expression, you fetch an item, run a simulation, ingest the
+  result to the stream on the local server. Then, you navigate the stream and the view on the
+  server. You create another view, and walk through this view when it's popupated, ...
+  Make this tutorial appealing, with screenshots.

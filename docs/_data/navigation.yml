@@ -1,6 +1,8 @@
 # The pages in the header, in this order; the documentation pages link to their neighbours
 - title: Home
   url: /
+- title: Walkthrough
+  url: /walkthrough/
 - title: Installation
   url: /installation/
 - title: Monitoring
