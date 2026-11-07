@@ -11,7 +11,7 @@ flowchart LR
 
   subgraph backend["Spring Boot backend"]
     direction LR
-    subgraph adapter_in["adapter (in)"]
+    subgraph adapter_in["adapter/in (Maven modules)"]
       rest["REST controllers"]
       scheduler["instance monitor<br/>(scheduled)"]
     end
@@ -21,15 +21,18 @@ flowchart LR
     subgraph model["model"]
       domain["Instance, EventStream, View, Fragment,<br/>Pipeline, Sandbox, ActivityEvent, …"]
     end
-    subgraph adapter_out["adapter (out)"]
+    subgraph adapter_out["adapter/out (Maven modules)"]
       jpa["JPA + Flyway"]
+      http["shared HTTP helpers"]
       ldes["LDES server client<br/>(RestClient + Jena)"]
       ldio["LDIO client<br/>(RestClient)"]
       health["actuator health probe"]
       runtime["local runtime<br/>(Testcontainers)"]
+      sandbox["sandbox runtime<br/>(LDI components)"]
     end
     rest & scheduler --> in
-    out --> jpa & ldes & ldio & health & runtime
+    out --> jpa & ldes & ldio & health & runtime & sandbox
+    health & ldes & ldio --> http
     services -. uses .-> domain
   end
 
@@ -46,17 +49,29 @@ The backend follows the hexagonal architecture of
 [Sven Woltmann's example](https://github.com/SvenWoltmann/hexagonal-architecture-java/tree/with-spring-boot):
 every ring is a Maven module, so the compiler enforces that dependencies only point inwards.
 
-| Module        | Contains                                                         | Depends on    | Frameworks                  |
-|---------------|------------------------------------------------------------------|---------------|-----------------------------|
-| `model`       | Domain model: records with their invariants and behaviour        | –             | none                        |
-| `application` | Use cases (ports in), ports out, and the services implementing them | `model`     | none                        |
-| `adapter`     | REST API, scheduler, JPA persistence, LDES server/LDIO clients, local runtime | `application` | Spring, Jena, Testcontainers |
-| `bootstrap`   | Spring Boot application, wiring, security, scheduling, configuration, serving the frontend | `adapter`, `frontend` | Spring Boot |
+| Module | Contains | Depends on | Frameworks |
+|---|---|---|---|
+| `model` | Domain records and behaviour | – | none |
+| `application` | Use cases, ports and orchestration | `model` | none |
+| `adapter` | Parent aggregator (`packaging=pom`) | – | – |
+| `adapter/in` | Inbound adapter aggregator (`packaging=pom`) | – | – |
+| `adapter/in/rest` | REST controllers and HTTP models | `application` | Spring MVC, validation |
+| `adapter/in/scheduling` | Instance monitor scheduler | `application` | Spring scheduling |
+| `adapter/out` | Outbound adapter aggregator (`packaging=pom`) | – | – |
+| `adapter/out/health` | Actuator health probe | `application`, shared HTTP | Spring RestClient |
+| `adapter/out/http` | Shared HTTP helpers and HTTP poller | `application` | Spring RestClient |
+| `adapter/out/ldes` | LDES client and RDF readers | `application`, shared HTTP | Spring RestClient, Jena |
+| `adapter/out/ldio` | LDIO client | `application`, shared HTTP | Spring RestClient |
+| `adapter/out/persistence` | JPA persistence and Flyway migrations | `application` | Spring Data JPA, Flyway |
+| `adapter/out/runtime` | Local Docker instance runtime | `application` | Spring Boot, Testcontainers |
+| `adapter/out/sandbox` | Local LDIO component runtime | `application` | Spring Boot, Jena, LDI |
+| `bootstrap` | Spring Boot application, wiring and frontend serving | Adapter modules, `frontend` | Spring Boot |
 
 `DependencyRuleTest` (ArchUnit, in `bootstrap`) additionally checks what the modules cannot:
 adapters don't depend on each other, inbound adapters only use use cases (never services),
 outbound adapters only implement ports, and `model`/`application` stay free of Spring, Jakarta,
-Jackson, Jena and Testcontainers.
+Jackson, Jena and Testcontainers. Health, LDES and LDIO may use the shared HTTP adapter; every
+other concrete adapter remains independent. Maven dependencies enforce the same allowed edges.
 
 The application services are plain Java classes marked with `@ApplicationService` (a plain
 annotation of the application ring). `ApplicationServiceConfig` in `bootstrap` turns them into
@@ -79,11 +94,19 @@ org.openldes.ldesadmin
 │   ├── port.in      instance | ldes | ldio | sandbox | monitoring | dashboard   use case interfaces and their exceptions
 │   ├── port.out     persistence | ldes | ldio | health | runtime | monitoring | sandbox, RemoteInstanceException
 │   └── service      instance | ldes | ldio | sandbox | monitoring | dashboard   one service per use case
-├── adapter
-│   ├── in.rest      instance | ldes | ldio | sandbox | monitoring | dashboard, RestExceptionHandler (RFC 9457)
-│   ├── in.scheduling InstanceMonitorScheduler
-│   └── out          persistence.jpa | ldes | ldio | health | runtime | sandbox (the LDI components)
-│                    | http (shared HTTP helpers, RestHttpPoller)
+├── adapter (packaging=pom)
+│   ├── in (packaging=pom)
+│   │   ├── rest       instance | ldes | ldio | sandbox | monitoring | dashboard, RestExceptionHandler (RFC 9457)
+│   │   └── scheduling InstanceMonitorScheduler
+│   └── out (packaging=pom)
+│       ├── persistence JPA repositories and entities; Flyway migrations
+│       ├── ldes         LDES server client and RDF readers
+│       ├── ldio         LDIO client
+│       ├── health       Actuator health probe
+│       ├── http         Shared HTTP helpers, RestHttpPoller
+│       ├── runtime      Local instance runtime
+│       ├── sandbox      LDI component runtime
+│       └── test-support Shared test fixtures (test scope only)
 └── bootstrap        LdesAdminApplication, ApplicationServiceConfig, SchedulingConfig, SecurityConfig, FrontendConfig
 ```
 
@@ -195,7 +218,7 @@ sandbox LDES server. Outputs run dry unless the run says otherwise.
 
 | Port                     | Adapter                       | Talks to                                                         |
 |--------------------------|-------------------------------|------------------------------------------------------------------|
-| `InstanceRepository`, `ActivityLog`, `IngestSampleRepository` | `JpaInstanceRepository`, `JpaActivityLog`, `JpaIngestSampleRepository` | Postgres; the schema is owned by Flyway (`adapter/src/main/resources/db/migration`), Hibernate only validates it |
+| `InstanceRepository`, `ActivityLog`, `IngestSampleRepository` | `JpaInstanceRepository`, `JpaActivityLog`, `JpaIngestSampleRepository` | Postgres; the schema is owned by Flyway (`adapter/out/persistence/src/main/resources/db/migration`), Hibernate only validates it |
 | `LdesServerClient`       | `RestLdesServerClient`        | `/admin/api/v1/…` (Turtle, parsed with Apache Jena), `POST /{collection}`, the fetch API (pages, with `Cache-Control: immutable`), `/actuator/prometheus` (`ldes_server_*_members_count`, `spring_batch_step_*`) |
 | `LdioClient`             | `RestLdioClient`              | `/admin/api/v1/pipeline…`, `/admin/api/v1/pipeline/ldes-client`, `/admin/api/v1/catalog`, `POST /{pipeline}`, `/actuator/prometheus` (`ldio_data_in_total`, `ldio_data_out_total`) |
 | `InstanceHealthProbe`    | `ActuatorHealthProbe`         | `/actuator/health`, falling back to the admin API                 |

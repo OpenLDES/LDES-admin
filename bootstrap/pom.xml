@@ -19,7 +19,43 @@
   <dependencies>
     <dependency>
       <groupId>org.openldes</groupId>
-      <artifactId>ldes-admin-adapter</artifactId>
+      <artifactId>ldes-admin-application</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-in-rest</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-in-scheduling</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-health</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-http</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-ldes</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-ldio</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-persistence</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-runtime</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openldes</groupId>
+      <artifactId>ldes-admin-adapter-out-sandbox</artifactId>
     </dependency>
     <!-- The built frontend, served on / -->
     <dependency>

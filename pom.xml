@@ -32,9 +32,8 @@
   </scm>
 
   <!--
-    Hexagonal architecture: every ring is a separate Maven module, so the dependency rule
-    (adapter -> application -> model) is enforced by the compiler. The frontend is built into a
-    jar of static resources that the bootstrap module serves.
+    Hexagonal rings and adapter types are separate Maven modules, so dependencies are enforced by
+    the compiler. The frontend is built into a jar of static resources that bootstrap serves.
     See _analysis/architecture.md.
   -->
   <modules>
@@ -83,7 +82,52 @@
       </dependency>
       <dependency>
         <groupId>org.openldes</groupId>
-        <artifactId>ldes-admin-adapter</artifactId>
+        <artifactId>ldes-admin-adapter-in-rest</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-in-scheduling</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-health</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-http</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-ldes</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-ldio</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-persistence</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-out-sandbox</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openldes</groupId>
+        <artifactId>ldes-admin-adapter-test-support</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

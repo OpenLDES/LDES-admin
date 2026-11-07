@@ -55,15 +55,19 @@ class DependencyRuleTest {
           .adapter("rest", "..adapter.in.rest..")
           .adapter("scheduling", "..adapter.in.scheduling..")
           .adapter("persistence", "..adapter.out.persistence..")
-          .adapter(
-              "remote instances",
-              "..adapter.out.ldes..",
-              "..adapter.out.ldio..",
-              "..adapter.out.health..",
-              "..adapter.out.http..")
+          .adapter("health", "..adapter.out.health..")
+          .adapter("shared HTTP", "..adapter.out.http..")
+          .adapter("LDES server", "..adapter.out.ldes..")
+          .adapter("LDIO", "..adapter.out.ldio..")
           .adapter("local runtime", "..adapter.out.runtime..")
           .adapter("sandbox runtime", "..adapter.out.sandbox..")
           .withOptionalLayers(true)
+          .ignoreDependency(
+              resideInAPackage("..adapter.out.health.."), resideInAPackage("..adapter.out.http.."))
+          .ignoreDependency(
+              resideInAPackage("..adapter.out.ldes.."), resideInAPackage("..adapter.out.http.."))
+          .ignoreDependency(
+              resideInAPackage("..adapter.out.ldio.."), resideInAPackage("..adapter.out.http.."))
           .ignoreDependency(resideInAPackage("..bootstrap.."), alwaysTrue());
 
   @ArchTest

@@ -9,7 +9,7 @@ Cucumber runner, test framework or mocking library to satisfy a documentation te
 |----------------------------------------------------|----------------------------------------------------------------------------|
 | Domain values and invariants                       | Plain JUnit tests in `model`                                               |
 | Use-case orchestration                             | JUnit, Mockito and AssertJ in `application`; mock output ports             |
-| HTTP binding, validation, status or response shape | `@WebMvcTest`, `MockMvcTester`, `@MockitoBean` in `adapter`                |
+| HTTP binding, validation, status or response shape | `@WebMvcTest`, `MockMvcTester`, `@MockitoBean` in `adapter/in/rest`        |
 | Remote request construction/parsing                | Focused outbound adapter tests                                             |
 | LDES/LDIO protocol behaviour                       | `RestLdesServerClientIT`, `RestLdioClientIT` against real container images |
 | Schema/entity/port persistence                     | Postgres/Testcontainers with Flyway, e.g. `JpaInstanceRepositoryIT`        |
@@ -36,6 +36,12 @@ non-mutating check (see [Java style](java-style.md)). For example:
 
 ```shell
 ./mvnw -pl application -am -Dtest=RegisterInstanceServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+Select an adapter module with its prerequisites for focused backend checks, for example:
+
+```shell
+./mvnw -pl adapter/in/rest -am -Dtest=InstanceControllerTest -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
 For code changes, the final project gate is:

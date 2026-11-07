@@ -110,7 +110,7 @@ bundle exec jekyll serve   # http://localhost:4000
 |---------------|-----------------------------------------------------------------------------------------------------------------------------|
 | `model`       | Domain model (plain Java)                                                                                                   |
 | `application` | Use cases, ports and services (plain Java)                                                                                  |
-| `adapter`     | REST API, monitor, Postgres (JPA + Flyway), LDES server and LDIO clients, local Docker runtime, sandbox runtime (LDI)       |
+| `adapter`     | Maven parent for inbound REST/scheduling and outbound health, HTTP, LDES, LDIO, persistence, local runtime and sandbox modules |
 | `frontend`    | Vue 3 + TypeScript + PrimeVue + Vue Flow frontend, in demo or production mode; Maven packages the build as static resources |
 | `bootstrap`   | Spring Boot application, serving the API and the frontend                                                                   |
 

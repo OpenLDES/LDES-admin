@@ -4,7 +4,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      # The schema is owned by Flyway (adapter/src/main/resources/db/migration)
+      # The schema is owned by Flyway (adapter/out/persistence/src/main/resources/db/migration)
       ddl-auto: validate
   http:
     clients:

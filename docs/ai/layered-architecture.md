@@ -10,13 +10,18 @@ is [_analysis/architecture.md](../../_analysis/architecture.md).
 |---------------|--------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
 | `model`       | Domain records, identifiers, invariants and domain behaviour                                                                                     | JDK only                                              |
 | `application` | `port.in` use cases/exceptions, `port.out` integration contracts, `service` orchestration                                                        | `model`                                               |
-| `adapter`     | `in.rest`, `in.scheduling`, `out.persistence.jpa`, `out.ldes`, `out.ldio`, `out.health`, `out.runtime`, `out.sandbox`, shared `out.http` helpers | `application`, domain types and integration libraries |
+| `adapter`     | Maven parent for separate inbound REST/scheduling and outbound health, shared HTTP, LDES, LDIO, persistence, local runtime and sandbox modules | `application`, domain types and integration libraries |
 | `frontend`    | Vue application packaged as static resources in a jar                                                                                            | REST contract, not Java internals                     |
 | `bootstrap`   | Spring Boot entry point, bean wiring, security, scheduling and SPA serving                                                                       | Backend adapters and frontend jar                     |
 
 Packages start at `org.openldes.ldesadmin`; the domain areas are `instance`, `ldes`, `ldio`,
 `sandbox`, `monitoring` and `dashboard`. Extend the appropriate area rather than creating a
 parallel generic feature framework.
+
+The adapter parent and the `adapter/in` and `adapter/out` aggregators have `packaging=pom`.
+Each concrete adapter is its own Maven module. Only the health, LDES and LDIO modules depend on
+the shared HTTP adapter; the other adapters remain independent. Bootstrap declares the concrete
+adapter modules explicitly and owns their cross-adapter wiring.
 
 ## Request flow
 
@@ -45,9 +50,9 @@ or an additional public service interface beyond the input port.
 
 LDES-admin persists instances, activity events and ingest samples. Event stream definitions and
 pipelines live on the remote servers, not in new local JPA aggregates. Schema migrations live in
-`adapter/src/main/resources/db/migration`. Add a migration for a schema change; do not rewrite an
-already-applied migration. `spring.jpa.hibernate.ddl-auto=validate` and `open-in-view=false` are
-intentional.
+`adapter/out/persistence/src/main/resources/db/migration`. Add a migration for a schema change; do
+not rewrite an already-applied migration. `spring.jpa.hibernate.ddl-auto=validate` and
+`open-in-view=false` are intentional.
 
 `Instance` distinguishes registered instances from locally owned containers. Preserve
 `runtimeReference`, `internalUrl`, URL translation and ownership when modifying lifecycle code.
