@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import Select from 'primevue/select'
 import Skeleton from 'primevue/skeleton'
 import { useConfirm } from 'primevue/useconfirm'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -15,6 +16,13 @@ import type { Instance, InstanceType } from '@/domain/instance'
 import type { LdesServerSummary, LdioSummary } from '@/domain/dashboard'
 import { useInstancesStore } from '@/stores/instances'
 import { formatCompact, formatRelative, shortUrl } from '@/utils/format'
+import {
+  instanceSortOptions,
+  readInstanceSort,
+  saveInstanceSort,
+  sortInstanceSummaries,
+  type InstanceSortValue,
+} from './instanceSorting'
 
 /**
  * The LDES servers or LDIOs, as cards with their health and activity.
@@ -28,11 +36,17 @@ const { run } = useAction()
 const { data: overview, reload } = useAsync(() => api.getDashboard())
 const showRegister = ref(false)
 const showStartLocal = ref(false)
+const sortBy = ref<InstanceSortValue>(readInstanceSort(props.type))
 
 const isLdio = computed(() => props.type === 'LDIO')
 const label = computed(() => (isLdio.value ? 'LDIO' : 'LDES server'))
+const sortOptions = computed(() => instanceSortOptions(props.type))
 const summaries = computed<(LdesServerSummary | LdioSummary)[]>(() =>
   (isLdio.value ? overview.value?.ldios : overview.value?.ldesServers) ?? [])
+const sortedSummaries = computed(() => sortInstanceSummaries(summaries.value, props.type, sortBy.value))
+
+watch(sortBy, (value) => saveInstanceSort(props.type, value))
+watch(() => props.type, (type) => { sortBy.value = readInstanceSort(type) })
 
 function instanceOf(summary: LdesServerSummary | LdioSummary): Instance {
   return 'server' in summary ? summary.server : summary.ldio
@@ -80,59 +94,66 @@ function pipelineCount(summary: LdioSummary, ...statuses: string[]) {
     <div v-if="!overview" class="card-grid">
       <Skeleton v-for="n in 3" :key="n" height="210px" border-radius="12px" />
     </div>
-    <div v-else-if="summaries.length" class="card-grid">
-      <article v-for="summary in summaries" :key="instanceOf(summary).id" class="card clickable instance"
-        data-cy="instance-card" @click="open(instanceOf(summary))">
-        <header class="instance-header">
-          <div class="instance-icon" :class="{ local: instanceOf(summary).origin === 'LOCAL' }">
-            <i :class="isLdio ? 'pi pi-share-alt' : 'pi pi-server'" />
+    <template v-else-if="summaries.length">
+      <div class="instance-sort">
+        <label for="instance-sort">Sort by</label>
+        <Select id="instance-sort" v-model="sortBy" :options="sortOptions" option-label="label"
+          option-value="value" aria-label="Sort instances" data-cy="instance-sort" />
+      </div>
+      <div class="card-grid">
+        <article v-for="summary in sortedSummaries" :key="instanceOf(summary).id" class="card clickable instance"
+          data-cy="instance-card" @click="open(instanceOf(summary))">
+          <header class="instance-header">
+            <div class="instance-icon" :class="{ local: instanceOf(summary).origin === 'LOCAL' }">
+              <i :class="isLdio ? 'pi pi-share-alt' : 'pi pi-server'" />
+            </div>
+            <div class="instance-title">
+              <h2>{{ instanceOf(summary).name }}</h2>
+              <span class="muted small truncate">{{ shortUrl(instanceOf(summary).url) }}</span>
+            </div>
+            <HealthBadge :status="summary.health.status" />
+          </header>
+          <div class="row-wrap tags">
+            <span class="chip">
+              <i :class="instanceOf(summary).origin === 'LOCAL' ? 'pi pi-desktop' : 'pi pi-link'" />
+              {{ instanceOf(summary).origin === 'LOCAL' ? 'Local container' : 'Registered' }}
+            </span>
+            <span v-if="instanceOf(summary).sandbox" class="chip"><i class="pi pi-box" />Sandbox</span>
+            <span class="chip"><i class="pi pi-calendar" />Added {{ formatRelative(instanceOf(summary).registeredAt) }}</span>
           </div>
-          <div class="instance-title">
-            <h2>{{ instanceOf(summary).name }}</h2>
-            <span class="muted small truncate">{{ shortUrl(instanceOf(summary).url) }}</span>
+
+          <div v-if="summary.health.status !== 'UP'" class="unreachable">
+            <i class="pi pi-times-circle" /> {{ shortUrl(instanceOf(summary).url) }} does not respond
           </div>
-          <HealthBadge :status="summary.health.status" />
-        </header>
-        <div class="row-wrap tags">
-          <span class="chip">
-            <i :class="instanceOf(summary).origin === 'LOCAL' ? 'pi pi-desktop' : 'pi pi-link'" />
-            {{ instanceOf(summary).origin === 'LOCAL' ? 'Local container' : 'Registered' }}
-          </span>
-          <span v-if="instanceOf(summary).sandbox" class="chip"><i class="pi pi-box" />Sandbox</span>
-          <span class="chip"><i class="pi pi-calendar" />Added {{ formatRelative(instanceOf(summary).registeredAt) }}</span>
-        </div>
-
-        <div v-if="summary.health.status !== 'UP'" class="unreachable">
-          <i class="pi pi-times-circle" /> {{ shortUrl(instanceOf(summary).url) }} does not respond
-        </div>
-        <div v-else-if="'server' in summary" class="metrics">
-          <div><span class="metric">{{ summary.streams.length }}</span><span class="label">Streams</span></div>
-          <div>
-            <span class="metric">{{ summary.streams.reduce((n, s) => n + s.views.length, 0) }}</span>
-            <span class="label">Views</span>
+          <div v-else-if="'server' in summary" class="metrics">
+            <div><span class="metric">{{ summary.streams.length }}</span><span class="label">Streams</span></div>
+            <div>
+              <span class="metric">{{ summary.streams.reduce((n, s) => n + s.views.length, 0) }}</span>
+              <span class="label">Views</span>
+            </div>
+            <div><span class="metric">{{ formatCompact(summary.ingestedMembers) }}</span><span class="label">Members</span></div>
           </div>
-          <div><span class="metric">{{ formatCompact(summary.ingestedMembers) }}</span><span class="label">Members</span></div>
-        </div>
-        <div v-else class="metrics">
-          <div><span class="metric">{{ pipelineCount(summary, 'RUNNING') }}</span><span class="label">Running</span></div>
-          <div><span class="metric">{{ pipelineCount(summary, 'HALTED') }}</span><span class="label">Halted</span></div>
-          <div><span class="metric">{{ formatCompact(summary.processedMembers) }}</span><span class="label">Processed</span></div>
-        </div>
+          <div v-else class="metrics">
+            <div><span class="metric">{{ pipelineCount(summary, 'RUNNING') }}</span><span class="label">Running</span></div>
+            <div><span class="metric">{{ pipelineCount(summary, 'HALTED') }}</span><span class="label">Halted</span></div>
+            <div><span class="metric">{{ formatCompact(summary.processedMembers) }}</span><span class="label">Processed</span></div>
+          </div>
 
-        <div v-if="summary.problems.length" class="problems">
-          <i class="pi pi-exclamation-triangle" />
-          <span>{{ summary.problems[0] }}</span>
-        </div>
+          <div v-if="summary.problems.length" class="problems">
+            <i class="pi pi-exclamation-triangle" />
+            <span>{{ summary.problems[0] }}</span>
+          </div>
 
-        <footer class="instance-footer">
-          <Button :label="instanceOf(summary).origin === 'LOCAL' ? 'Stop' : 'Remove'"
-            :icon="instanceOf(summary).origin === 'LOCAL' ? 'pi pi-stop' : 'pi pi-trash'" severity="danger"
-            text size="small" data-cy="remove-instance" @click.stop="remove(instanceOf(summary))" />
-          <Button label="Open" icon="pi pi-arrow-right" icon-pos="right" text size="small"
-            @click.stop="open(instanceOf(summary))" />
-        </footer>
-      </article>
-    </div>
+          <footer class="instance-footer">
+            <Button :label="instanceOf(summary).origin === 'LOCAL' ? 'Stop' : 'Remove'"
+              :icon="instanceOf(summary).origin === 'LOCAL' ? 'pi pi-stop' : 'pi pi-trash'" severity="danger"
+              text size="small" data-cy="remove-instance" @click.stop="remove(instanceOf(summary))" />
+            <Button label="Open" icon="pi pi-arrow-right" icon-pos="right" text size="small"
+              @click.stop="open(instanceOf(summary))" />
+          </footer>
+        </article>
+      </div>
+    </template>
     <div v-else class="card">
       <EmptyState :icon="isLdio ? 'pi pi-share-alt' : 'pi pi-server'" :title="`No ${label}s yet`"
         :description="`Add a ${label} that already runs somewhere, or start one locally to experiment.`">
@@ -150,6 +171,23 @@ function pipelineCount(summary: LdioSummary, ...statuses: string[]) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.instance-sort {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.instance-sort label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.instance-sort :deep(.p-select) {
+  min-width: 220px;
 }
 
 .instance-header {

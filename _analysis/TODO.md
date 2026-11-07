@@ -142,3 +142,10 @@
 * [x] When you select "execute outputs" in the sandbox, then open an alert panel, which says that
   you are going to add members to the configured outputs. Add a checkbox to stop displaying this
   message again.
+* [x] Add ordering selection to the LDES servers and LDIOs pages. The default sort order is
+  alphabetic and ascending. The user can change between alphabetic, number of streams, views and
+  members for LDES servers (each of them can be ascending or descending). For the LDIOs, the user
+  can choose alphabetic, number of running or halted pipelines, and the number of processed members
+  (each of them can be ascending or descending). Save the user selection,
+  so that when the user comes back to this page, the ordering is done like the user selected for the
+  last time.
