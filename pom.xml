@@ -59,8 +59,8 @@
     <spring-boot.run.skip>true</spring-boot.run.skip>
     <!-- Extended by modules that load Mockito as a Java agent, and by JaCoCo (profile coverage) -->
     <argLine/>
+    <jacoco.version>0.8.16</jacoco.version>
     <maven-release-plugin.version>3.3.1</maven-release-plugin.version>
-    <jacoco.version>0.8.15</jacoco.version>
     <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
     <google-java-format.version>1.36.1</google-java-format.version>
     <!-- SonarCloud analysis in the GitHub workflows, with the coverage of the coverage profile -->
