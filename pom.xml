@@ -11,19 +11,28 @@
   </parent>
   <groupId>org.openldes</groupId>
   <artifactId>ldes-admin</artifactId>
-  <version>0.0.1</version>
+  <version>0.2.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>LDES-admin</name>
   <description>
     Administration, monitoring and sandboxing tool for OpenLDES servers and LDIO pipelines
   </description>
-  <url/>
-  <licenses>
-    <license/>
-  </licenses>
+  <url>https://openldes.github.io/LDES-admin</url>
   <developers>
-    <developer/>
+    <developer>
+      <name>Summ1t</name>
+      <email>Summm1t@users.noreply.github.com</email>
+      <organization>Sirus</organization>
+      <organizationUrl>https://sirus.be/</organizationUrl>
+    </developer>
   </developers>
+
+  <licenses>
+    <license>
+      <name>EUPL</name>
+      <url>https://eupl.eu/1.2/en</url>
+    </license>
+  </licenses>
   <scm>
     <connection>scm:git:git://github.com/OpenLDES/LDES-admin.git</connection>
     <developerConnection>scm:git:git@github.com:OpenLDES/LDES-admin.git</developerConnection>
