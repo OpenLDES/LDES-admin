@@ -293,6 +293,13 @@ The GitHub workflows in `.github/workflows` follow the release flow of the
 | 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main`                                        | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                                                 |
 | 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump                                                     | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                                             |
 | 5. Build & Deploy Documentation    | pushes to `main` that change `docs/` or `frontend/`, pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll, and the frontend restricted to demo mode as a demo in `/demo/` of the site; on `main`, publishes it to GitHub Pages                                                             |
+| 6. Prepare Next Version            | manually, choosing major, minor and/or patch increments                                             | Merges `main` into `develop`, increments the selected Maven version components, ensures the result ends in `-SNAPSHOT`, commits and pushes `develop`                                                                        |
+
+Workflow 6 is an alternative to workflow 4 for preparing the next development version; do not run
+both for the same version. In workflow 6, each selected component is incremented independently,
+and at least one component must be selected. A merge conflict stops the workflow before the version
+is changed or pushed. It checks out `develop` regardless of which branch was selected to start the
+manual run.
 
 To release a version:
 
@@ -302,15 +309,15 @@ To release a version:
 3. Publish a GitHub release of `main`, with a tag `v<version>` (the Maven release plugin uses the
    bare version for its own tags). Workflow 3 opens a pull request that promotes the snapshot;
    merging it publishes `<version>` and `latest` to Docker Hub.
-4. Run workflow 4 to move `develop` on to the next snapshot version.
+4. Run workflow 4, or workflow 6 instead, to move `develop` on to the next snapshot version.
 
 Configure the repository under *Settings › Secrets and variables › Actions*:
 
 | Variable              | Needed for             | Value                                                            |
 |-----------------------|------------------------|------------------------------------------------------------------|
 | `DOCKER_NAMESPACE`    | 2.a on `main`          | The Docker Hub namespace (user or organisation) of the image     |
-| `GIT_CONFIG_USERNAME` | 3                      | Author of the commit that promotes the version                   |
-| `GIT_CONFIG_EMAIL`    | 3                      | E-mail address of that author                                    |
+| `GIT_CONFIG_USERNAME` | 3 and 6                | Git author name for the snapshot-promotion and next-version commits |
+| `GIT_CONFIG_EMAIL`    | 3 and 6                | Git author e-mail for the snapshot-promotion and next-version commits |
 | `JAVA_DISTRIBUTION`   | all, optional          | The JDK distribution for `actions/setup-java`; default `temurin` |
 | `JAVA_VERSION`        | all, optional          | The JDK version; default `25`                                    |
 | `RUBY_VERSION`        | 5, optional            | The Ruby version that builds the documentation; default `4.0`    |
@@ -322,13 +329,13 @@ Configure the repository under *Settings › Secrets and variables › Actions*:
 |-------------------|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `DOCKER_USER`     | 2.a on `main`          | A Docker Hub user that may push to the namespace                                                                                                                                           |
 | `DOCKER_PASSWORD` | 2.a on `main`          | An access token of that user                                                                                                                                                               |
-| `SSH_PRIVATE_KEY` | 4                      | The private key of a deploy key with write access, which pushes the release commits and tag (see [Setup with SSH](https://github.com/qcastel/github-actions-maven-release#setup-with-ssh)) |
+| `SSH_PRIVATE_KEY` | 4 and 6               | The private key of a deploy key with write access, which pushes release commits/tags or the prepared version to `develop` (see [Setup with SSH](https://github.com/qcastel/github-actions-maven-release#setup-with-ssh)) |
 | `SONAR_TOKEN`     | with `ANALYSE_PACKAGE` | A SonarCloud token                                                                                                                                                                         |
 
 The workflows publish to the GitHub Container Registry with the token GitHub gives them. For
 workflow 3, allow *GitHub Actions to create and approve pull requests* (*Settings › Actions ›
-General › Workflow permissions*). When `develop` is protected, let the deploy key of workflow 4
-push to it. For workflow 5, pick *GitHub Actions* as the source of GitHub Pages (*Settings › Pages*)
+General › Workflow permissions*). When `develop` is protected, let the deploy key used by workflows
+4 and 6 push to it. For workflow 5, pick *GitHub Actions* as the source of GitHub Pages (*Settings › Pages*)
 and, when the deployment is refused, allow `main` to deploy to the `github-pages` environment
 (*Settings › Environments*).
 
