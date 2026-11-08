@@ -25,21 +25,20 @@ public record ThroughputSeries(InstanceId instanceId, String label, List<Point> 
   /**
    * @param hour start of the hour
    */
-  public record Point(Instant hour, long members) {
-
-  }
+  public record Point(Instant hour, long members) {}
 
   /**
    * Derives the members ingested per hour, over the given number of hours up to now, from samples
    * of the ingested total. A total that dropped (e.g. because members were deleted) counts as no
    * ingestion.
    */
-  public static ThroughputSeries fromSamples(InstanceId instanceId, String label,
-      List<IngestSample> samples, Instant now, int hours) {
-    List<IngestSample> sorted = samples.stream()
-        .filter(sample -> sample.instanceId().equals(instanceId))
-        .sorted(Comparator.comparing(IngestSample::time))
-        .toList();
+  public static ThroughputSeries fromSamples(
+      InstanceId instanceId, String label, List<IngestSample> samples, Instant now, int hours) {
+    List<IngestSample> sorted =
+        samples.stream()
+            .filter(sample -> sample.instanceId().equals(instanceId))
+            .sorted(Comparator.comparing(IngestSample::time))
+            .toList();
     List<Point> points = new ArrayList<>();
     if (sorted.isEmpty()) {
       return new ThroughputSeries(instanceId, label, points);

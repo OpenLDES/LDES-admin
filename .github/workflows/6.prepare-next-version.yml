@@ -1,0 +1,94 @@
+name: 6. Prepare Next Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      major:
+        description: Increment the major version
+        type: boolean
+        required: true
+        default: false
+      minor:
+        description: Increment the minor version
+        type: boolean
+        required: true
+        default: false
+      patch:
+        description: Increment the patch version
+        type: boolean
+        required: true
+        default: true
+
+concurrency:
+  group: prepare-next-version-develop
+  cancel-in-progress: false
+
+env:
+  JAVA_DISTRIBUTION: ${{ vars.JAVA_DISTRIBUTION || 'temurin' }}
+  JAVA_VERSION: ${{ vars.JAVA_VERSION || '25' }}
+  GIT_CONFIG_USERNAME: ${{ vars.GIT_CONFIG_USERNAME }}
+  GIT_CONFIG_EMAIL: ${{ vars.GIT_CONFIG_EMAIL }}
+  BUMP_MAJOR: ${{ inputs.major }}
+  BUMP_MINOR: ${{ inputs.minor }}
+  BUMP_PATCH: ${{ inputs.patch }}
+
+jobs:
+  prepare-next-version:
+    name: Prepare next version on develop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: develop
+          fetch-depth: 0
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Set up Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Merge main into develop
+        run: |
+          git config user.name "$GIT_CONFIG_USERNAME"
+          git config user.email "$GIT_CONFIG_EMAIL"
+          git fetch origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/develop:refs/remotes/origin/develop
+          git merge --no-edit origin/main
+      - name: Increment Maven version and push develop
+        run: |
+          if [[ "$BUMP_MAJOR" != "true" && "$BUMP_MINOR" != "true" && "$BUMP_PATCH" != "true" ]]; then
+            echo "Select at least one version component to increment." >&2
+            exit 1
+          fi
+
+          current_version=$(./mvnw -B help:evaluate -Dexpression=project.version -q -DforceStdout)
+          base_version="${current_version%-SNAPSHOT}"
+          if [[ ! "$base_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Maven version must be MAJOR.MINOR.PATCH with an optional -SNAPSHOT suffix; found: $current_version" >&2
+            exit 1
+          fi
+
+          major=$((10#${BASH_REMATCH[1]}))
+          minor=$((10#${BASH_REMATCH[2]}))
+          patch=$((10#${BASH_REMATCH[3]}))
+          if [[ "$BUMP_MAJOR" == "true" ]]; then major=$((major + 1)); fi
+          if [[ "$BUMP_MINOR" == "true" ]]; then minor=$((minor + 1)); fi
+          if [[ "$BUMP_PATCH" == "true" ]]; then patch=$((patch + 1)); fi
+          new_version="${major}.${minor}.${patch}-SNAPSHOT"
+
+          echo "Preparing Maven version $new_version from $current_version"
+          ./mvnw -B versions:set -DnewVersion="$new_version" -DgenerateBackupPoms=false
+          ./mvnw -B versions:commit
+
+          git add -- pom.xml ':(glob)**/pom.xml'
+          if git diff --cached --quiet; then
+            echo "Version update did not change any Maven POMs." >&2
+            exit 1
+          fi
+          git commit -m "[ci] Prepare version ${major}.${minor}.${patch}"
+          git push origin HEAD:develop

@@ -55,16 +55,97 @@
   "input member" text area. The user can then choose to change the data, and then run the
   simulation with the changed data. The user should also have the possibility to fetch the data
   constantly, and use the cron expression that was configured for the component.
-* [] The sparql construct component in the sandbox should do a sparql construct transformation, so
+* [x] Make an output adapter, `sandbox`, where you can run LDIO input, adapter, transformer and
+  output components. So, this will be a local runtime engine to run separate LDIO components.
+* [x] The sparql construct component in the sandbox should do a sparql construct transformation, so
   the output of this component should be the transformation of the input with the
   `Ldio:SparqlConstructTransformer` transformer. Make use of this component to do the transformation
-* [] When you change the content type of the input member in the sandbox environment, the member
+* [x] When you change the content type of the input member in the sandbox environment, the member
   should be converted to the selected content type. For example, when you have a member in turtle
   format, and you change the content type to json-ld, the member should be available in json-ld
-* [] You should be able to change the content type of the output member in the sandbox environment
+* [x] You should be able to change the content type of the output member in the sandbox environment
   after running a test and selecting a step.
-* [] When you run a test in the sandbox environment, and you select a component in the canvas, then
+* [x] When you run a test in the sandbox environment, and you select a component in the canvas, then
   the step of the selected component should be selected in the "steps" panel. You leave the steps as
   long as the user doesn't run or resets the simulation
-* [] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also in
-  demo mode). Now, when I run the 
+* [x] the result of the json to json-ld adapter should be json-ld in the sandbox environment (also
+  in
+  demo mode). Now, when I run the
+* [x] Change the sandbox screen, so that you can change the size of the side panels (the panel with
+  components, the panel on the right with the configuration of the selected item, and the panel of
+  the simulation). You should be able to make them bigger and smaller, and even to hide and expand
+  them with a small button. The right configuration panel can grow to 66% of the screen width.
+* [x] Make the sandbox runtime instantiate and use real LDIO components with their corresponding
+  auto-configuration classes, rather than recreating their behaviour in the sandbox. Cover every
+  input, adapter, transformer, and output currently supported by the sandbox runtime.
+    * Inputs:
+        * [x] `Ldio:HttpInPoller`
+        * [x] `Ldio:HttpIn`
+        * [x] `Ldio:AmqpIn`
+        * [x] `Ldio:KafkaIn`
+        * [x] `Ldio:LdesClient`
+        * [x] `Ldio:LdesClientConnector`
+    * Adapters:
+        * [x] `Ldio:RdfAdapter`
+        * [x] `Ldio:JsonToLdAdapter`
+        * [x] `Ldio:RmlAdapter`
+        * [x] `Ldio:NgsiV2ToLdAdapter`
+    * Transformers:
+        * [x] `Ldio:VersionObjectCreator`
+        * [x] `Ldio:VersionMaterialiser`
+        * [x] `Ldio:SparqlConstructTransformer`
+        * [x] `Ldio:GeoJsonToWktTransformer`
+        * [x] `Ldio:SkolemisationTransformer`
+        * [x] `Ldio:ChangeDetectionFilter`
+        * [x] `Ldio:HttpEnricher`
+    * Outputs:
+        * [x] `Ldio:ConsoleOut`
+        * [x] `Ldio:HttpOut`
+        * [x] `Ldio:HttpSparqlOut`
+        * [x] `Ldio:RepositorySink`
+        * [x] `Ldio:KafkaOut`
+        * [x] `Ldio:AmqpOut`
+        * [x] `Ldio:LdioRdbOut`
+        * [x] `Ldio:NoopOut`
+* [x] Remember the last size of the panels in the sandbox view.
+* [x] Add a link to the documentation of LDES-admin on the dashboard (add it to the place where you
+  can find the links to openldes, ...)
+* [x] Separate the different adapters in different maven modules. Add those modules to the archunit
+  test. Make sure that you end up with a clean architecture, according to the hexagonal architecture
+  pattern.
+  You'll have a folder structure like this:
+  /adapter
+  /adapter/in
+  /adapter/in/rest
+  /adapter/in/scheduling
+  /adapter/out
+  /adapter/out/health
+  /adapter/out/http
+  /adapter/out/ldes
+  ...
+  The adapter, adapter/in and adapter/out should also contain a pom.xml, however they are packaging=
+  pom.
+* [x] Add documentation to the site: add a walkthrough tutorial, where you first start a local
+  server, then add the parking occupancy stream. You then start a local LDIO, and add the parking
+  occupancy pipeline. You open the pipeline in the sandbox, and experiment with it: you change the
+  interval of the httpInPoller to a cron expression, you fetch an item, run a simulation, ingest the
+  result to the stream on the local server. Then, you navigate the stream and the view on the
+  server. You create another view, and walk through this view when it's popupated, ...
+  Make this tutorial appealing, with screenshots.
+* [x] When you select the steps after a simulation run, then the according step in the pipeline
+  overview should be selected, and the inspector panel should show the configuration of that
+  component. When you select a component in the pipeline overview, then the according step in the
+  steps panel should be selected, and the inspector panel should show the configuration of that
+  component.
+* [x] When you fetch the input member in the simulation, then you get a text "Fetched <url>". Let
+  this message disappear after 3 seconds
+* [x] When you select "execute outputs" in the sandbox, then open an alert panel, which says that
+  you are going to add members to the configured outputs. Add a checkbox to stop displaying this
+  message again.
+* [x] Add ordering selection to the LDES servers and LDIOs pages. The default sort order is
+  alphabetic and ascending. The user can change between alphabetic, number of streams, views and
+  members for LDES servers (each of them can be ascending or descending). For the LDIOs, the user
+  can choose alphabetic, number of running or halted pipelines, and the number of processed members
+  (each of them can be ascending or descending). Save the user selection,
+  so that when the user comes back to this page, the ordering is done like the user selected for the
+  last time.

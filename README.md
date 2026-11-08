@@ -54,11 +54,14 @@ Data Interaction Orchestrator (LDIO) pipelines.
 
 * **Design** a pipeline by dragging components onto a canvas, or start from a template. Configure
   every LDIO component in a form or as YAML, validated as you type.
-* **Simulate**: run a member through the pipeline in the browser and see what each step makes of
-  it. A pipeline with an HTTP poller can fetch its input from the URL it polls, once or on its
-  schedule.
+* **Run**: LDES-admin runs a member through the pipeline on the components LDIO is built on, and
+  shows what each step makes of it. Outputs run dry, or really send when you want. A pipeline with
+  an HTTP poller can fetch its input from the URL it polls, once or on its schedule.
 * **Deploy** the pipeline to an LDIO, or start the **sandbox environment**: a local LDES server and
   LDIO in Docker that work together out of the box.
+* **Live inputs**: start and stop real LDIO HTTP, AMQP, Kafka and LDES sources, with the latest
+  result shown step by step. Outputs stay dry unless explicitly enabled; broker/database outputs
+  always stay dry.
 
 | [![Designing a pipeline in the sandbox](docs/screenshots/sandbox.png)](docs/screenshots/sandbox.png) | [![Simulating a pipeline step by step](docs/screenshots/simulation.png)](docs/screenshots/simulation.png) |
 |:----------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|
@@ -86,8 +89,10 @@ Ingesting in their event streams starts from a member that fits, in the format o
 
 * [The documentation site](https://openldes.github.io/LDES-admin/) – installing LDES-admin,
   monitoring, LDES servers, LDIO and the sandbox
-* [analysis/README.md](analysis/README.md) – what LDES-admin does
-* [analysis/architecture.md](analysis/architecture.md) – how it is built
+* [_analysis/README.md](_analysis/README.md) – what LDES-admin does
+* [_analysis/architecture.md](_analysis/architecture.md) – how it is built
+* [AI contributor guide](docs/ai/README.md) – shared agent instructions, development conventions,
+  optional agents and change/review templates; start with [AGENTS.md](AGENTS.md)
 
 The documentation site is a [Jekyll](https://jekyllrb.com/) 4 site in `docs/`, published to GitHub
 Pages by workflow 5 (see [below](#continuous-integration-and-releases)). It reuses the screenshots
@@ -105,13 +110,17 @@ bundle exec jekyll serve   # http://localhost:4000
 |---------------|-----------------------------------------------------------------------------------------------------------------------------|
 | `model`       | Domain model (plain Java)                                                                                                   |
 | `application` | Use cases, ports and services (plain Java)                                                                                  |
-| `adapter`     | REST API, monitor, Postgres (JPA + Flyway), LDES server and LDIO clients, local Docker runtime                              |
+| `adapter`     | Maven parent for inbound REST/scheduling and outbound health, HTTP, LDES, LDIO, persistence, local runtime and sandbox modules |
 | `frontend`    | Vue 3 + TypeScript + PrimeVue + Vue Flow frontend, in demo or production mode; Maven packages the build as static resources |
 | `bootstrap`   | Spring Boot application, serving the API and the frontend                                                                   |
 
 ## Requirements
 
 * JDK 25
+* The [LDI/LDIO](https://github.com/OpenLDES/Linked-Data-Interactions) 3.2.2 libraries
+  (`org.openldes.ldi` and `org.openldes.ldio`), including the sandbox's real component
+  auto-configurators. If they are unavailable from your configured Maven repositories,
+  install the matching tag from source with `mvn install -DskipTests`.
 * Docker, for the database during development, the integration tests and local LDES servers/LDIOs
 * pnpm 9, only to run the frontend on its own (see [below](#2-backend-and-frontend-separately)).
   The frontend needs Node.js 22.12 or later (Vite 8); pnpm downloads and uses Node.js 24.21.0 for
@@ -202,6 +211,18 @@ for demo purposes.
 
 ## Tests and builds
 
+Java production and test sources use Google Java Format (standard Google style), enforced by
+Spotless in every Maven module. With JDK 25, run from the project root:
+
+```shell
+./mvnw spotless:apply   # Apply formatting
+./mvnw spotless:check   # Check without changing sources
+```
+
+Formatting is checked automatically in Maven's `validate` phase, including existing CI builds.
+Generated sources and non-Java files are not formatted. Formatter versions are pinned in the
+root POM; see the [Java style guide](docs/ai/java-style.md) for focused formatting and IDE guidance.
+
 With Maven, for the whole project:
 
 ```shell
@@ -272,6 +293,13 @@ The GitHub workflows in `.github/workflows` follow the release flow of the
 | 3. Approve Snapshot                | publishing a GitHub release of `main`, or manually on `main`                                        | Opens the pull request `ci/promote-snapshot`, which turns the snapshot version into the release version (`0.1.0-SNAPSHOT` becomes `0.1.0`)                                                                                 |
 | 4. Prepare New Version for Project | manually, choosing a patch, minor or major bump                                                     | Releases `develop` with the Maven release plugin: tags the version and moves `develop` on to the next snapshot                                                                                                             |
 | 5. Build & Deploy Documentation    | pushes to `main` that change `docs/` or `frontend/`, pull requests that change `docs/`, or manually | Builds the documentation site with Jekyll, and the frontend restricted to demo mode as a demo in `/demo/` of the site; on `main`, publishes it to GitHub Pages                                                             |
+| 6. Prepare Next Version            | manually, choosing major, minor and/or patch increments                                             | Merges `main` into `develop`, increments the selected Maven version components, ensures the result ends in `-SNAPSHOT`, commits and pushes `develop`                                                                        |
+
+Workflow 6 is an alternative to workflow 4 for preparing the next development version; do not run
+both for the same version. In workflow 6, each selected component is incremented independently,
+and at least one component must be selected. A merge conflict stops the workflow before the version
+is changed or pushed. It checks out `develop` regardless of which branch was selected to start the
+manual run.
 
 To release a version:
 
@@ -281,15 +309,15 @@ To release a version:
 3. Publish a GitHub release of `main`, with a tag `v<version>` (the Maven release plugin uses the
    bare version for its own tags). Workflow 3 opens a pull request that promotes the snapshot;
    merging it publishes `<version>` and `latest` to Docker Hub.
-4. Run workflow 4 to move `develop` on to the next snapshot version.
+4. Run workflow 4, or workflow 6 instead, to move `develop` on to the next snapshot version.
 
 Configure the repository under *Settings › Secrets and variables › Actions*:
 
 | Variable              | Needed for             | Value                                                            |
 |-----------------------|------------------------|------------------------------------------------------------------|
 | `DOCKER_NAMESPACE`    | 2.a on `main`          | The Docker Hub namespace (user or organisation) of the image     |
-| `GIT_CONFIG_USERNAME` | 3                      | Author of the commit that promotes the version                   |
-| `GIT_CONFIG_EMAIL`    | 3                      | E-mail address of that author                                    |
+| `GIT_CONFIG_USERNAME` | 3 and 6                | Git author name for the snapshot-promotion and next-version commits |
+| `GIT_CONFIG_EMAIL`    | 3 and 6                | Git author e-mail for the snapshot-promotion and next-version commits |
 | `JAVA_DISTRIBUTION`   | all, optional          | The JDK distribution for `actions/setup-java`; default `temurin` |
 | `JAVA_VERSION`        | all, optional          | The JDK version; default `25`                                    |
 | `RUBY_VERSION`        | 5, optional            | The Ruby version that builds the documentation; default `4.0`    |
@@ -301,13 +329,13 @@ Configure the repository under *Settings › Secrets and variables › Actions*:
 |-------------------|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `DOCKER_USER`     | 2.a on `main`          | A Docker Hub user that may push to the namespace                                                                                                                                           |
 | `DOCKER_PASSWORD` | 2.a on `main`          | An access token of that user                                                                                                                                                               |
-| `SSH_PRIVATE_KEY` | 4                      | The private key of a deploy key with write access, which pushes the release commits and tag (see [Setup with SSH](https://github.com/qcastel/github-actions-maven-release#setup-with-ssh)) |
+| `SSH_PRIVATE_KEY` | 4 and 6               | The private key of a deploy key with write access, which pushes release commits/tags or the prepared version to `develop` (see [Setup with SSH](https://github.com/qcastel/github-actions-maven-release#setup-with-ssh)) |
 | `SONAR_TOKEN`     | with `ANALYSE_PACKAGE` | A SonarCloud token                                                                                                                                                                         |
 
 The workflows publish to the GitHub Container Registry with the token GitHub gives them. For
 workflow 3, allow *GitHub Actions to create and approve pull requests* (*Settings › Actions ›
-General › Workflow permissions*). When `develop` is protected, let the deploy key of workflow 4
-push to it. For workflow 5, pick *GitHub Actions* as the source of GitHub Pages (*Settings › Pages*)
+General › Workflow permissions*). When `develop` is protected, let the deploy key used by workflows
+4 and 6 push to it. For workflow 5, pick *GitHub Actions* as the source of GitHub Pages (*Settings › Pages*)
 and, when the deployment is refused, allow `main` to deploy to the `github-pages` environment
 (*Settings › Environments*).
 

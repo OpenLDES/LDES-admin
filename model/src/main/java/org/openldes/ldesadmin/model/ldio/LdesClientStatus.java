@@ -1,8 +1,6 @@
 package org.openldes.ldesadmin.model.ldio;
 
-/**
- * Progress of a pipeline whose input is an LDES client.
- */
+/** Progress of a pipeline whose input is an LDES client. */
 public enum LdesClientStatus {
   /** Reading the members that were already in the LDES */
   REPLICATING,

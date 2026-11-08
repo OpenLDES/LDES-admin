@@ -32,15 +32,14 @@ class FrontendIT {
 
   private static final Pattern SCRIPT = Pattern.compile("src=\"(/assets/[^\"]+\\.js)\"");
 
-  @Autowired
-  private RestTestClient client;
+  @Autowired private RestTestClient client;
 
-  @LocalServerPort
-  private int port;
+  @LocalServerPort private int port;
 
   @BeforeEach
   void requireTheBuiltFrontend() {
-    assumeTrue(new ClassPathResource("static/index.html").exists(),
+    assumeTrue(
+        new ClassPathResource("static/index.html").exists(),
         "The frontend was not built, so there is nothing to serve");
   }
 
@@ -63,12 +62,22 @@ class FrontendIT {
     Matcher script = SCRIPT.matcher(index("/"));
     assertThat(script.find()).isTrue();
 
-    client.get().uri(script.group(1)).exchange()
-        .expectStatus().isOk()
-        .expectHeader().contentTypeCompatibleWith("text/javascript")
-        .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "max-age=31536000, public, immutable");
-    client.get().uri("/").exchange()
-        .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache");
+    client
+        .get()
+        .uri(script.group(1))
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectHeader()
+        .contentTypeCompatibleWith("text/javascript")
+        .expectHeader()
+        .valueEquals(HttpHeaders.CACHE_CONTROL, "max-age=31536000, public, immutable");
+    client
+        .get()
+        .uri("/")
+        .exchange()
+        .expectHeader()
+        .valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache");
   }
 
   @Test
@@ -78,11 +87,13 @@ class FrontendIT {
 
     // The test client decompresses on the fly; the JDK client shows what goes over the wire
     try (HttpClient http = HttpClient.newHttpClient()) {
-      HttpResponse<Void> response = http.send(HttpRequest.newBuilder()
-              .uri(URI.create("http://localhost:" + port + script.group(1)))
-              .header(HttpHeaders.ACCEPT_ENCODING, "gzip")
-              .build(),
-          HttpResponse.BodyHandlers.discarding());
+      HttpResponse<Void> response =
+          http.send(
+              HttpRequest.newBuilder()
+                  .uri(URI.create("http://localhost:" + port + script.group(1)))
+                  .header(HttpHeaders.ACCEPT_ENCODING, "gzip")
+                  .build(),
+              HttpResponse.BodyHandlers.discarding());
 
       assertThat(response.headers().firstValue(HttpHeaders.CONTENT_ENCODING)).contains("gzip");
     }
@@ -92,15 +103,29 @@ class FrontendIT {
   void doesNotAnswerMissingFilesOrEndpointsWithTheFrontend() {
     client.get().uri("/assets/index-missing.js").exchange().expectStatus().isNotFound();
     client.get().uri("/missing.png").exchange().expectStatus().isNotFound();
-    client.get().uri("/api/v1/missing").accept(MediaType.APPLICATION_JSON).exchange()
-        .expectStatus().isNotFound()
-        .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
+    client
+        .get()
+        .uri("/api/v1/missing")
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        .expectStatus()
+        .isNotFound()
+        .expectHeader()
+        .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
   }
 
   private String index(String path) {
-    return client.get().uri(path).accept(MediaType.TEXT_HTML).exchange()
-        .expectStatus().isOk()
-        .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
-        .expectBody(String.class).returnResult().getResponseBody();
+    return client
+        .get()
+        .uri(path)
+        .accept(MediaType.TEXT_HTML)
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectHeader()
+        .contentTypeCompatibleWith(MediaType.TEXT_HTML)
+        .expectBody(String.class)
+        .returnResult()
+        .getResponseBody();
   }
 }

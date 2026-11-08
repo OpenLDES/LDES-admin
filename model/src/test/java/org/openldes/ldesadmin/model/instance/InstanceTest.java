@@ -15,8 +15,13 @@ class InstanceTest {
 
   @Test
   void registeredInstanceHasNoRuntimeReference() {
-    Instance instance = Instance.register(InstanceType.LDES_SERVER, " Production ",
-        URI.create("http://ldes.example.org:8080/"), false, NOW);
+    Instance instance =
+        Instance.register(
+            InstanceType.LDES_SERVER,
+            " Production ",
+            URI.create("http://ldes.example.org:8080/"),
+            false,
+            NOW);
 
     assertThat(instance.origin()).isEqualTo(InstanceOrigin.REGISTERED);
     assertThat(instance.isLocal()).isFalse();
@@ -27,9 +32,15 @@ class InstanceTest {
 
   @Test
   void localInstanceKeepsItsRuntimeReference() {
-    Instance instance = Instance.local(InstanceType.LDIO, "sandbox",
-        URI.create("http://localhost:32768"), URI.create("http://sandbox-ldio:8080/"),
-        "container-1", true, NOW);
+    Instance instance =
+        Instance.local(
+            InstanceType.LDIO,
+            "sandbox",
+            URI.create("http://localhost:32768"),
+            URI.create("http://sandbox-ldio:8080/"),
+            "container-1",
+            true,
+            NOW);
 
     assertThat(instance.isLocal()).isTrue();
     assertThat(instance.sandbox()).isTrue();
@@ -39,9 +50,15 @@ class InstanceTest {
 
   @Test
   void translatesIrisPublishedOnTheInternalUrl() {
-    Instance instance = Instance.local(InstanceType.LDES_SERVER, "sandbox",
-        URI.create("http://localhost:32768"), URI.create("http://sandbox-ldes-server:8080"),
-        "container-1", true, NOW);
+    Instance instance =
+        Instance.local(
+            InstanceType.LDES_SERVER,
+            "sandbox",
+            URI.create("http://localhost:32768"),
+            URI.create("http://sandbox-ldes-server:8080"),
+            "container-1",
+            true,
+            NOW);
 
     assertThat(instance.reachable("http://sandbox-ldes-server:8080/parcels/by-page?pageNumber=2"))
         .hasToString("http://localhost:32768/parcels/by-page?pageNumber=2");
@@ -51,8 +68,13 @@ class InstanceTest {
 
   @Test
   void onlyServesUrlsBelowItsBaseUrl() {
-    Instance instance = Instance.register(InstanceType.LDES_SERVER, "ldes",
-        URI.create("http://ldes.example.org/ldes"), false, NOW);
+    Instance instance =
+        Instance.register(
+            InstanceType.LDES_SERVER,
+            "ldes",
+            URI.create("http://ldes.example.org/ldes"),
+            false,
+            NOW);
 
     assertThat(instance.serves(URI.create("http://ldes.example.org/ldes/parcels"))).isTrue();
     assertThat(instance.serves(URI.create("http://ldes.example.org/ldes"))).isTrue();
@@ -62,16 +84,22 @@ class InstanceTest {
 
   @Test
   void urlIsStoredWithoutTrailingSlash() {
-    Instance instance = Instance.register(InstanceType.LDES_SERVER, "ldes",
-        URI.create("http://localhost:8080/ldes//"), false, NOW);
+    Instance instance =
+        Instance.register(
+            InstanceType.LDES_SERVER,
+            "ldes",
+            URI.create("http://localhost:8080/ldes//"),
+            false,
+            NOW);
 
     assertThat(instance.url()).hasToString("http://localhost:8080/ldes");
   }
 
   @Test
   void resolvesPathsAgainstTheBaseUrl() {
-    Instance instance = Instance.register(InstanceType.LDES_SERVER, "ldes",
-        URI.create("http://localhost:8080/ldes"), false, NOW);
+    Instance instance =
+        Instance.register(
+            InstanceType.LDES_SERVER, "ldes", URI.create("http://localhost:8080/ldes"), false, NOW);
 
     assertThat(instance.resolve("/admin/api/v1/eventstreams"))
         .hasToString("http://localhost:8080/ldes/admin/api/v1/eventstreams");
@@ -82,8 +110,7 @@ class InstanceTest {
   @ValueSource(strings = {"ftp://localhost/ldes", "localhost:8080", "/relative/path"})
   void rejectsUrlsThatAreNotAbsoluteHttpUrls(String url) {
     assertThatIllegalArgumentException()
-        .isThrownBy(() -> Instance.register(InstanceType.LDIO, "ldio", URI.create(url), false,
-            NOW))
+        .isThrownBy(() -> Instance.register(InstanceType.LDIO, "ldio", URI.create(url), false, NOW))
         .withMessageContaining("absolute http(s) URL");
   }
 

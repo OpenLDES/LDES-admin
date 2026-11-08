@@ -33,6 +33,8 @@ defaults:
       layout: page
 
 exclude:
+  # Repository-only contributor instructions, not user-facing site pages
+  - ai
   - Gemfile
   - Gemfile.lock
   - vendor

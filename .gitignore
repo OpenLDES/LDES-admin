@@ -37,3 +37,6 @@ docs/vendor
 docs/_site
 docs/.bundle
 docs/.jekyll-cache
+
+# Apache SIS (GeoSPARQL in the sandbox runtime) boots an embedded Derby database
+derby.log

@@ -3,9 +3,7 @@ package org.openldes.ldesadmin.model.rdf;
 import java.util.Arrays;
 import java.util.Locale;
 
-/**
- * RDF serialisations used by the OpenLDES APIs.
- */
+/** RDF serialisations used by the OpenLDES APIs. */
 public enum RdfFormat {
   TURTLE("text/turtle"),
   JSON_LD("application/ld+json"),
@@ -22,9 +20,7 @@ public enum RdfFormat {
     return mediaType;
   }
 
-  /**
-   * Finds the format for a media type, ignoring parameters such as {@code charset}.
-   */
+  /** Finds the format for a media type, ignoring parameters such as {@code charset}. */
   public static RdfFormat fromMediaType(String mediaType) {
     String type = mediaType.split(";")[0].strip().toLowerCase(Locale.ROOT);
     return Arrays.stream(values())

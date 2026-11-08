@@ -25,7 +25,7 @@ public class ShapeService implements ShapeUseCase {
 
   @Override
   public RdfDocument update(InstanceId serverId, String collection, RdfDocument shape) {
-    return ldesServerClient.updateShape(instanceLookup.requireLdesServer(serverId), collection,
-        shape);
+    return ldesServerClient.updateShape(
+        instanceLookup.requireLdesServer(serverId), collection, shape);
   }
 }

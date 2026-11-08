@@ -16,7 +16,7 @@ public interface PollUseCase {
 
   /**
    * @throws PollException if the URL is unreachable, answers with an error, or answers what LDIO
-   *                       would not pass on to a pipeline
+   *     would not pass on to a pipeline
    */
   PolledContent poll(Poll poll);
 }

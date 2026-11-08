@@ -9,9 +9,7 @@ import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.monitoring.ActivityEvent;
 import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 
-/**
- * Records what happened to an instance. Recording never makes the action itself fail.
- */
+/** Records what happened to an instance. Recording never makes the action itself fail. */
 @ApplicationService
 public class ActivityRecorder {
 

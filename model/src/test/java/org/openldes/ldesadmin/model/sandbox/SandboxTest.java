@@ -11,11 +11,24 @@ import org.openldes.ldesadmin.model.instance.InstanceType;
 class SandboxTest {
 
   private static final Instant NOW = Instant.parse("2026-10-24T10:15:30Z");
-  private static final Instance LDES = Instance.local(InstanceType.LDES_SERVER,
-      Sandbox.LDES_SERVER_NAME, URI.create("http://localhost:32768"),
-      URI.create("http://sandbox-ldes-server:8080"), "c1", true, NOW);
-  private static final Instance LDIO = Instance.local(InstanceType.LDIO, Sandbox.LDIO_NAME,
-      URI.create("http://localhost:32769"), URI.create("http://sandbox-ldio:8080"), "c2", true, NOW);
+  private static final Instance LDES =
+      Instance.local(
+          InstanceType.LDES_SERVER,
+          Sandbox.LDES_SERVER_NAME,
+          URI.create("http://localhost:32768"),
+          URI.create("http://sandbox-ldes-server:8080"),
+          "c1",
+          true,
+          NOW);
+  private static final Instance LDIO =
+      Instance.local(
+          InstanceType.LDIO,
+          Sandbox.LDIO_NAME,
+          URI.create("http://localhost:32769"),
+          URI.create("http://sandbox-ldio:8080"),
+          "c2",
+          true,
+          NOW);
 
   @Test
   void runsWhenBothInstancesRun() {

@@ -14,8 +14,8 @@ public class FindInstancesService implements FindInstancesUseCase {
   private final InstanceRepository instanceRepository;
   private final InstanceLookup instanceLookup;
 
-  public FindInstancesService(InstanceRepository instanceRepository,
-      InstanceLookup instanceLookup) {
+  public FindInstancesService(
+      InstanceRepository instanceRepository, InstanceLookup instanceLookup) {
     this.instanceRepository = instanceRepository;
     this.instanceLookup = instanceLookup;
   }

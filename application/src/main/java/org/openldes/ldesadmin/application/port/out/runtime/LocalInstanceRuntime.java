@@ -18,8 +18,7 @@ public interface LocalInstanceRuntime {
   LocalRuntimeHandle start(InstanceType type, String name);
 
   /**
-   * Stops an instance and releases everything it used. Does nothing if it is not running
-   * anymore.
+   * Stops an instance and releases everything it used. Does nothing if it is not running anymore.
    */
   void stop(String runtimeReference);
 
@@ -30,11 +29,9 @@ public interface LocalInstanceRuntime {
   boolean isRunning(String runtimeReference);
 
   /**
-   * @param url              base URL on which LDES-admin reaches the started instance
-   * @param internalUrl      base URL on which other local instances reach it
+   * @param url base URL on which LDES-admin reaches the started instance
+   * @param internalUrl base URL on which other local instances reach it
    * @param runtimeReference reference needed to {@link #stop(String) stop} the instance again
    */
-  record LocalRuntimeHandle(URI url, URI internalUrl, String runtimeReference) {
-
-  }
+  record LocalRuntimeHandle(URI url, URI internalUrl, String runtimeReference) {}
 }

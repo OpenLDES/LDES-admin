@@ -18,8 +18,10 @@ public class UnregisterInstanceService implements UnregisterInstanceUseCase {
   private final LocalInstanceRuntime localInstanceRuntime;
   private final ActivityRecorder activity;
 
-  public UnregisterInstanceService(InstanceLookup instanceLookup,
-      InstanceRepository instanceRepository, LocalInstanceRuntime localInstanceRuntime,
+  public UnregisterInstanceService(
+      InstanceLookup instanceLookup,
+      InstanceRepository instanceRepository,
+      LocalInstanceRuntime localInstanceRuntime,
       ActivityRecorder activity) {
     this.instanceLookup = instanceLookup;
     this.instanceRepository = instanceRepository;
@@ -34,7 +36,10 @@ public class UnregisterInstanceService implements UnregisterInstanceUseCase {
       localInstanceRuntime.stop(instance.runtimeReference());
     }
     instanceRepository.deleteById(id);
-    activity.record(instance, Severity.INFO, instance.isLocal()
-        ? "Local " + type.label() + " stopped" : type.label() + " removed", null);
+    activity.record(
+        instance,
+        Severity.INFO,
+        instance.isLocal() ? "Local " + type.label() + " stopped" : type.label() + " removed",
+        null);
   }
 }

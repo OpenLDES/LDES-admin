@@ -14,8 +14,8 @@ public class BackgroundProcessService implements BackgroundProcessUseCase {
   private final InstanceLookup instanceLookup;
   private final LdesServerClient ldesServerClient;
 
-  public BackgroundProcessService(InstanceLookup instanceLookup,
-      LdesServerClient ldesServerClient) {
+  public BackgroundProcessService(
+      InstanceLookup instanceLookup, LdesServerClient ldesServerClient) {
     this.instanceLookup = instanceLookup;
     this.ldesServerClient = ldesServerClient;
   }

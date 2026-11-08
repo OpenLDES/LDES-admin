@@ -10,6 +10,12 @@ describe('navigation', () => {
     cy.contains('[data-cy=dashboard-server]', 'Legacy 3.x').should('contain', 'Down')
   })
 
+  it('links to the LDES-admin documentation from the dashboard', () => {
+    cy.get('[data-cy=sidebar] .links').contains('a', 'LDES-admin docs')
+      .should('have.attr', 'href', 'https://openldes.github.io/LDES-admin/')
+      .and('have.attr', 'target', '_blank')
+  })
+
   it('opens the LDES servers or LDIOs behind a headline number', () => {
     const opens = (tile: string, path: string) => {
       cy.contains('[data-cy=stat-tile]', tile).click()

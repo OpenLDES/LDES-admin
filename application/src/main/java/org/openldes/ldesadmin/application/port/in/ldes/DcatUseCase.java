@@ -19,9 +19,7 @@ public interface DcatUseCase {
    */
   RdfDocument getCatalog(InstanceId serverId);
 
-  /**
-   * The {@code dcat:Catalog} of the server itself, or an empty one to start from.
-   */
+  /** The {@code dcat:Catalog} of the server itself, or an empty one to start from. */
   CatalogDescription getServerCatalog(InstanceId serverId);
 
   /**

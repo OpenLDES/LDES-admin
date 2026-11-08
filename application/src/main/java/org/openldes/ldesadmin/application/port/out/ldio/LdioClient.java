@@ -13,8 +13,9 @@ import org.openldes.ldesadmin.model.ldio.PipelineStatus;
 /**
  * Talks to the pipeline management API, the HTTP inputs and the metrics of an LDIO.
  *
- * <p>Implementations throw a {@link org.openldes.ldesadmin.application.port.out.RemoteInstanceException}
- * when the LDIO cannot fulfil a request.
+ * <p>Implementations throw a {@link
+ * org.openldes.ldesadmin.application.port.out.RemoteInstanceException} when the LDIO cannot fulfil
+ * a request.
  */
 public interface LdioClient {
 
@@ -22,9 +23,7 @@ public interface LdioClient {
 
   DeployedPipeline createPipeline(Instance ldio, Pipeline pipeline);
 
-  /**
-   * Deletes a pipeline and returns once it is gone.
-   */
+  /** Deletes a pipeline and returns once it is gone. */
   void deletePipeline(Instance ldio, String pipeline);
 
   PipelineStatus getStatus(Instance ldio, String pipeline);
@@ -37,9 +36,7 @@ public interface LdioClient {
 
   List<PipelineStatistics> getStatistics(Instance ldio);
 
-  /**
-   * The status of every pipeline whose input is an LDES client, by pipeline name.
-   */
+  /** The status of every pipeline whose input is an LDES client, by pipeline name. */
   Map<String, LdesClientStatus> getLdesClientStatuses(Instance ldio);
 
   /**

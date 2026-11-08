@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
+import Dialog from 'primevue/dialog'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import Select from 'primevue/select'
+import ToggleSwitch from 'primevue/toggleswitch'
+import { useToast } from 'primevue/usetoast'
 import CodeEditor from '@/components/common/CodeEditor.vue'
 import { api } from '@/api'
 import { useAction } from '@/composables/useAsync'
-import type { EventStream } from '@/domain/ldes'
+import type { EventStream, RdfFormat } from '@/domain/ldes'
 import type { DeployedPipeline } from '@/domain/ldio'
-import { SANDBOX_INGEST_PIPELINE } from '@/domain/sandbox'
+import { SANDBOX_INGEST_PIPELINE, type SimulationStep } from '@/domain/sandbox'
+import { convertRdf, isRdfFormat } from '@/ldes/formats'
 import { componentInfo, kinds } from '@/pipeline/catalog'
 import { describeSchedule } from '@/pipeline/poller'
-import type { SimulationStep } from '@/pipeline/simulator'
 import { templateById } from '@/pipeline/templates'
 import { useInstancesStore } from '@/stores/instances'
 import { useSandboxStore } from '@/stores/sandbox'
@@ -25,14 +29,55 @@ import { shortUrl } from '@/utils/format'
 const open = defineModel<boolean>('open', { required: true })
 
 const sandbox = useSandboxStore()
+const toast = useToast()
 const instances = useInstancesStore()
 const { run: act, busy: ingesting } = useAction()
 const { run: sendAction, busy: sending } = useAction()
+const EXECUTE_OUTPUTS_WARNING_KEY = 'ldes-admin.sandbox-execute-outputs-warning-dismissed'
+const executeOutputsWarningOpen = ref(false)
+const skipExecuteOutputsWarning = ref(false)
+const executeOutputsToggle = ref(sandbox.executeOutputs)
+
+watch(() => sandbox.executeOutputs, (enabled) => {
+  executeOutputsToggle.value = enabled
+})
+
+function requestExecuteOutputs(enabled: boolean) {
+  executeOutputsToggle.value = enabled
+  if (!enabled) {
+    sandbox.executeOutputs = false
+    return
+  }
+  if (localStorage.getItem(EXECUTE_OUTPUTS_WARNING_KEY) === 'true') {
+    sandbox.executeOutputs = true
+    return
+  }
+  skipExecuteOutputsWarning.value = false
+  executeOutputsWarningOpen.value = true
+}
+
+function confirmExecuteOutputs() {
+  if (skipExecuteOutputsWarning.value) {
+    localStorage.setItem(EXECUTE_OUTPUTS_WARNING_KEY, 'true')
+  }
+  sandbox.executeOutputs = true
+  executeOutputsWarningOpen.value = false
+}
+
+function cancelExecuteOutputs() {
+  executeOutputsToggle.value = false
+  executeOutputsWarningOpen.value = false
+}
+
+watch(executeOutputsWarningOpen, (open) => {
+  if (!open && !sandbox.executeOutputs) executeOutputsToggle.value = false
+})
 
 const contentTypes = [
   { label: 'JSON', value: 'application/json' },
   { label: 'Turtle', value: 'text/turtle' },
   { label: 'N-Quads', value: 'application/n-quads' },
+  { label: 'N-Triples', value: 'application/n-triples' },
   { label: 'JSON-LD', value: 'application/ld+json' },
   { label: 'CSV', value: 'text/csv' },
 ]
@@ -46,12 +91,54 @@ const contentTypeOptions = computed(() => {
 const selectedStep = ref(0)
 const steps = computed(() => sandbox.result?.steps ?? [])
 const shown = computed<SimulationStep | undefined>(() => steps.value[selectedStep.value])
+/** Which of the models of the shown step is shown: adapters and transformers can make several */
+const shownModel = ref(0)
+watch(shown, () => {
+  shownModel.value = 0
+})
+
+const outputFormats: { label: string; value: RdfFormat }[] = [
+  { label: 'Turtle', value: 'text/turtle' },
+  { label: 'JSON-LD', value: 'application/ld+json' },
+  { label: 'N-Quads', value: 'application/n-quads' },
+  { label: 'N-Triples', value: 'application/n-triples' },
+]
+/** The RDF format chosen to show linked data in; as the step made it when none is chosen */
+const outputFormat = ref<RdfFormat>()
+/** The RDF format the shown step is shown in; none when it did not make linked data */
+const shownFormat = computed<RdfFormat | undefined>(() => {
+  const step = shown.value
+  if (!step?.outputs.length || !isRdfFormat(step.contentType)) return undefined
+  return outputFormat.value ?? naturalFormat(step)
+})
+
+/** The JSON to JSON-LD adapter makes JSON-LD; other steps are shown as they made it */
+function naturalFormat(step: SimulationStep): RdfFormat {
+  return step.kind === 'adapter' && step.component === 'Ldio:JsonToLdAdapter'
+    ? 'application/ld+json'
+    : mediaTypeOf(step.contentType) as RdfFormat
+}
+const shownOutput = computed<{ text?: string; error?: string }>(() => {
+  const step = shown.value
+  const made = step?.outputs[shownModel.value]
+  if (!step || made === undefined || !shownFormat.value) return { text: made }
+  try {
+    return { text: convertRdf(made, mediaTypeOf(step.contentType) as RdfFormat, shownFormat.value) }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+const outputLanguage = computed(() => {
+  if (shownFormat.value) return shownFormat.value === 'application/ld+json' ? 'json' : 'turtle'
+  return shown.value ? languageOf(shown.value.format) : 'text'
+})
 const pending = computed(() => sandbox.conversion.order.length - steps.value.length)
 // A configuration that LDIO would refuse can still be simulated
 const blocked = computed(() => sandbox.errors.find((issue) => issue.property === undefined)?.message)
 
 const status = computed(() => {
   if (sandbox.running) return { icon: 'pi pi-spin pi-spinner', text: 'Running…', tone: 'busy' }
+  if (sandbox.runError) return { icon: 'pi pi-times-circle', text: `Could not run: ${sandbox.runError}`, tone: 'error' }
   const result = sandbox.result
   if (!result) return { icon: 'pi pi-play-circle', text: 'Run a member through the pipeline to see every step', tone: 'idle' }
   const last = result.steps[result.steps.length - 1]
@@ -67,6 +154,18 @@ const status = computed(() => {
 watch(() => steps.value.length, (length) => {
   if (length) selectedStep.value = length - 1
 })
+
+// Selecting a component on the canvas shows what it did
+watch(() => sandbox.selectedId, (id) => {
+  const index = id ? sandbox.stepNodeIds.indexOf(id) : -1
+  if (index >= 0 && index < steps.value.length) selectedStep.value = index
+})
+
+function selectStep(index: number) {
+  selectedStep.value = index
+  const nodeId = sandbox.stepNodeIds[index]
+  if (nodeId) sandbox.selectedId = nodeId
+}
 
 const targetServer = ref<string>()
 const targetCollection = ref<string>()
@@ -89,6 +188,14 @@ function runPipeline() {
   sandbox.run()
 }
 
+/** Linked data follows the new content type; a toast says when it cannot */
+function changeContentType(contentType: string) {
+  const problem = sandbox.changeContentType(contentType)
+  if (problem) {
+    toast.add({ severity: 'warn', summary: 'Kept the member as it was', detail: `It could not be converted: ${problem}`, life: 7000 })
+  }
+}
+
 function useTemplateSample() {
   const origin = sandbox.origin
   const template = templateById(origin.kind === 'template' ? origin.id : 'parcels-to-ldes')
@@ -99,6 +206,9 @@ function useTemplateSample() {
 
 const fetchMenu = ref<InstanceType<typeof Menu>>()
 const fetching = ref(false)
+const fetchNotice = ref<string>()
+const manualFetchOutcome = ref<{ url: string; at: number }>()
+let fetchNoticeTimer: ReturnType<typeof setTimeout> | undefined
 const fetchItems = computed(() => (sandbox.poller?.urls ?? [])
   .map((url) => ({ label: shortUrl(url), command: () => fetchFrom(url) })))
 const fetchTooltip = computed(() => {
@@ -130,9 +240,11 @@ const pollStatus = computed(() => {
     }
   }
   if (!last) return undefined
-  return last.error
-    ? { icon: 'pi pi-exclamation-triangle', text: `Could not fetch ${shortUrl(last.url)}`, tone, detail: last.error }
-    : { icon: 'pi pi-cloud-download', text: `Fetched ${shortUrl(last.url)} at ${clock(last.at)}`, tone, detail: undefined }
+  if (last.error) {
+    return { icon: 'pi pi-exclamation-triangle', text: `Could not fetch ${shortUrl(last.url)}`, tone, detail: last.error }
+  }
+  if (manualFetchOutcome.value?.url === last.url && manualFetchOutcome.value.at === last.at.getTime()) return undefined
+  return { icon: 'pi pi-cloud-download', text: `Fetched ${shortUrl(last.url)} at ${clock(last.at)}`, tone, detail: undefined }
 })
 
 function fetchInput(event: Event) {
@@ -142,9 +254,16 @@ function fetchInput(event: Event) {
 }
 
 async function fetchFrom(url: string) {
+  clearTimeout(fetchNoticeTimer)
+  fetchNotice.value = undefined
   fetching.value = true
   try {
     await sandbox.fetchInput(url)
+    if (sandbox.lastPoll) {
+      manualFetchOutcome.value = { url: sandbox.lastPoll.url, at: sandbox.lastPoll.at.getTime() }
+    }
+    fetchNotice.value = `Fetched ${shortUrl(url)}`
+    fetchNoticeTimer = setTimeout(() => { fetchNotice.value = undefined }, 3000)
   } catch {
     // The poll status tells what went wrong
   } finally {
@@ -158,20 +277,27 @@ function togglePolling() {
 }
 
 // Polling is for the pipeline on the canvas, while it is in view
-onBeforeUnmount(() => sandbox.stopPolling())
+onBeforeUnmount(() => {
+  clearTimeout(fetchNoticeTimer)
+  sandbox.stopPolling()
+  void sandbox.stopLive()
+})
 
 function clock(time: Date): string {
   return time.toLocaleTimeString('en-GB')
 }
 
 async function ingest() {
-  const member = sandbox.result?.member
-  if (!member || !targetServer.value || !targetCollection.value) return
+  const members = sandbox.result?.members ?? []
+  if (!members.length || !targetServer.value || !targetCollection.value) return
   const collection = targetCollection.value
   const done = await act(async () => {
-    await api.ingestMember(targetServer.value!, collection, member, 'text/turtle')
+    // One by one: the LDES server takes one member per request
+    for (const member of members) {
+      await api.ingestMember(targetServer.value!, collection, member, 'text/turtle')
+    }
     return true
-  }, `Ingested the result in ${collection}`)
+  }, members.length === 1 ? `Ingested the result in ${collection}` : `Ingested ${members.length} members in ${collection}`)
   if (done) ingestPopover.value?.hide()
 }
 
@@ -216,6 +342,14 @@ async function send() {
   if (sent) sendPopover.value?.hide()
 }
 
+function mediaTypeOf(contentType: string): string {
+  return contentType.split(';')[0].trim().toLowerCase()
+}
+
+function languageOf(format: SimulationStep['format']) {
+  return format === 'json' ? 'json' : format === 'text' ? 'text' : 'turtle'
+}
+
 function stepLabel(step: SimulationStep) {
   return componentInfo(step.component)?.label ?? step.component
 }
@@ -236,15 +370,40 @@ const statusIcon: Record<SimulationStep['status'], string> = {
       </button>
       <span class="bar-status" :class="status.tone"><i :class="status.icon" />{{ status.text }}</span>
       <span class="spacer" />
+      <label class="execute" for="execute-outputs" data-cy="execute-outputs"
+        v-tooltip.top="'On: outputs really send what they make (HTTP Out posts, SPARQL Out updates its store, …). Off: a dry run shows what they would send.'">
+        <ToggleSwitch :model-value="executeOutputsToggle" input-id="execute-outputs"
+          :disabled="sandbox.live?.active || sandbox.liveBusy" @update:model-value="requestExecuteOutputs" />
+        <span>Execute outputs</span>
+      </label>
       <Button v-if="sandbox.polling" label="Stop polling" icon="pi pi-stop-circle" severity="secondary" text
         size="small" data-cy="stop-polling" @click="sandbox.stopPolling()" />
       <Button v-if="sandbox.result && !sandbox.running" label="Reset" severity="secondary" text size="small"
         @click="sandbox.resetSimulation()" />
       <span v-tooltip.top="blocked">
-        <Button label="Run" icon="pi pi-play" size="small" :loading="sandbox.running" :disabled="!!blocked"
+        <Button label="Run" icon="pi pi-play" size="small" :loading="sandbox.running"
+          :disabled="!!blocked || sandbox.live?.active || sandbox.liveBusy"
           data-cy="run-simulation" @click="runPipeline" />
       </span>
+      <Button v-if="sandbox.liveAttached" label="Stop live" icon="pi pi-stop" severity="danger"
+        size="small" :loading="sandbox.liveBusy" data-cy="stop-live" @click="sandbox.stopLive()" />
+      <Button v-else label="Start live" icon="pi pi-bolt" severity="secondary" size="small"
+        :loading="sandbox.liveBusy" :disabled="!sandbox.conversion.valid || sandbox.running"
+        v-tooltip.top="'Start the configured source. Production runs real LDIO components; demo approximates HTTP inputs. Changes stop the live source.'"
+        data-cy="start-live" @click="open = true; sandbox.startLive()" />
     </header>
+
+    <div v-if="sandbox.live || sandbox.liveError" class="poll-status" :class="{ error: sandbox.liveError }" data-cy="live-status">
+      <i :class="sandbox.live?.active ? 'pi pi-bolt' : 'pi pi-stop-circle'" />
+      <span>{{ sandbox.liveError ?? `${sandbox.live?.active ? 'Live source running' : 'Live source stopped'} · ${sandbox.live?.received ?? 0} members received` }}</span>
+      <Button v-if="sandbox.live?.active && sandbox.conversion.pipeline?.input.name === 'Ldio:HttpIn'"
+        label="Send input to live source" icon="pi pi-send" severity="secondary" size="small" text
+        :disabled="!sandbox.sample.content.trim()" :loading="sandbox.liveBusy"
+        data-cy="send-live-input" @click="sandbox.sendLiveInput()" />
+      <code v-if="sandbox.liveAttached && sandbox.conversion.pipeline?.input.name === 'Ldio:LdesClientConnector'">
+        EDC callbacks: POST /api/v1/sandbox/live/{{ sandbox.liveId }}/connector/{token|transfer}
+      </code>
+    </div>
 
     <div v-if="open" class="body">
       <section class="column">
@@ -269,8 +428,9 @@ const statusIcon: Record<SimulationStep['status'], string> = {
           <!-- A poller brings its own input -->
           <Button v-else icon="pi pi-refresh" severity="secondary" text rounded size="small"
             v-tooltip.top="'Use the sample member of the template'" aria-label="Sample member" @click="useTemplateSample" />
-          <Select v-model="sandbox.sample.contentType" :options="contentTypeOptions" option-label="label" option-value="value"
-            size="small" aria-label="Content type" data-cy="sample-content-type" />
+          <Select :model-value="sandbox.sample.contentType" :options="contentTypeOptions" option-label="label"
+            option-value="value" size="small" aria-label="Content type" data-cy="sample-content-type"
+            @update:model-value="changeContentType" />
           <Button icon="pi pi-send" severity="secondary" text rounded size="small"
             v-tooltip.top="'Send this member to a pipeline on an LDIO'" aria-label="Send to an LDIO"
             :disabled="!sandbox.sample.content.trim()" data-cy="open-send" @click="openSend" />
@@ -296,6 +456,10 @@ const statusIcon: Record<SimulationStep['status'], string> = {
             <span v-if="pollStatus.detail" class="poll-detail">{{ pollStatus.detail }}</span>
           </span>
         </div>
+        <div v-if="fetchNotice" class="poll-status" data-cy="fetch-notice">
+          <i class="pi pi-cloud-download" />
+          <span>{{ fetchNotice }}</span>
+        </div>
         <CodeEditor v-model="sandbox.sample.content"
           :language="sandbox.sample.contentType.includes('json') ? 'json' : sandbox.sample.contentType.includes('csv') ? 'text' : 'turtle'"
           min-height="100%" class="editor" data-cy="sample-input" />
@@ -308,7 +472,7 @@ const statusIcon: Record<SimulationStep['status'], string> = {
         <ol v-if="steps.length" class="step-list">
           <li v-for="(step, index) in steps" :key="index">
             <button type="button" class="step" :class="[step.status, { selected: index === selectedStep }]"
-              :style="{ '--kind': kinds[step.kind].color }" data-cy="simulation-step" @click="selectedStep = index">
+              :style="{ '--kind': kinds[step.kind].color }" data-cy="simulation-step" @click="selectStep(index)">
               <span class="step-marker"><i :class="statusIcon[step.status]" /></span>
               <span class="step-text">
                 <span class="step-title">{{ stepLabel(step) }} <span class="muted small">{{ step.durationMs }} ms</span></span>
@@ -331,12 +495,26 @@ const statusIcon: Record<SimulationStep['status'], string> = {
           <span class="column-title"><i class="pi pi-file-export" />
             <span class="truncate">{{ shown ? `After ${stepLabel(shown)}` : 'Output' }}</span></span>
           <span class="spacer" />
+          <span v-if="shown && shown.outputs.length > 1" class="pager" data-cy="model-pager">
+            <Button icon="pi pi-chevron-left" severity="secondary" text rounded size="small" aria-label="Previous model"
+              :disabled="shownModel === 0" @click="shownModel--" />
+            <span class="muted small">Model {{ shownModel + 1 }} of {{ shown.outputs.length }}</span>
+            <Button icon="pi pi-chevron-right" severity="secondary" text rounded size="small" aria-label="Next model"
+              :disabled="shownModel === shown.outputs.length - 1" data-cy="next-model" @click="shownModel++" />
+          </span>
+          <Select v-if="shownFormat" :model-value="shownFormat" :options="outputFormats" option-label="label"
+            option-value="value" size="small" aria-label="Show in format" data-cy="output-content-type"
+            @update:model-value="outputFormat = $event" />
           <Button v-if="sandbox.result?.delivered && !sandbox.running" icon="pi pi-upload" label="Ingest"
             v-tooltip.top="'Ingest the result in a sandbox LDES server'" size="small" text
             data-cy="open-ingest-result" @click="ingestPopover?.toggle($event)" />
         </header>
-        <CodeEditor v-if="shown?.output" :model-value="shown.output" :language="shown.format === 'json' ? 'json' : 'turtle'"
+        <CodeEditor v-if="shownOutput.text" :model-value="shownOutput.text" :language="outputLanguage"
           readonly min-height="100%" class="editor" data-cy="step-output" />
+        <div v-else-if="shownOutput.error" class="placeholder muted small" data-cy="output-error">
+          <i class="pi pi-exclamation-triangle" />
+          <p>Cannot show this in that format: {{ shownOutput.error }}</p>
+        </div>
         <div v-else-if="shown" class="placeholder muted small">
           <i :class="statusIcon[shown.status]" />
           <p>{{ shown.summary }}</p>
@@ -358,6 +536,23 @@ const statusIcon: Record<SimulationStep['status'], string> = {
         </Popover>
       </section>
     </div>
+    <Dialog v-model:visible="executeOutputsWarningOpen" modal header="Execute outputs?" :closable="false"
+      :style="{ width: '440px', maxWidth: 'calc(100vw - 32px)' }" data-cy="execute-outputs-warning">
+      <p class="warning-copy">
+        The next simulation will execute the configured outputs. This may add members or modify remote
+        systems, and those real side effects cannot necessarily be undone.
+      </p>
+      <div class="warning-choice">
+        <Checkbox v-model="skipExecuteOutputsWarning" input-id="skip-execute-outputs-warning" binary
+          data-cy="skip-execute-outputs-warning" />
+        <label for="skip-execute-outputs-warning">Don't show this message again</label>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" text data-cy="cancel-execute-outputs"
+          @click="cancelExecuteOutputs" />
+        <Button label="Execute outputs" data-cy="confirm-execute-outputs" @click="confirmExecuteOutputs" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -488,10 +683,40 @@ const statusIcon: Record<SimulationStep['status'], string> = {
   height: 100%;
 }
 
+.execute {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
 .hint {
   margin: 0;
   max-width: 260px;
   line-height: 1.45;
+}
+
+.warning-copy {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.warning-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
 }
 
 .poll-status {

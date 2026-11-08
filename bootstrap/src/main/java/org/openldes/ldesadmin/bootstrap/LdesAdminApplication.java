@@ -13,5 +13,4 @@ public class LdesAdminApplication {
   public static void main(String[] args) {
     SpringApplication.run(LdesAdminApplication.class, args);
   }
-
 }

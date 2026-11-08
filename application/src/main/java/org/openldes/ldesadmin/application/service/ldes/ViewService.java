@@ -19,8 +19,8 @@ public class ViewService implements ViewUseCase {
   private final LdesServerClient ldesServerClient;
   private final ActivityRecorder activity;
 
-  public ViewService(InstanceLookup instanceLookup, LdesServerClient ldesServerClient,
-      ActivityRecorder activity) {
+  public ViewService(
+      InstanceLookup instanceLookup, LdesServerClient ldesServerClient, ActivityRecorder activity) {
     this.instanceLookup = instanceLookup;
     this.ldesServerClient = ldesServerClient;
     this.activity = activity;

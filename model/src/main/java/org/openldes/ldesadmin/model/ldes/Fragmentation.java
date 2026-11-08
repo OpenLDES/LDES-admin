@@ -6,7 +6,7 @@ import java.util.Map;
  * A fragmentation strategy of a view, e.g. {@code HierarchicalTimeBasedFragmentation} with
  * properties {@code maxGranularity} and {@code fragmentationPath}.
  *
- * @param type       local name of the {@code tree:} fragmentation type
+ * @param type local name of the {@code tree:} fragmentation type
  * @param properties configuration of the fragmentation, keyed by local property name
  */
 public record Fragmentation(String type, Map<String, String> properties) {

@@ -7,9 +7,7 @@ import org.openldes.ldesadmin.model.instance.Instance;
 import org.openldes.ldesadmin.model.instance.InstanceId;
 import org.openldes.ldesadmin.model.instance.InstanceType;
 
-/**
- * Looks up registered instances for the services that act on them.
- */
+/** Looks up registered instances for the services that act on them. */
 @ApplicationService
 public class InstanceLookup {
 
@@ -23,7 +21,8 @@ public class InstanceLookup {
    * @throws InstanceNotFoundException if there is no instance of the given type with that id
    */
   public Instance require(InstanceType type, InstanceId id) {
-    return instanceRepository.findById(id)
+    return instanceRepository
+        .findById(id)
         .filter(instance -> instance.type() == type)
         .orElseThrow(() -> new InstanceNotFoundException(type, id));
   }

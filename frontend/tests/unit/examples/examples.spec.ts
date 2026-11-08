@@ -120,9 +120,9 @@ describe('the sensor example', () => {
       { contentType: 'application/json', content: JSON.stringify(message) })
 
     expect(result.delivered).toBe(true)
-    expect(result.member).toContain(`<${message.id}/2026-10-25T10:00:00Z> a sosa:Observation`)
-    expect(result.member).toContain(`qudt:unit <${message.hasResult.unit}>`)
-    expect(result.member.match(/sosa:resultTime/g)).toHaveLength(1)
+    expect(result.members[0]).toContain(`<${message.id}/2026-10-25T10:00:00Z> a sosa:Observation`)
+    expect(result.members[0]).toContain(`qudt:unit <${message.hasResult.unit}>`)
+    expect(result.members[0].match(/sosa:resultTime/g)).toHaveLength(1)
   })
 })
 
