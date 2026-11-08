@@ -15,26 +15,33 @@ class ThroughputSeriesTest {
 
   @Test
   void countsTheMembersIngestedPerHour() {
-    List<IngestSample> samples = List.of(
-        sample("2026-10-24T09:10:00Z", 100),
-        sample("2026-10-24T09:50:00Z", 160),
-        sample("2026-10-24T10:30:00Z", 200),
-        sample("2026-10-24T11:59:00Z", 260),
-        sample("2026-10-24T12:15:00Z", 270));
+    List<IngestSample> samples =
+        List.of(
+            sample("2026-10-24T09:10:00Z", 100),
+            sample("2026-10-24T09:50:00Z", 160),
+            sample("2026-10-24T10:30:00Z", 200),
+            sample("2026-10-24T11:59:00Z", 260),
+            sample("2026-10-24T12:15:00Z", 270));
 
     ThroughputSeries series = ThroughputSeries.fromSamples(SERVER, "Production", samples, NOW, 4);
 
-    assertThat(series.points()).containsExactly(
-        new Point(Instant.parse("2026-10-24T09:00:00Z"), 60),
-        new Point(Instant.parse("2026-10-24T10:00:00Z"), 40),
-        new Point(Instant.parse("2026-10-24T11:00:00Z"), 60),
-        new Point(Instant.parse("2026-10-24T12:00:00Z"), 10));
+    assertThat(series.points())
+        .containsExactly(
+            new Point(Instant.parse("2026-10-24T09:00:00Z"), 60),
+            new Point(Instant.parse("2026-10-24T10:00:00Z"), 40),
+            new Point(Instant.parse("2026-10-24T11:00:00Z"), 60),
+            new Point(Instant.parse("2026-10-24T12:00:00Z"), 10));
   }
 
   @Test
   void leavesOutHoursBeforeSamplingStarted() {
-    ThroughputSeries series = ThroughputSeries.fromSamples(SERVER, "Production",
-        List.of(sample("2026-10-24T12:01:00Z", 5), sample("2026-10-24T12:11:00Z", 9)), NOW, 24);
+    ThroughputSeries series =
+        ThroughputSeries.fromSamples(
+            SERVER,
+            "Production",
+            List.of(sample("2026-10-24T12:01:00Z", 5), sample("2026-10-24T12:11:00Z", 9)),
+            NOW,
+            24);
 
     assertThat(series.points())
         .containsExactly(new Point(Instant.parse("2026-10-24T12:00:00Z"), 4));
@@ -42,16 +49,21 @@ class ThroughputSeriesTest {
 
   @Test
   void countsADroppingTotalAsNoIngestion() {
-    ThroughputSeries series = ThroughputSeries.fromSamples(SERVER, "Production",
-        List.of(sample("2026-10-24T11:10:00Z", 500), sample("2026-10-24T12:10:00Z", 300)), NOW, 2);
+    ThroughputSeries series =
+        ThroughputSeries.fromSamples(
+            SERVER,
+            "Production",
+            List.of(sample("2026-10-24T11:10:00Z", 500), sample("2026-10-24T12:10:00Z", 300)),
+            NOW,
+            2);
 
     assertThat(series.points()).extracting(Point::members).containsExactly(0L, 0L);
   }
 
   @Test
   void ignoresSamplesOfOtherServers() {
-    IngestSample other = new IngestSample(InstanceId.randomId(),
-        Instant.parse("2026-10-24T12:10:00Z"), 1_000);
+    IngestSample other =
+        new IngestSample(InstanceId.randomId(), Instant.parse("2026-10-24T12:10:00Z"), 1_000);
 
     assertThat(ThroughputSeries.fromSamples(SERVER, "Production", List.of(other), NOW, 24).points())
         .isEmpty();

@@ -8,10 +8,10 @@ import org.openldes.ldesadmin.model.rdf.RdfDocument;
 /**
  * Manages the event streams of an LDES server.
  *
- * <p>All methods throw an
- * {@link org.openldes.ldesadmin.application.port.in.instance.InstanceNotFoundException} if the
- * server is unknown, and a {@link org.openldes.ldesadmin.application.port.out.RemoteInstanceException}
- * if the server cannot fulfil the request.
+ * <p>All methods throw an {@link
+ * org.openldes.ldesadmin.application.port.in.instance.InstanceNotFoundException} if the server is
+ * unknown, and a {@link org.openldes.ldesadmin.application.port.out.RemoteInstanceException} if the
+ * server cannot fulfil the request.
  */
 public interface EventStreamUseCase {
 

@@ -1,8 +1,8 @@
 package org.openldes.ldesadmin.application.port.out.sandbox;
 
 /**
- * A URL could not be polled: it is unreachable, answered with an error, or answered what LDIO
- * would not pass on to a pipeline.
+ * A URL could not be polled: it is unreachable, answered with an error, or answered what LDIO would
+ * not pass on to a pipeline.
  */
 public class PollException extends RuntimeException {
 

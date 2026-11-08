@@ -38,10 +38,11 @@ public class PipelineActivityService implements PipelineActivityUseCase {
       throw new IllegalArgumentException("A message needs a content type");
     }
     Instance ldio = instanceLookup.requireLdio(ldioId);
-    DeployedPipeline deployed = ldioClient.getPipelines(ldio).stream()
-        .filter(candidate -> candidate.name().equals(pipeline))
-        .findFirst()
-        .orElseThrow(() -> new PipelineNotFoundException(pipeline));
+    DeployedPipeline deployed =
+        ldioClient.getPipelines(ldio).stream()
+            .filter(candidate -> candidate.name().equals(pipeline))
+            .findFirst()
+            .orElseThrow(() -> new PipelineNotFoundException(pipeline));
     String input = deployed.pipeline().input().name();
     if (!HTTP_INPUT.equals(input)) {
       throw new IllegalArgumentException(

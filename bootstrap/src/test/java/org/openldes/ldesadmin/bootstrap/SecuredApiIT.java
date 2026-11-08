@@ -18,14 +18,10 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 @Import(TestcontainersConfiguration.class)
 class SecuredApiIT {
 
-  @Autowired
-  private MockMvcTester mvc;
+  @Autowired private MockMvcTester mvc;
 
-  /**
-   * Replaces the decoder that would otherwise be built from the issuer URI.
-   */
-  @MockitoBean
-  private JwtDecoder jwtDecoder;
+  /** Replaces the decoder that would otherwise be built from the issuer URI. */
+  @MockitoBean private JwtDecoder jwtDecoder;
 
   @Test
   void requiresATokenForTheApi() {

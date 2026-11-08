@@ -18,8 +18,8 @@ public class PipelineLifecycleService implements PipelineLifecycleUseCase {
   private final LdioClient ldioClient;
   private final ActivityRecorder activity;
 
-  public PipelineLifecycleService(InstanceLookup instanceLookup, LdioClient ldioClient,
-      ActivityRecorder activity) {
+  public PipelineLifecycleService(
+      InstanceLookup instanceLookup, LdioClient ldioClient, ActivityRecorder activity) {
     this.instanceLookup = instanceLookup;
     this.ldioClient = ldioClient;
     this.activity = activity;

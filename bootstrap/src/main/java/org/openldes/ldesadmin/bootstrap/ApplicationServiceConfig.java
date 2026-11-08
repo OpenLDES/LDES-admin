@@ -8,9 +8,7 @@ import org.springframework.context.annotation.ComponentScan.Filter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 
-/**
- * Turns the framework-free services of the application ring into Spring beans.
- */
+/** Turns the framework-free services of the application ring into Spring beans. */
 @Configuration(proxyBeanMethods = false)
 @ComponentScan(
     basePackageClasses = ApplicationService.class,

@@ -53,13 +53,166 @@ provide('selectedNodeId', computed(() => sandbox.selectedId))
 const templateMenu = ref<InstanceType<typeof Menu>>()
 const showYaml = ref(false)
 const showDeploy = ref(false)
-const simulationOpen = ref(false)
+const PANEL_SETTINGS_KEY = 'ldes-admin.sandbox-panels'
+
+interface PanelSettings {
+  paletteWidth: number
+  inspectorWidth: number
+  paletteCollapsed: boolean
+  inspectorCollapsed: boolean
+  simulationHeight: number
+  simulationOpen: boolean
+}
+
+function readPanelSettings(): Partial<PanelSettings> {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(PANEL_SETTINGS_KEY) ?? 'null')
+    if (typeof stored !== 'object' || stored === null) return {}
+    const settings: Partial<PanelSettings> = {}
+    if ('paletteWidth' in stored && typeof stored.paletteWidth === 'number') settings.paletteWidth = stored.paletteWidth
+    if ('inspectorWidth' in stored && typeof stored.inspectorWidth === 'number') settings.inspectorWidth = stored.inspectorWidth
+    if ('paletteCollapsed' in stored && typeof stored.paletteCollapsed === 'boolean') {
+      settings.paletteCollapsed = stored.paletteCollapsed
+    }
+    if ('inspectorCollapsed' in stored && typeof stored.inspectorCollapsed === 'boolean') {
+      settings.inspectorCollapsed = stored.inspectorCollapsed
+    }
+    if ('simulationHeight' in stored && typeof stored.simulationHeight === 'number') {
+      settings.simulationHeight = stored.simulationHeight
+    }
+    if ('simulationOpen' in stored && typeof stored.simulationOpen === 'boolean') {
+      settings.simulationOpen = stored.simulationOpen
+    }
+    return settings
+  } catch {
+    return {}
+  }
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value)) : fallback
+}
+
+const panelSettings = readPanelSettings()
+const paletteWidth = ref(boundedNumber(panelSettings.paletteWidth, 236, 180, 460))
+const inspectorWidth = ref(boundedNumber(panelSettings.inspectorWidth, 330, 240, Math.floor(window.innerWidth * 0.66)))
+const viewportWidth = ref(window.innerWidth)
+const inspectorMaxWidth = computed(() => Math.floor(viewportWidth.value * 0.66))
+const paletteCollapsed = ref(panelSettings.paletteCollapsed === true)
+const inspectorCollapsed = ref(panelSettings.inspectorCollapsed === true)
+const simulationHeight = ref(boundedNumber(panelSettings.simulationHeight, 44, 30, 72))
+const simulationOpen = ref(panelSettings.simulationOpen === true)
+const workspace = ref<HTMLElement>()
+const panelStyle = computed(() => ({
+  '--palette-width': paletteCollapsed.value ? '0px' : `${paletteWidth.value}px`,
+  '--inspector-width': inspectorCollapsed.value ? '0px' : `${inspectorWidth.value}px`,
+}))
+
+watch([paletteWidth, inspectorWidth, paletteCollapsed, inspectorCollapsed, simulationHeight, simulationOpen], () => {
+  localStorage.setItem(PANEL_SETTINGS_KEY, JSON.stringify({
+    paletteWidth: paletteWidth.value,
+    inspectorWidth: inspectorWidth.value,
+    paletteCollapsed: paletteCollapsed.value,
+    inspectorCollapsed: inspectorCollapsed.value,
+    simulationHeight: simulationHeight.value,
+    simulationOpen: simulationOpen.value,
+  }))
+}, { flush: 'post' })
+
 let fitPending = true
 // The canvas needs the room: the navigation collapses while in the sandbox
 let sidebarWasCollapsed = false
+let panelResize: { side: 'palette' | 'inspector'; startX: number; startWidth: number } | undefined
+let simulationResize: { startY: number; startHeight: number; workspaceHeight: number } | undefined
 
 // The canvas changes size with the simulation panel: keep the pipeline in view
-watch(simulationOpen, () => setTimeout(() => fitView({ padding: 0.2, maxZoom: 1.1, duration: 250 }), 220))
+watch([simulationOpen, paletteCollapsed, inspectorCollapsed], () =>
+  setTimeout(() => fitView({ padding: 0.2, maxZoom: 1.1, duration: 250 }), 220))
+
+function resizePanel(side: 'palette' | 'inspector', event: MouseEvent) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  panelResize = {
+    side,
+    startX: event.clientX,
+    startWidth: side === 'palette' ? paletteWidth.value : inspectorWidth.value,
+  }
+  window.addEventListener('mousemove', onPanelPointerMove)
+  window.addEventListener('mouseup', stopPanelResize, { once: true })
+}
+
+function onPanelPointerMove(event: MouseEvent) {
+  if (!panelResize) return
+  const { side, startX, startWidth } = panelResize
+  const direction = side === 'palette' ? 1 : -1
+  const width = Math.min(side === 'palette' ? 460 : inspectorMaxWidth.value, Math.max(side === 'palette' ? 180 : 240,
+    startWidth + direction * (event.clientX - startX)))
+  if (side === 'palette') paletteWidth.value = width
+  else inspectorWidth.value = width
+}
+
+function stopPanelResize() {
+  panelResize = undefined
+  window.removeEventListener('mousemove', onPanelPointerMove)
+  setTimeout(() => fitView({ padding: 0.2, maxZoom: 1.1, duration: 250 }), 30)
+}
+
+function adjustPanel(side: 'palette' | 'inspector', direction: number) {
+  if (side === 'palette') paletteWidth.value = Math.min(460, Math.max(180, paletteWidth.value + direction * 24))
+  else inspectorWidth.value = Math.min(inspectorMaxWidth.value, Math.max(240, inspectorWidth.value + direction * 24))
+}
+
+function onViewportResize() {
+  viewportWidth.value = window.innerWidth
+  inspectorWidth.value = Math.min(inspectorWidth.value, inspectorMaxWidth.value)
+}
+
+function resizeSimulation(event: MouseEvent) {
+  if (event.button !== 0 || !workspace.value) return
+  event.preventDefault()
+  const panelHeight = workspace.value.querySelector('[data-cy="simulation"]')?.getBoundingClientRect().height
+  simulationResize = {
+    startY: event.clientY,
+    startHeight: panelHeight ?? workspace.value.clientHeight * simulationHeight.value / 100,
+    workspaceHeight: workspace.value.clientHeight,
+  }
+  window.addEventListener('mousemove', onSimulationPointerMove)
+  window.addEventListener('mouseup', stopSimulationResize, { once: true })
+}
+
+function onSimulationPointerMove(event: MouseEvent) {
+  if (!simulationResize) return
+  const availableHeight = simulationResize.workspaceHeight
+  const height = Math.min(Math.max(260, availableHeight - 80), Math.max(260,
+    simulationResize.startHeight + simulationResize.startY - event.clientY))
+  simulationHeight.value = Math.min(72, Math.max(30, height / availableHeight * 100))
+}
+
+function stopSimulationResize() {
+  simulationResize = undefined
+  window.removeEventListener('mousemove', onSimulationPointerMove)
+  setTimeout(() => fitView({ padding: 0.2, maxZoom: 1.1, duration: 250 }), 30)
+}
+
+function onPanelKeydown(side: 'palette' | 'inspector', event: KeyboardEvent) {
+  if (event.target !== event.currentTarget) return
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    const direction = event.key === 'ArrowRight' ? 1 : -1
+    adjustPanel(side, side === 'palette' ? direction : -direction)
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    if (side === 'palette') paletteCollapsed.value = !paletteCollapsed.value
+    else inspectorCollapsed.value = !inspectorCollapsed.value
+  }
+}
+
+function onSimulationKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+  event.preventDefault()
+  simulationHeight.value = Math.min(72, Math.max(30, simulationHeight.value + (event.key === 'ArrowUp' ? 4 : -4)))
+}
 
 function run() {
   simulationOpen.value = true
@@ -89,6 +242,7 @@ const originLabel = computed(() => {
 })
 
 onMounted(async () => {
+  window.addEventListener('resize', onViewportResize)
   sidebarWasCollapsed = ui.sidebarCollapsed
   ui.sidebarCollapsed = true
   environment.ensureLoaded()
@@ -107,7 +261,12 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', onViewportResize)
   ui.sidebarCollapsed = sidebarWasCollapsed
+  window.removeEventListener('mousemove', onPanelPointerMove)
+  window.removeEventListener('mousemove', onSimulationPointerMove)
+  window.removeEventListener('mouseup', stopPanelResize)
+  window.removeEventListener('mouseup', stopSimulationResize)
 })
 
 onNodesInitialized(() => {
@@ -202,12 +361,23 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
 </script>
 
 <template>
-  <div class="sandbox">
+  <div class="sandbox" :style="panelStyle">
     <aside class="side palette-side">
-      <ComponentPalette @add="sandbox.addComponent" />
+      <ComponentPalette v-if="!paletteCollapsed" @add="sandbox.addComponent" />
     </aside>
+    <div class="panel-resizer" role="separator" aria-orientation="vertical" aria-label="Components panel size"
+      :aria-valuenow="paletteWidth" aria-valuemin="180" aria-valuemax="460" tabindex="0"
+      data-cy="resize-components" @mousedown="resizePanel('palette', $event)" @keydown="onPanelKeydown('palette', $event)">
+      <button type="button" class="panel-toggle" :aria-expanded="!paletteCollapsed"
+        :aria-label="paletteCollapsed ? 'Show components panel' : 'Hide components panel'"
+        :title="paletteCollapsed ? 'Show components' : 'Hide components'"
+        data-cy="toggle-components-panel" @click="paletteCollapsed = !paletteCollapsed">
+        <i :class="paletteCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'" />
+      </button>
+      <span class="resize-grip" aria-hidden="true" />
+    </div>
 
-    <section class="workspace">
+    <section ref="workspace" class="workspace">
       <header class="toolbar">
         <div class="pipeline-title">
           <span class="mono name" :title="originLabel">{{ sandbox.name || 'untitled' }}</span>
@@ -285,11 +455,29 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
           </span>
         </div>
       </div>
-      <SimulationPanel v-model:open="simulationOpen" />
+      <div v-if="simulationOpen" class="simulation-resizer" role="separator" aria-orientation="horizontal"
+        aria-label="Simulation panel size" aria-valuemin="30" aria-valuemax="72" :aria-valuenow="Math.round(simulationHeight)"
+        tabindex="0" data-cy="resize-simulation" @mousedown="resizeSimulation"
+        @mousemove="onSimulationPointerMove"
+        @keydown="onSimulationKeydown">
+        <span class="resize-grip" aria-hidden="true" />
+      </div>
+      <SimulationPanel v-model:open="simulationOpen" :style="simulationOpen ? { height: `${simulationHeight}%` } : undefined" />
     </section>
 
+    <div class="panel-resizer" role="separator" aria-orientation="vertical" aria-label="Configuration panel size"
+      :aria-valuenow="inspectorWidth" aria-valuemin="240" :aria-valuemax="inspectorMaxWidth" tabindex="0"
+      data-cy="resize-inspector" @mousedown="resizePanel('inspector', $event)" @keydown="onPanelKeydown('inspector', $event)">
+      <button type="button" class="panel-toggle" :aria-expanded="!inspectorCollapsed"
+        :aria-label="inspectorCollapsed ? 'Show configuration panel' : 'Hide configuration panel'"
+        :title="inspectorCollapsed ? 'Show configuration' : 'Hide configuration'"
+        data-cy="toggle-inspector-panel" @click="inspectorCollapsed = !inspectorCollapsed">
+        <i :class="inspectorCollapsed ? 'pi pi-angle-left' : 'pi pi-angle-right'" />
+      </button>
+      <span class="resize-grip" aria-hidden="true" />
+    </div>
     <aside class="side inspector-side">
-      <ComponentInspector @edit-yaml="showYaml = true" />
+      <ComponentInspector v-if="!inspectorCollapsed" @edit-yaml="showYaml = true" />
     </aside>
 
     <PipelineYamlDialog v-model:visible="showYaml" />
@@ -303,7 +491,7 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
   --canvas-mask: rgba(241, 245, 249, 0.7);
   --canvas-bg: #f8fafc;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, var(--palette-width)) 22px minmax(0, 1fr) 22px var(--inspector-width);
   /* The panels scroll inside, they never stretch the sandbox */
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
@@ -335,6 +523,57 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.panel-resizer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-right: 1px solid var(--card-border);
+  border-left: 1px solid var(--card-border);
+  background: var(--card-bg);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.panel-resizer:focus-visible,
+.simulation-resizer:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: -2px;
+}
+
+.panel-toggle {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.panel-toggle:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+.resize-grip {
+  display: block;
+  width: 4px;
+  height: 24px;
+  border-radius: 3px;
+  background: var(--p-surface-300);
+}
+
+.app-dark .resize-grip {
+  background: var(--p-surface-600);
 }
 
 .toolbar {
@@ -467,6 +706,24 @@ function minimapColor(node: { data?: GraphNode['data'] }) {
   flex: 1;
   min-height: 0;
   background: var(--canvas-bg);
+}
+
+.simulation-resizer {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex: none;
+  height: 8px;
+  border-top: 1px solid var(--card-border);
+  background: var(--card-bg);
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.simulation-resizer .resize-grip {
+  width: 38px;
+  height: 4px;
 }
 
 .canvas-empty {

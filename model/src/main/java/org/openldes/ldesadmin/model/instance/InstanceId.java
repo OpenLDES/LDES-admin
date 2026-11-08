@@ -3,9 +3,7 @@ package org.openldes.ldesadmin.model.instance;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Identifies an LDES server or LDIO managed by LDES-admin.
- */
+/** Identifies an LDES server or LDIO managed by LDES-admin. */
 public record InstanceId(UUID value) {
 
   public InstanceId {

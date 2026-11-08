@@ -11,8 +11,8 @@ import java.util.Optional;
  *
  * @param adapter the adapter of this input, {@code null} if the input produces linked data itself
  */
-public record InputDefinition(String name, Map<String, Object> config,
-                              ComponentDefinition adapter) {
+public record InputDefinition(
+    String name, Map<String, Object> config, ComponentDefinition adapter) {
 
   public InputDefinition {
     if (name == null || name.isBlank()) {

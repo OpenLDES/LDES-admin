@@ -1,6 +1,10 @@
 describe('the sandbox', () => {
   beforeEach(() => {
-    cy.visit('/sandbox', { onBeforeLoad: (win) => win.localStorage.setItem('ldes-admin.dark', 'false') })
+    cy.visit('/sandbox', { onBeforeLoad: (win) => {
+      win.localStorage.setItem('ldes-admin.dark', 'false')
+      win.localStorage.removeItem('ldes-admin.sandbox-panels')
+      win.localStorage.removeItem('ldes-admin.sandbox-execute-outputs-warning-dismissed')
+    } })
     cy.get('[data-cy=canvas] .vue-flow__node').should('have.length', 6)
   })
 
@@ -9,6 +13,123 @@ describe('the sandbox', () => {
     cy.get('[data-cy=pipeline-yaml] .cm-content')
       .should('contain', 'name: parcels-to-ldes')
       .and('contain', 'Ldio:VersionObjectCreator')
+  })
+
+  it('starts a live HTTP source, processes a member, and stops it', () => {
+    cy.get('[data-cy=templates]').click()
+    cy.contains('.p-menu-item', 'HTTP in → console').click()
+    cy.contains('.p-confirmdialog button', 'Replace').click()
+
+    cy.get('[data-cy=start-live]').click()
+    cy.get('[data-cy=live-status]').should('contain', 'Live source running')
+    cy.get('[data-cy=run-simulation]').should('be.disabled')
+    cy.get('[data-cy=send-live-input]').click()
+    cy.get('[data-cy=live-status]').should('contain', '1 members received')
+    cy.get('[data-cy=simulation-step]').should('have.length', 3)
+    cy.get('[data-cy=stop-live]').click()
+    cy.get('[data-cy=live-status]').should('contain', 'Live source stopped')
+    cy.get('[data-cy=run-simulation]').should('not.be.disabled')
+  })
+
+  it('resizes and collapses the side panels and simulation', () => {
+    cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '236')
+      .trigger('mousedown', { button: 0, clientX: 236, clientY: 100 })
+    cy.window().trigger('mousemove', { clientX: 280, clientY: 100 })
+    cy.window().trigger('mouseup')
+    cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '280')
+
+    cy.get('[data-cy=toggle-components-panel]').click().should('have.attr', 'aria-expanded', 'false')
+    cy.get('[data-cy=palette-search]').should('not.exist')
+    cy.get('[data-cy=toggle-components-panel]').click().should('have.attr', 'aria-expanded', 'true')
+
+    cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '330')
+      .trigger('mousedown', { button: 0, clientX: 600, clientY: 100 })
+    cy.window().trigger('mousemove', { clientX: 550, clientY: 100 })
+    cy.window().trigger('mouseup')
+    cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '380')
+    cy.get('[data-cy=toggle-inspector-panel]').click().should('have.attr', 'aria-expanded', 'false')
+    cy.get('[data-cy=inspector]').should('not.exist')
+    cy.get('[data-cy=toggle-inspector-panel]').click().should('have.attr', 'aria-expanded', 'true')
+
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', '44')
+      .then(($separator) => {
+        const top = $separator[0].getBoundingClientRect().top
+        cy.wrap($separator).trigger('mousedown', { button: 0, clientY: top })
+        cy.wrap($separator).trigger('mousemove', { clientX: 100, clientY: top - 60 })
+        cy.window().trigger('mouseup')
+      })
+    cy.get('[data-cy=resize-simulation]').invoke('attr', 'aria-valuenow').then(Number).should('not.equal', 44)
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=sample-input]').should('not.exist')
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=sample-input]').should('exist')
+
+    cy.get('[data-cy=resize-simulation]').invoke('attr', 'aria-valuenow').then((height) => {
+      cy.get('[data-cy=toggle-components-panel]').click()
+      cy.get('[data-cy=toggle-inspector-panel]').click()
+      cy.reload()
+      cy.get('[data-cy=resize-components]').should('have.attr', 'aria-valuenow', '280')
+      cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '380')
+      cy.get('[data-cy=toggle-components-panel]').should('have.attr', 'aria-expanded', 'false')
+      cy.get('[data-cy=toggle-inspector-panel]').should('have.attr', 'aria-expanded', 'false')
+      cy.get('[data-cy=sample-input]').should('exist')
+      cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', height)
+    })
+  })
+
+  it('remembers whether the simulation is open across navigation and reloads', () => {
+    cy.get('[data-cy=sample-input]').should('not.exist')
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=resize-simulation]').trigger('keydown', { key: 'ArrowUp' })
+      .should('have.attr', 'aria-valuenow', '48')
+
+    for (const path of ['/ldes-servers', '/ldios']) {
+      cy.get(`[data-cy=sidebar] a[href="${path}"]`).click()
+      cy.location('pathname').should('eq', path)
+      cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
+      cy.get('[data-cy=sample-input]').should('exist')
+      cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', '48')
+    }
+
+    cy.get('[data-cy=toggle-simulation]').click()
+    for (const path of ['/ldes-servers', '/ldios']) {
+      cy.get(`[data-cy=sidebar] a[href="${path}"]`).click()
+      cy.location('pathname').should('eq', path)
+      cy.get('[data-cy=sidebar] a[href="/sandbox"]').click()
+      cy.get('[data-cy=sample-input]').should('not.exist')
+      cy.get('[data-cy=resize-simulation]').should('not.exist')
+    }
+
+    cy.reload()
+    cy.get('[data-cy=sample-input]').should('not.exist')
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=resize-simulation]').should('have.attr', 'aria-valuenow', '48')
+  })
+
+  it('lets the configuration panel grow to 66% of the screen width', () => {
+    for (const viewportWidth of [1440, 1920, 1280]) {
+      cy.viewport(viewportWidth, 900)
+      const maximum = Math.floor(viewportWidth * 0.66)
+      cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuemax', String(maximum))
+        .trigger('mousedown', { button: 0, clientX: 1000, clientY: 100 })
+      cy.window().trigger('mousemove', { clientX: -2000, clientY: 100 })
+      cy.window().trigger('mouseup')
+      cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', String(maximum))
+      cy.get('.inspector-side').should(($panel) => {
+        expect($panel[0].getBoundingClientRect().width).to.be.closeTo(maximum, 1)
+      })
+      cy.get('[data-cy=resize-inspector]').trigger('keydown', { key: 'ArrowLeft' })
+        .should('have.attr', 'aria-valuenow', String(maximum))
+        .trigger('keydown', { key: 'ArrowRight' })
+        .should('have.attr', 'aria-valuenow', String(maximum - 24))
+    }
+
+    cy.viewport(1000, 900)
+    cy.get('[data-cy=resize-inspector]').should('have.attr', 'aria-valuenow', '660')
+    cy.get('.inspector-side').should(($panel) => {
+      expect($panel[0].getBoundingClientRect().width).to.be.closeTo(660, 1)
+    })
   })
 
   it('shows and edits the YAML of the component you click', () => {
@@ -99,12 +220,67 @@ describe('the sandbox', () => {
     cy.get('[data-cy=run-simulation]').click()
     cy.get('[data-cy=simulation-step]', { timeout: 8000 }).should('have.length', 6)
     cy.get('[data-cy=simulation]').should('contain', 'Delivered to 2 outputs')
+    // The JSON to JSON-LD adapter makes JSON-LD
+    cy.contains('[data-cy=simulation-step]', 'JSON to JSON-LD').click()
+    cy.get('[data-cy=output-content-type]').should('contain', 'JSON-LD')
+    cy.get('[data-cy=step-output] .cm-content').should('contain', '"@context"')
+      .and('contain', '"@id": "https://data.vlaanderen.be/id/perceel/24062B0123-00A000"')
+
     cy.contains('[data-cy=simulation-step]', 'Version Object Creator').click()
     cy.get('[data-cy=step-output] .cm-content').should('contain', 'dcterms:isVersionOf')
+
+    // The model of a step in another format
+    cy.get('[data-cy=output-content-type]').should('contain', 'Turtle').click()
+    cy.contains('.p-select-option', 'N-Triples').click()
+    cy.get('[data-cy=step-output] .cm-content')
+      .should('contain', '<http://purl.org/dc/terms/isVersionOf> <https://data.vlaanderen.be/id/perceel/24062B0123-00A000> .')
+    cy.get('[data-cy=output-content-type]').click()
+    cy.contains('.p-select-option', 'JSON-LD').click()
+    cy.get('[data-cy=step-output] .cm-content').should('contain', '"dcterms:isVersionOf"')
 
     cy.get('[data-cy=open-ingest-result]').click()
     cy.get('[data-cy=ingest-result]').click()
     cy.contains('.p-toast', 'Ingested the result in sandbox-parcels')
+  })
+
+  it('shows the step of the component selected on the canvas, and keeps the steps until run again or reset', () => {
+    cy.get('[data-cy=run-simulation]').click()
+    cy.get('[data-cy=simulation-step]', { timeout: 8000 }).should('have.length', 6)
+
+    cy.contains('[data-cy=simulation-step]', 'Version Object Creator').click()
+    cy.get('[data-cy="node-Ldio:VersionObjectCreator"]').should('have.class', 'selected')
+    cy.get('[data-cy=inspector] h2').should('contain', 'Version Object Creator')
+
+    cy.get('[data-cy="node-Ldio:GeoJsonToWktTransformer"]').click()
+    cy.contains('[data-cy=simulation-step]', 'GeoJSON to WKT').should('have.class', 'selected')
+    cy.get('[data-cy=step-output] .cm-content').should('contain', 'geo:asWKT')
+    cy.get('[data-cy=inspector] h2').should('contain', 'GeoJSON to WKT')
+
+    // Editing the pipeline keeps the steps
+    cy.get('[data-cy="node-Ldio:HttpOut"]').click()
+    cy.contains('[data-cy=simulation-step]', 'HTTP Out').should('have.class', 'selected')
+    cy.get('[data-cy=component-yaml] .cm-content').type('{selectall}{backspace}name: Ldio:ConsoleOut', { delay: 0 })
+    cy.get('[data-cy="node-Ldio:ConsoleOut"]').should('have.length', 2)
+    cy.get('[data-cy=simulation-step]').should('have.length', 6)
+
+    cy.contains('[data-cy=simulation] button', 'Reset').click()
+    cy.get('[data-cy=simulation-step]').should('not.exist')
+  })
+
+  it('confirms output execution and remembers when the warning is dismissed', () => {
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.dialogOpened('execute-outputs-warning').should('contain', 'may add members or modify remote systems')
+    cy.get('[data-cy=cancel-execute-outputs]').click()
+    cy.get('[data-cy=execute-outputs-warning]').should('not.exist')
+
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.get('[data-cy=skip-execute-outputs-warning]').click()
+    cy.get('[data-cy=confirm-execute-outputs]').click()
+    cy.get('[data-cy=execute-outputs-warning]').should('not.exist')
+
+    cy.reload()
+    cy.get('[data-cy=execute-outputs]').click()
+    cy.get('[data-cy=execute-outputs-warning]').should('not.exist')
   })
 
   it('fetches the input of an HTTP poller, and polls on its schedule', () => {
@@ -131,9 +307,11 @@ describe('the sandbox', () => {
       .and('contain', '503').and('contain', 'Down for maintenance')
 
     cy.get('[data-cy=fetch-input]').click()
-    cy.get('[data-cy=poll-status]').should('contain', 'Fetched api.example.org/changes')
+    cy.get('[data-cy=fetch-notice]').should('contain', 'Fetched api.example.org/changes')
     cy.get('[data-cy=sample-input] .cm-content').should('contain', '<http://example.org/area> "512.4"')
     cy.get('[data-cy=sample-content-type]').should('contain', 'Turtle')
+    cy.wait(3100)
+    cy.get('[data-cy=fetch-notice]').should('not.exist')
 
     // Polling runs every response through the pipeline
     cy.get('[data-cy=toggle-polling]').click()
@@ -145,6 +323,23 @@ describe('the sandbox', () => {
     cy.get('[data-cy=stop-polling]').click()
     cy.get('[data-cy=poll-status]').should('not.contain', 'Polling')
     cy.get('[data-cy=stop-polling]').should('not.exist')
+  })
+
+  it('converts the input member to the content type chosen for it', () => {
+    cy.get('[data-cy=templates]').click()
+    cy.contains('.p-menu-item', 'HTTP in → console').click()
+    cy.contains('.p-confirmdialog button', 'Replace').click()
+    cy.get('[data-cy=toggle-simulation]').click()
+    cy.get('[data-cy=sample-input] .cm-content').should('contain', 'schema:name "Jane Doe"')
+
+    cy.get('[data-cy=sample-content-type]').click()
+    cy.contains('.p-select-option', 'JSON-LD').click()
+    cy.get('[data-cy=sample-input] .cm-content').should('contain', '"@context"').and('contain', '"schema:name": "Jane Doe"')
+
+    cy.get('[data-cy=sample-content-type]').click()
+    cy.contains('.p-select-option', 'N-Triples').click()
+    cy.get('[data-cy=sample-input] .cm-content')
+      .should('contain', '<http://www.janedoe.com/#me> <http://schema.org/name> "Jane Doe" .')
   })
 
   it('loads a template', () => {

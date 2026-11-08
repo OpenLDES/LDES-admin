@@ -4,9 +4,7 @@ import java.util.List;
 import org.openldes.ldesadmin.model.monitoring.ActivityEvent;
 import org.openldes.ldesadmin.model.monitoring.ThroughputSeries;
 
-/**
- * What the instances did lately.
- */
+/** What the instances did lately. */
 public interface ActivityUseCase {
 
   /**
@@ -15,8 +13,6 @@ public interface ActivityUseCase {
    */
   List<ThroughputSeries> throughput();
 
-  /**
-   * The latest activity, newest first.
-   */
+  /** The latest activity, newest first. */
   List<ActivityEvent> recentActivity(int limit);
 }

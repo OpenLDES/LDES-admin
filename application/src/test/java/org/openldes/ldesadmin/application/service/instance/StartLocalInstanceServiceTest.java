@@ -28,29 +28,30 @@ import org.openldes.ldesadmin.model.monitoring.ActivityEvent.Severity;
 @ExtendWith(MockitoExtension.class)
 class StartLocalInstanceServiceTest {
 
-  @Mock
-  private LocalInstanceRuntime localInstanceRuntime;
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private LocalInstanceRuntime localInstanceRuntime;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private ActivityRecorder activity;
 
   private StartLocalInstanceService service;
 
   @BeforeEach
   void setUp() {
-    service = new StartLocalInstanceService(localInstanceRuntime, instanceRepository,
-        activity, TestFixtures.CLOCK);
+    service =
+        new StartLocalInstanceService(
+            localInstanceRuntime, instanceRepository, activity, TestFixtures.CLOCK);
   }
 
   @Test
   void startsAndRegistersALocalInstance() {
     when(localInstanceRuntime.start(InstanceType.LDES_SERVER, "sandbox"))
-        .thenReturn(new LocalRuntimeHandle(URI.create("http://localhost:32770"),
-            URI.create("http://sandbox:8080"), "container-7"));
+        .thenReturn(
+            new LocalRuntimeHandle(
+                URI.create("http://localhost:32770"),
+                URI.create("http://sandbox:8080"),
+                "container-7"));
 
-    Instance instance = service.start(new StartLocalInstanceCommand(InstanceType.LDES_SERVER,
-        "sandbox", true));
+    Instance instance =
+        service.start(new StartLocalInstanceCommand(InstanceType.LDES_SERVER, "sandbox", true));
 
     assertThat(instance.isLocal()).isTrue();
     assertThat(instance.sandbox()).isTrue();
@@ -58,19 +59,26 @@ class StartLocalInstanceServiceTest {
     assertThat(instance.internalUrl()).hasToString("http://sandbox:8080");
     assertThat(instance.runtimeReference()).isEqualTo("container-7");
     verify(instanceRepository).save(instance);
-    verify(activity).record(eq(instance), eq(Severity.SUCCESS), eq("Local LDES server started"),
-        contains("http://sandbox:8080"));
+    verify(activity)
+        .record(
+            eq(instance),
+            eq(Severity.SUCCESS),
+            eq("Local LDES server started"),
+            contains("http://sandbox:8080"));
   }
 
   @Test
   void stopsTheInstanceAgainWhenItCannotBeRegistered() {
     when(localInstanceRuntime.start(InstanceType.LDIO, "sandbox"))
-        .thenReturn(new LocalRuntimeHandle(URI.create("http://localhost:32771"),
-            URI.create("http://sandbox:8080"), "container-8"));
+        .thenReturn(
+            new LocalRuntimeHandle(
+                URI.create("http://localhost:32771"),
+                URI.create("http://sandbox:8080"),
+                "container-8"));
     doThrow(new IllegalStateException("database down")).when(instanceRepository).save(any());
 
-    StartLocalInstanceCommand command = new StartLocalInstanceCommand(InstanceType.LDIO,
-        "sandbox", false);
+    StartLocalInstanceCommand command =
+        new StartLocalInstanceCommand(InstanceType.LDIO, "sandbox", false);
 
     assertThatThrownBy(() -> service.start(command)).hasMessage("database down");
     verify(localInstanceRuntime).stop("container-8");
@@ -78,10 +86,9 @@ class StartLocalInstanceServiceTest {
 
   @Test
   void requiresAName() {
-    StartLocalInstanceCommand command = new StartLocalInstanceCommand(InstanceType.LDIO, " ",
-        false);
+    StartLocalInstanceCommand command =
+        new StartLocalInstanceCommand(InstanceType.LDIO, " ", false);
 
-    assertThatThrownBy(() -> service.start(command))
-        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> service.start(command)).isInstanceOf(IllegalArgumentException.class);
   }
 }

@@ -19,8 +19,8 @@ public class EventStreamService implements EventStreamUseCase {
   private final LdesServerClient ldesServerClient;
   private final ActivityRecorder activity;
 
-  public EventStreamService(InstanceLookup instanceLookup, LdesServerClient ldesServerClient,
-      ActivityRecorder activity) {
+  public EventStreamService(
+      InstanceLookup instanceLookup, LdesServerClient ldesServerClient, ActivityRecorder activity) {
     this.instanceLookup = instanceLookup;
     this.ldesServerClient = ldesServerClient;
     this.activity = activity;
@@ -33,8 +33,7 @@ public class EventStreamService implements EventStreamUseCase {
 
   @Override
   public EventStream get(InstanceId serverId, String collection) {
-    return ldesServerClient.getEventStream(instanceLookup.requireLdesServer(serverId),
-        collection);
+    return ldesServerClient.getEventStream(instanceLookup.requireLdesServer(serverId), collection);
   }
 
   @Override

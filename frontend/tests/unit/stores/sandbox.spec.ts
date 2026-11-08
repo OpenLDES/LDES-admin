@@ -1,13 +1,27 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { ApiError } from '@/api/LdesAdminApi'
+import { MockLdesAdminApi } from '@/api/mock/MockLdesAdminApi'
 import type { Pipeline } from '@/domain/ldio'
+import type { PipelineRunRequest } from '@/domain/sandbox'
 import { useSandboxStore } from '@/stores/sandbox'
 
 const mockPoll = jest.fn()
+const mockRunPipeline = jest.fn()
+const mockStartLive = jest.fn()
+const mockGetLive = jest.fn()
+const mockStopLive = jest.fn()
+const mockSendLive = jest.fn()
 jest.mock('@/api', () => ({
   ...jest.requireActual('@/api'),
-  api: { poll: (...args: unknown[]) => mockPoll(...args) },
+  api: {
+    poll: (...args: unknown[]) => mockPoll(...args),
+    runPipeline: (...args: unknown[]) => mockRunPipeline(...args),
+    startLivePipeline: (...args: unknown[]) => mockStartLive(...args),
+    getLivePipeline: (...args: unknown[]) => mockGetLive(...args),
+    stopLivePipeline: (...args: unknown[]) => mockStopLive(...args),
+    sendLiveInput: (...args: unknown[]) => mockSendLive(...args),
+  },
 }))
 
 const CHANGES = 'https://api.example.org/changes'
@@ -24,6 +38,91 @@ function polledPipeline(config: Record<string, unknown>): Pipeline {
 describe('sandbox store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    // Runs as in demo mode, unless a test says otherwise
+    const demo = new MockLdesAdminApi({ latency: 0, startupDelay: 0 })
+    mockRunPipeline.mockReset()
+    mockRunPipeline.mockImplementation((request: PipelineRunRequest) => demo.runPipeline(request))
+    mockStartLive.mockReset().mockResolvedValue({ active: true, received: 0, latest: null, error: null })
+    mockGetLive.mockReset().mockResolvedValue({ active: true, received: 0, latest: null, error: null })
+    mockStopLive.mockReset().mockResolvedValue(undefined)
+    mockSendLive.mockReset().mockResolvedValue(undefined)
+  })
+
+  it('starts a live source on a snapshot and shows its latest result', async () => {
+    jest.useFakeTimers()
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+    await nextTick()
+    mockGetLive.mockResolvedValue({
+      active: true, received: 1, error: null,
+      latest: { delivered: true, members: [MEMBER], steps: [
+        { kind: 'input', index: 0, component: 'Ldio:HttpIn', status: 'ok', summary: 'Received', outputs: [MEMBER], contentType: 'text/turtle', format: 'turtle', durationMs: 1 },
+      ] },
+    })
+
+    await sandbox.startLive()
+    expect(sandbox.live?.active).toBe(true)
+    expect(mockStartLive).toHaveBeenCalledWith(expect.objectContaining({ executeOutputs: false }))
+    await sandbox.sendLiveInput()
+    expect(mockSendLive).toHaveBeenCalledWith(sandbox.liveId, expect.objectContaining({ contentType: 'text/turtle' }))
+    await jest.advanceTimersByTimeAsync(1000)
+    expect(sandbox.live?.received).toBe(1)
+    expect(sandbox.result?.members).toEqual([MEMBER])
+    expect(sandbox.stepNodeIds).toEqual(['input'])
+    await sandbox.stopLive()
+    expect(sandbox.live?.active).toBe(false)
+    await jest.advanceTimersByTimeAsync(2000)
+    expect(mockGetLive).toHaveBeenCalledTimes(1)
+    jest.useRealTimers()
+  })
+
+  it('stops live sources when the pipeline changes, without discarding the last result', async () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+    await nextTick()
+    await sandbox.startLive()
+
+    sandbox.updateComponent('output-1', 'Ldio:NoopOut', {})
+    await nextTick()
+    await sandbox.stopLive()
+
+    expect(mockStopLive).toHaveBeenCalledWith(sandbox.liveId)
+    expect(sandbox.liveAttached).toBe(false)
+  })
+
+  it('waits for a pending live start before stopping, so navigation does not leak a source', async () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+    await nextTick()
+    let started!: (state: { active: boolean; received: number; latest: null; error: null }) => void
+    mockStartLive.mockReturnValue(new Promise((resolve) => { started = resolve }))
+
+    const starting = sandbox.startLive()
+    const stopping = sandbox.stopLive()
+    const stoppingAgain = sandbox.stopLive()
+    expect(mockStopLive).not.toHaveBeenCalled()
+    started({ active: true, received: 0, latest: null, error: null })
+    await starting
+    await stopping
+    await stoppingAgain
+
+    expect(mockStopLive).toHaveBeenCalledTimes(1)
+    expect(sandbox.liveAttached).toBe(false)
+  })
+
+  it('keeps Stop live available when termination fails', async () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+    await nextTick()
+    await sandbox.startLive()
+    mockStopLive.mockRejectedValueOnce(new Error('Backend unreachable'))
+
+    await sandbox.stopLive()
+
+    expect(sandbox.liveAttached).toBe(true)
+    expect(sandbox.liveError).toContain('Could not stop')
+    await sandbox.stopLive()
+    expect(sandbox.liveAttached).toBe(false)
   })
 
   it('starts with the default template', () => {
@@ -102,6 +201,87 @@ outputs:
       .toEqual(['Ldio:HttpIn', 'Ldio:RdfAdapter', 'Ldio:ConsoleOut'])
     expect(sandbox.nodes.every((node) => node.data.runStatus === 'done')).toBe(true)
     jest.useRealTimers()
+  })
+
+  it('runs on the API, in a session per loaded pipeline, dry unless asked otherwise', async () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+
+    jest.useFakeTimers()
+    const first = sandbox.run()
+    await jest.runAllTimersAsync()
+    await first
+    sandbox.executeOutputs = true
+    const second = sandbox.run()
+    await jest.runAllTimersAsync()
+    await second
+    sandbox.loadTemplate('http-to-console')
+    const third = sandbox.run()
+    await jest.runAllTimersAsync()
+    await third
+    jest.useRealTimers()
+
+    const requests = mockRunPipeline.mock.calls.map(([request]) => request as PipelineRunRequest)
+    expect(requests.map((request) => request.executeOutputs)).toEqual([false, true, true])
+    expect(requests[0].pipeline.input.name).toBe('Ldio:HttpIn')
+    expect(requests[0].input.contentType).toBe('text/turtle')
+    expect(requests[1].session).toBe(requests[0].session)
+    expect(requests[2].session).not.toBe(requests[0].session)
+  })
+
+  it('keeps the steps of a run while the pipeline is edited, until it runs again or is reset', async () => {
+    jest.useFakeTimers()
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+    const running = sandbox.run()
+    await jest.runAllTimersAsync()
+    await running
+    jest.useRealTimers()
+    const nodes = sandbox.nodes.map((node) => node.id)
+    expect(sandbox.stepNodeIds).toEqual(sandbox.conversion.order)
+
+    sandbox.updateComponent('output-1', 'Ldio:ConsoleOut', { 'rdf-writer': { 'content-type': 'text/turtle' } })
+    sandbox.addComponent('Ldio:NoopOut')
+    sandbox.removeNode(sandbox.nodes.at(-1)!.id)
+
+    expect(sandbox.result?.steps).toHaveLength(3)
+    expect(sandbox.stepNodeIds).toHaveLength(3)
+    expect(sandbox.nodes.filter((node) => nodes.includes(node.id)).every((node) => node.data.runStatus === 'done')).toBe(true)
+    sandbox.resetSimulation()
+    expect(sandbox.result).toBeUndefined()
+    expect(sandbox.stepNodeIds).toEqual([])
+  })
+
+  it('converts linked data in the input to another content type', () => {
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+
+    expect(sandbox.changeContentType('application/ld+json')).toBeUndefined()
+    expect(JSON.parse(sandbox.sample.content)).toMatchObject({ '@id': 'http://www.janedoe.com/#me', 'schema:name': 'Jane Doe' })
+    expect(sandbox.changeContentType('text/turtle')).toBeUndefined()
+    expect(sandbox.sample.content).toContain('schema:name "Jane Doe"')
+
+    // Not linked data: the content stays as it is
+    expect(sandbox.changeContentType('text/csv')).toBeUndefined()
+    expect(sandbox.sample).toMatchObject({ contentType: 'text/csv', content: expect.stringContaining('schema:name') })
+
+    sandbox.sample = { content: '<not turtle', contentType: 'text/turtle' }
+    expect(sandbox.changeContentType('application/n-quads')).toMatch(/Unexpected/)
+    expect(sandbox.sample).toEqual({ content: '<not turtle', contentType: 'application/n-quads' })
+  })
+
+  it('tells why a run could not run', async () => {
+    mockRunPipeline.mockRejectedValue(new ApiError(0, 'LDES-admin is unreachable. Check that the backend runs.'))
+    const sandbox = useSandboxStore()
+    sandbox.loadTemplate('http-to-console')
+
+    await sandbox.run()
+
+    expect(sandbox.running).toBe(false)
+    expect(sandbox.result).toBeUndefined()
+    expect(sandbox.runError).toBe('LDES-admin is unreachable. Check that the backend runs.')
+    sandbox.resetSimulation()
+    expect(sandbox.runError).toBeUndefined()
   })
 
   describe('with an HTTP In Poller', () => {

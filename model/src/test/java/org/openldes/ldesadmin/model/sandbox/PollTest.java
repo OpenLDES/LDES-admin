@@ -36,8 +36,10 @@ class PollTest {
 
   @Test
   void needsCompleteClientCredentials() {
-    assertThatThrownBy(() -> new ClientCredentials(URI.create("https://login.example.org/token"),
-        "ldes-admin", " ", null))
+    assertThatThrownBy(
+            () ->
+                new ClientCredentials(
+                    URI.create("https://login.example.org/token"), "ldes-admin", " ", null))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("'clientSecret' must not be blank");
     assertThatThrownBy(() -> new ClientCredentials(null, "ldes-admin", "secret", null))
@@ -46,8 +48,9 @@ class PollTest {
 
   @Test
   void keepsTheSecretOutOfTheDescription() {
-    ClientCredentials credentials = new ClientCredentials(
-        URI.create("https://login.example.org/token"), "ldes-admin", "s3cr3t", " ");
+    ClientCredentials credentials =
+        new ClientCredentials(
+            URI.create("https://login.example.org/token"), "ldes-admin", "s3cr3t", " ");
 
     assertThat(credentials.scope()).isNull();
     assertThat(credentials.toString()).contains("ldes-admin").doesNotContain("s3cr3t");

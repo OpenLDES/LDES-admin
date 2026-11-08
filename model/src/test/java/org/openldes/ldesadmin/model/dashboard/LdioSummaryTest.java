@@ -22,14 +22,19 @@ class LdioSummaryTest {
 
   @Test
   void countsPipelinesByStatusAndSumsProcessedMembers() {
-    Instance ldio = Instance.register(InstanceType.LDIO, "ldio",
-        URI.create("http://localhost:8082"), false, NOW);
-    LdioSummary summary = new LdioSummary(ldio, InstanceHealth.up(NOW), List.of(
-        deployed("a", PipelineStatus.RUNNING),
-        deployed("b", PipelineStatus.RUNNING),
-        deployed("c", PipelineStatus.HALTED)), List.of(
-        new PipelineStatistics("a", 10, 8),
-        new PipelineStatistics("b", 5, 5)), List.of());
+    Instance ldio =
+        Instance.register(
+            InstanceType.LDIO, "ldio", URI.create("http://localhost:8082"), false, NOW);
+    LdioSummary summary =
+        new LdioSummary(
+            ldio,
+            InstanceHealth.up(NOW),
+            List.of(
+                deployed("a", PipelineStatus.RUNNING),
+                deployed("b", PipelineStatus.RUNNING),
+                deployed("c", PipelineStatus.HALTED)),
+            List.of(new PipelineStatistics("a", 10, 8), new PipelineStatistics("b", 5, 5)),
+            List.of());
 
     assertThat(summary.pipelinesByStatus())
         .containsEntry(PipelineStatus.RUNNING, 2L)
@@ -39,8 +44,8 @@ class LdioSummaryTest {
   }
 
   private static DeployedPipeline deployed(String name, PipelineStatus status) {
-    Pipeline pipeline = new Pipeline(name, null, new InputDefinition("Ldio:HttpIn", null, null),
-        null, null);
+    Pipeline pipeline =
+        new Pipeline(name, null, new InputDefinition("Ldio:HttpIn", null, null), null, null);
     return new DeployedPipeline(pipeline, status, StatusChangeSource.AUTO);
   }
 }

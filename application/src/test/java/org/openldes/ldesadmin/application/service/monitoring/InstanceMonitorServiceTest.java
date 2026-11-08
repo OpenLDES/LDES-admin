@@ -32,52 +32,56 @@ import org.openldes.ldesadmin.model.monitoring.IngestSample;
 @ExtendWith(MockitoExtension.class)
 class InstanceMonitorServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private InstanceHealthProbe instanceHealthProbe;
-  @Mock
-  private LdesServerClient ldesServerClient;
-  @Mock
-  private IngestSampleRepository ingestSamples;
-  @Mock
-  private LocalInstanceRuntime localInstanceRuntime;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private InstanceHealthProbe instanceHealthProbe;
+  @Mock private LdesServerClient ldesServerClient;
+  @Mock private IngestSampleRepository ingestSamples;
+  @Mock private LocalInstanceRuntime localInstanceRuntime;
+  @Mock private ActivityRecorder activity;
 
   private final Instance server = TestFixtures.ldesServer();
   private InstanceMonitorService service;
 
   @BeforeEach
   void setUp() {
-    service = new InstanceMonitorService(instanceRepository, instanceHealthProbe,
-        ldesServerClient, ingestSamples, localInstanceRuntime, activity, TestFixtures.CLOCK);
+    service =
+        new InstanceMonitorService(
+            instanceRepository,
+            instanceHealthProbe,
+            ldesServerClient,
+            ingestSamples,
+            localInstanceRuntime,
+            activity,
+            TestFixtures.CLOCK);
   }
 
   @Test
   void samplesTheMembersIngestedByAHealthyServer() {
     givenInstances(List.of(server), List.of());
     when(instanceHealthProbe.check(server)).thenReturn(InstanceHealth.up(TestFixtures.NOW));
-    when(ldesServerClient.getStatistics(server)).thenReturn(List.of(
-        new StreamStatistics("parcels", 1_200, List.of()),
-        new StreamStatistics("addresses", 300, List.of())));
+    when(ldesServerClient.getStatistics(server))
+        .thenReturn(
+            List.of(
+                new StreamStatistics("parcels", 1_200, List.of()),
+                new StreamStatistics("addresses", 300, List.of())));
 
     service.monitor();
 
     verify(ingestSamples).save(new IngestSample(server.id(), TestFixtures.NOW, 1_500));
-    verify(ingestSamples).deleteBefore(TestFixtures.NOW.minus(
-        InstanceMonitorService.SAMPLE_RETENTION));
+    verify(ingestSamples)
+        .deleteBefore(TestFixtures.NOW.minus(InstanceMonitorService.SAMPLE_RETENTION));
   }
 
   @Test
   void recordsWhenAnInstanceGoesDownAndComesBack() {
     Instance ldio = TestFixtures.ldio();
     givenInstances(List.of(), List.of(ldio));
-    when(instanceHealthProbe.check(ldio)).thenReturn(
-        InstanceHealth.up(TestFixtures.NOW),
-        InstanceHealth.down(TestFixtures.NOW),
-        InstanceHealth.down(TestFixtures.NOW),
-        InstanceHealth.up(TestFixtures.NOW));
+    when(instanceHealthProbe.check(ldio))
+        .thenReturn(
+            InstanceHealth.up(TestFixtures.NOW),
+            InstanceHealth.down(TestFixtures.NOW),
+            InstanceHealth.down(TestFixtures.NOW),
+            InstanceHealth.up(TestFixtures.NOW));
 
     service.monitor();
     verifyNoInteractions(activity);

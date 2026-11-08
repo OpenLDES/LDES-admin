@@ -13,8 +13,8 @@ import org.springframework.web.servlet.resource.PathResourceResolver;
  * Serves the built frontend (the frontend module, packaged in {@code static/}) on {@code /}.
  *
  * <p>The frontend routes in the browser, so a page such as {@code /ldes-servers/{id}} has no file:
- * every path that is not a file, the API or the actuator gets {@code index.html}. The assets have
- * a content hash in their name, so browsers may keep them; {@code index.html} is checked on every
+ * every path that is not a file, the API or the actuator gets {@code index.html}. The assets have a
+ * content hash in their name, so browsers may keep them; {@code index.html} is checked on every
  * visit, so a new version shows right away.
  */
 @Configuration(proxyBeanMethods = false)
@@ -25,10 +25,12 @@ class FrontendConfig implements WebMvcConfigurer {
 
   @Override
   public void addResourceHandlers(ResourceHandlerRegistry registry) {
-    registry.addResourceHandler("/assets/**")
+    registry
+        .addResourceHandler("/assets/**")
         .addResourceLocations(LOCATION + "assets/")
         .setCacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable());
-    registry.addResourceHandler("/**")
+    registry
+        .addResourceHandler("/**")
         .addResourceLocations(LOCATION)
         .setCacheControl(CacheControl.noCache())
         .resourceChain(true)

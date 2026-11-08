@@ -24,18 +24,21 @@ import org.openldes.ldesadmin.model.instance.InstanceType;
 @ExtendWith(MockitoExtension.class)
 class RegisterInstanceServiceTest {
 
-  @Mock
-  private InstanceRepository instanceRepository;
-  @Mock
-  private ActivityRecorder activity;
+  @Mock private InstanceRepository instanceRepository;
+  @Mock private ActivityRecorder activity;
 
   @Test
   void registersAndStoresTheInstance() {
-    RegisterInstanceService service = new RegisterInstanceService(instanceRepository, activity,
-        TestFixtures.CLOCK);
+    RegisterInstanceService service =
+        new RegisterInstanceService(instanceRepository, activity, TestFixtures.CLOCK);
 
-    Instance instance = service.register(new RegisterInstanceCommand(InstanceType.LDES_SERVER,
-        "Production", URI.create("https://ldes.example.org/"), false));
+    Instance instance =
+        service.register(
+            new RegisterInstanceCommand(
+                InstanceType.LDES_SERVER,
+                "Production",
+                URI.create("https://ldes.example.org/"),
+                false));
 
     assertThat(instance.origin()).isEqualTo(InstanceOrigin.REGISTERED);
     assertThat(instance.url()).hasToString("https://ldes.example.org");
@@ -46,13 +49,14 @@ class RegisterInstanceServiceTest {
 
   @Test
   void refusesToRegisterTheSameUrlTwice() {
-    RegisterInstanceService service = new RegisterInstanceService(instanceRepository, activity,
-        TestFixtures.CLOCK);
+    RegisterInstanceService service =
+        new RegisterInstanceService(instanceRepository, activity, TestFixtures.CLOCK);
     URI url = URI.create("https://ldes.example.org");
     when(instanceRepository.existsByTypeAndUrl(InstanceType.LDES_SERVER, url)).thenReturn(true);
 
-    RegisterInstanceCommand command = new RegisterInstanceCommand(InstanceType.LDES_SERVER,
-        "Production", URI.create("https://ldes.example.org/"), false);
+    RegisterInstanceCommand command =
+        new RegisterInstanceCommand(
+            InstanceType.LDES_SERVER, "Production", URI.create("https://ldes.example.org/"), false);
 
     assertThatThrownBy(() -> service.register(command))
         .isInstanceOf(InstanceAlreadyRegisteredException.class);

@@ -28,9 +28,8 @@ public class PollService implements PollUseCase {
   }
 
   /**
-   * A pipeline on a local LDIO polls the other local instances on their internal URL, e.g.
-   * {@code http://sandbox-ldes-server:8080/sandbox-parcels}, which only resolves in their Docker
-   * network.
+   * A pipeline on a local LDIO polls the other local instances on their internal URL, e.g. {@code
+   * http://sandbox-ldes-server:8080/sandbox-parcels}, which only resolves in their Docker network.
    */
   private URI reachable(URI url) {
     return Arrays.stream(InstanceType.values())

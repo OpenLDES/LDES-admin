@@ -24,7 +24,16 @@ import type {
   PipelineStatus,
 } from '@/domain/ldio'
 import type { ActivityEvent, DashboardOverview, ThroughputSeries } from '@/domain/dashboard'
-import type { PolledContent, PollRequest, Sandbox } from '@/domain/sandbox'
+import type {
+  PipelineRunRequest,
+  LivePipelineRequest,
+  LivePipelineRun,
+  SimulationInput,
+  PolledContent,
+  PollRequest,
+  Sandbox,
+  SimulationResult,
+} from '@/domain/sandbox'
 import { ApiError, type LdesAdminApi } from '../LdesAdminApi'
 
 const TURTLE = 'text/turtle'
@@ -75,6 +84,31 @@ export class HttpLdesAdminApi implements LdesAdminApi {
 
   poll(request: PollRequest): Promise<PolledContent> {
     return this.json('/sandbox/poll', { method: 'POST', body: request })
+  }
+
+  runPipeline(request: PipelineRunRequest): Promise<SimulationResult> {
+    return this.json('/sandbox/runs', { method: 'POST', body: request })
+  }
+
+  startLivePipeline(request: LivePipelineRequest): Promise<LivePipelineRun> {
+    return this.json('/sandbox/live', { method: 'POST', body: request })
+  }
+
+  getLivePipeline(session: string): Promise<LivePipelineRun> {
+    return this.json(`/sandbox/live/${encodeURIComponent(session)}`)
+  }
+
+  async sendLiveInput(session: string, input: SimulationInput): Promise<void> {
+    await this.request(`/sandbox/live/${encodeURIComponent(session)}/input`, { method: 'POST', body: input })
+  }
+
+  async stopLivePipeline(session: string): Promise<void> {
+    await this.request(`/sandbox/live/${encodeURIComponent(session)}`, { method: 'DELETE' })
+  }
+
+  liveConnector(session: string, action: 'token' | 'transfer', content: string): Promise<string> {
+    return this.text(`/sandbox/live/${encodeURIComponent(session)}/connector/${action}`,
+      { method: 'POST', body: content, contentType: 'application/json' })
   }
 
   // Instances ----------------------------------------------------------------------------------
