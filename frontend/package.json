@@ -42,7 +42,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "^7.29.13",
     "@babel/preset-env": "^7.29.7",
     "@tsconfig/node22": "^22.0.6",
     "@types/jest": "^29.5.14",
