@@ -10,4 +10,4 @@ RUN adduser -D -u 2000 ldesadmin
 USER ldesadmin
 
 EXPOSE 8080
-CMD ["java", "-jar", "ldes-admin.jar"]
+CMD ["java", "-XX:-UseBASE64Intrinsics", "-jar", "ldes-admin.jar"]
