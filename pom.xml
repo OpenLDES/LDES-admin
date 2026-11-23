@@ -55,7 +55,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <jena.version>6.2.0</jena.version>
+    <jena.version>6.3.0</jena.version>
     <!--
       The LDI components the sandbox runs (adapter.out.sandbox): the same code as the LDIO image
       of local instances. LDI is built on Jena 5; Jena is aligned to the version of LDES-admin.
